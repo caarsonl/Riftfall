@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Rift-Bound: Chronicles of the Gate</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-container">
+    <!-- Main 2.5D Isometric Viewport -->
+    <canvas id="game-canvas" aria-label="Rift-Bound 2.5D Isometric Game Canvas"></canvas>
+
+    <!-- Fullscreen Environmental Hazard Vignette -->
+    <div id="hazard-overlay" class="hazard-overlay" aria-hidden="true"></div>
+
+    <!-- Boss Entrance & Warning Banner -->
+    <div id="boss-banner" class="boss-banner hidden" role="alert">
+      <div class="boss-banner-line"></div>
+      <div class="boss-banner-sub" id="boss-banner-sub">RIFT GUARDIAN AWAKENS</div>
+      <h2 class="boss-banner-title" id="boss-banner-title">OBSIDIAN COLOSSUS</h2>
+      <div class="boss-banner-line"></div>
+    </div>
+
+    <!-- Floating Toast Notifications -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- =========================================================
+         TOP HUD BAR
+         ========================================================= -->
+    <header id="top-hud" class="hud-bar">
+      <!-- Left: Zone Info & Player Level -->
+      <div class="hud-group hud-left">
+        <div class="zone-card">
+          <div class="zone-header">
+            <span id="location-badge" class="location-badge">Sanctuary Camp</span>
+            <span id="difficulty-badge" class="difficulty-badge hidden">Normal</span>
+          </div>
+          <div class="zone-meta">
+            <span id="room-indicator" class="room-indicator">Walk to stations or select a tab</span>
+            <span id="mutator-badges" class="mutator-badges"></span>
+          </div>
+        </div>
+
+        <div class="player-badge" title="Hero Level & Experience">
+          <div class="level-crest">
+            <span class="level-label">LV</span>
+            <span id="player-level">1</span>
+          </div>
+          <div class="xp-wrap">
+            <div class="xp-header">
+              <span id="player-power-score" class="power-score">PWR 100</span>
+              <span id="xp-text" class="xp-text">0 / 100 XP</span>
+            </div>
+            <div class="bar-track bar-xp">
+              <div id="xp-bar-fill" class="bar-fill xp-fill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Sanctuary Station Navigation / Dungeon Retreat -->
+      <nav id="camp-tabs" class="camp-tabs" aria-label="Sanctuary Stations">
+        <button id="btn-tab-dungeon" class="hud-tab" data-tab="dungeon" title="Open Dungeon Gate [1]">
+          <span class="tab-icon">&#9876;</span>
+          <span class="tab-label">Dungeon Gate</span>
+          <kbd>1</kbd>
+        </button>
+        <button id="btn-tab-armory" class="hud-tab" data-tab="armory" title="Armory & Inventory [2]">
+          <span class="tab-icon">&#128737;</span>
+          <span class="tab-label">Armory</span>
+          <kbd>2</kbd>
+        </button>
+        <button id="btn-tab-forge" class="hud-tab" data-tab="forge" title="Blacksmith Forge [3]">
+          <span class="tab-icon">&#9874;</span>
+          <span class="tab-label">Blacksmith</span>
+          <kbd>3</kbd>
+        </button>
+        <button id="btn-tab-guild" class="hud-tab" data-tab="guild" title="Mercenary Guild [4]">
+          <span class="tab-icon">&#9813;</span>
+          <span class="tab-label">Mercenaries</span>
+          <kbd>4</kbd>
+        </button>
+      </nav>
+
+      <div id="dungeon-actions" class="dungeon-actions hidden">
+        <button id="btn-retreat" class="btn btn-danger btn-sm" title="Abort run and return to Sanctuary">
+          &#8617; Retreat to Sanctuary
+        </button>
+      </div>
+
+      <!-- Right: Currencies & Audio/Settings -->
+      <div class="hud-group hud-right">
+        <div class="currency-strip">
+          <div class="currency-pill currency-gold" title="Gold Coins (Earned from monsters, loot sales, and mercenaries)">
+            <span class="currency-dot gold-dot"></span>
+            <div class="currency-vals">
+              <span id="hud-gold" class="currency-amount">0</span>
+              <span id="hud-gold-rate" class="currency-rate hidden">+0/s</span>
+            </div>
+          </div>
+          <div class="currency-pill currency-shards" title="Rift Shards (Earned by salvaging gear and mercenaries)">
+            <span class="currency-dot shard-dot"></span>
+            <div class="currency-vals">
+              <span id="hud-shards" class="currency-amount">0</span>
+              <span id="hud-shards-rate" class="currency-rate hidden">+0/s</span>
+            </div>
+          </div>
+          <div class="currency-pill currency-renown" title="Guild Renown (Earned from first-time Boss clears)">
+            <span class="currency-dot renown-dot"></span>
+            <div class="currency-vals">
+              <span id="hud-renown" class="currency-amount">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="utility-btns">
+          <button id="btn-mute" class="icon-btn" title="Toggle Sound Effects [M]" aria-label="Toggle Sound">
+            <span id="mute-icon">&#128266;</span>
+          </button>
+          <button id="btn-settings" class="icon-btn" title="Settings & Save Data [Esc]" aria-label="Settings">
+            &#9881;
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- =========================================================
+         BOSS HEALTH BAR (Active during Boss Encounters)
+         ========================================================= -->
+    <section id="boss-hud" class="boss-hud hidden" aria-label="Boss Status">
+      <div class="boss-hud-header">
+        <div>
+          <span id="boss-name" class="boss-name">Boss Name</span>
+          <span id="boss-subtitle" class="boss-subtitle">Title</span>
+        </div>
+        <div id="boss-tags" class="boss-tags"></div>
+      </div>
+      <div class="bar-track bar-boss">
+        <div id="boss-hp-fill" class="bar-fill boss-fill" style="width: 100%"></div>
+        <span id="boss-hp-text" class="bar-text">10,000 / 10,000</span>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         SURVIVAL HAZARD METER (Active inside Dungeons)
+         ========================================================= -->
+    <aside id="survival-hud" class="survival-hud hidden" aria-label="Environmental Hazard">
+      <div class="survival-header">
+        <span id="hazard-icon" class="hazard-icon">&#10022;</span>
+        <span id="hazard-name" class="hazard-name">Oxygen Level</span>
+        <span id="hazard-status-text" class="hazard-status">100%</span>
+      </div>
+      <div class="bar-track bar-hazard">
+        <div id="hazard-bar-fill" class="bar-fill hazard-fill" style="width: 100%"></div>
+      </div>
+      <div id="hazard-tip" class="hazard-tip">Stand near glowing crystal vents to restore oxygen.</div>
+    </aside>
+
+    <!-- =========================================================
+         INTERACTIVE WORLD PROMPT
+         ========================================================= -->
+    <div id="interact-prompt" class="interact-prompt hidden">
+      <kbd>F</kbd> <span id="interact-prompt-text">Open Dungeon Gate</span>
+    </div>
+
+    <!-- =========================================================
+         BOTTOM HUD: VITALS, SKILL HOTBAR, MINIMAP
+         ========================================================= -->
+    <footer id="bottom-hud" class="bottom-hud">
+      <!-- Left: Health, Shield & Survival Flask -->
+      <div class="vitals-panel">
+        <div class="vital-row">
+          <div class="vital-labels">
+            <span class="vital-title">VITALITY</span>
+            <span id="hp-text" class="vital-numbers">250 / 250</span>
+          </div>
+          <div class="bar-track bar-hp">
+            <div id="hp-bar-fill" class="bar-fill hp-fill" style="width: 100%"></div>
+            <div id="shield-bar-fill" class="bar-fill shield-fill" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <button id="btn-flask" class="flask-btn" title="Drink Survival Flask [R] - Restores 45% HP and stabilizes hazard">
+          <span class="flask-icon">&#9879;</span>
+          <div class="flask-info">
+            <span class="flask-label">Survival Flask</span>
+            <span id="flask-count" class="flask-count">3 Left</span>
+          </div>
+          <kbd>R</kbd>
+          <div id="flask-cd" class="cooldown-curtain hidden"></div>
+        </button>
+      </div>
+
+      <!-- Center: Combat Action Hotbar -->
+      <div class="skill-hotbar" aria-label="Combat Skills">
+        <div id="skill-auto" class="skill-slot skill-passive" title="Auto-Attack: Fires automatically when enemies enter weapon range">
+          <span class="skill-key">AUTO</span>
+          <span id="skill-auto-icon" class="skill-icon">&#9876;</span>
+          <span id="skill-auto-name" class="skill-name">Strike</span>
+        </div>
+
+        <button id="skill-q" class="skill-slot skill-active" title="Weapon Skill [Q]">
+          <span class="skill-key">Q</span>
+          <span id="skill-q-icon" class="skill-icon">&#10040;</span>
+          <span id="skill-q-name" class="skill-name">Cleave</span>
+          <div id="skill-q-cd" class="cooldown-curtain hidden"></div>
+          <span id="skill-q-cd-text" class="cooldown-text hidden"></span>
+        </button>
+
+        <button id="skill-e" class="skill-slot skill-active" title="Armor / Relic Skill [E]">
+          <span class="skill-key">E</span>
+          <span id="skill-e-icon" class="skill-icon">&#10023;</span>
+          <span id="skill-e-name" class="skill-name">Aegis</span>
+          <div id="skill-e-cd" class="cooldown-curtain hidden"></div>
+          <span id="skill-e-cd-text" class="cooldown-text hidden"></span>
+        </button>
+
+        <button id="skill-dash" class="skill-slot skill-dash" title="Dash / Dodge Roll [Spacebar] - Grants brief invulnerability">
+          <span class="skill-key">SPACE</span>
+          <span class="skill-icon">&#10148;</span>
+          <span class="skill-name">Dash</span>
+          <div id="skill-dash-cd" class="cooldown-curtain hidden"></div>
+          <span id="skill-dash-cd-text" class="cooldown-text hidden"></span>
+        </button>
+      </div>
+
+      <!-- Right: Minimap & Controls Hint -->
+      <div class="minimap-panel">
+        <canvas id="minimap-canvas" width="150" height="96"></canvas>
+        <div class="controls-hint">
+          <span><kbd>WASD</kbd> Move</span>
+          <span><kbd>SPACE</kbd> Dash</span>
+          <span><kbd>Q</kbd><kbd>E</kbd> Skills</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- =========================================================
+         MODAL BACKDROP & RPG INTERFACE PANELS
+         ========================================================= -->
+    <div id="modal-backdrop" class="modal-backdrop hidden">
+
+      <!-- 1. DUNGEON GATE MODAL -->
+      <section id="modal-dungeon" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="dungeon-modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — Expedition Selector</h2>
+            <p class="modal-subtitle">Choose a realm, set difficulty, and activate Rift Mutators for amplified loot.</p>
+          </div>
+          <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+        </header>
+
+        <div class="modal-body dungeon-layout">
+          <!-- Dungeon Selection Cards -->
+          <div id="dungeon-list" class="dungeon-grid"></div>
+
+          <!-- Expedition Configuration Sidebar -->
+          <aside class="expedition-config">
+            <div id="selected-dungeon-header" class="selected-dungeon-header">
+              <h3 id="cfg-dungeon-name">Sunken Quarry</h3>
+              <p id="cfg-dungeon-desc" class="muted-text"></p>
+              <div id="cfg-hazard-box" class="info-callout"></div>
+              <div id="cfg-loot-preview" class="loot-preview-tags"></div>
+            </div>
+
+            <div class="config-block">
+              <h4 class="config-label">Difficulty Tier</h4>
+              <div class="difficulty-selector">
+                <button class="diff-btn active" data-diff="normal">
+                  <span class="diff-name">Normal</span>
+                  <span class="diff-meta">1.0x Loot</span>
+                </button>
+                <button class="diff-btn" data-diff="nightmare">
+                  <span class="diff-name">Nightmare</span>
+                  <span class="diff-meta">2.2x Loot</span>
+                </button>
+                <button class="diff-btn" data-diff="abyssal">
+                  <span class="diff-name">Abyssal</span>
+                  <span class="diff-meta">4.5x Loot</span>
+                </button>
+              </div>
+              <div id="cfg-rec-power" class="rec-power-note">Recommended Power: 100</div>
+            </div>
+
+            <div class="config-block">
+              <div class="config-label-row">
+                <h4 class="config-label">Rift Key Mutators</h4>
+                <span id="total-reward-mult" class="reward-mult-pill">Rewards: 1.0x</span>
+              </div>
+              <div id="mutator-list" class="mutator-list"></div>
+            </div>
+
+            <button id="btn-enter-dungeon" class="btn btn-primary btn-lg btn-block">
+              Enter Rift Expedition
+            </button>
+          </aside>
+        </div>
+      </section>
+
+      <!-- 2. ARMORY & INVENTORY MODAL -->
+      <section id="modal-armory" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="armory-modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="armory-modal-title">&#128737; Sanctuary Armory &amp; Gear</h2>
+            <p class="modal-subtitle">Equip Weapons, Armor Sets, and Relics to alter your hero's visuals, stats, and active skills.</p>
+          </div>
+          <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+        </header>
+
+        <div class="modal-body armory-layout">
+          <!-- Left: Equipment & Live Stats -->
+          <div class="armory-character">
+            <div class="equipped-section">
+              <h3 class="section-title">Equipped Loadout</h3>
+              <div id="equipped-slots" class="equipped-slots">
+                <div class="equip-slot-wrap" data-slot="weapon">
+                  <span class="slot-caption">Weapon</span>
+                  <div id="slot-weapon" class="gear-card slot-card"></div>
+                </div>
+                <div class="equip-slot-wrap" data-slot="armor">
+                  <span class="slot-caption">Armor Set</span>
+                  <div id="slot-armor" class="gear-card slot-card"></div>
+                </div>
+                <div class="equip-slot-wrap" data-slot="relic">
+                  <span class="slot-caption">Special Relic</span>
+                  <div id="slot-relic" class="gear-card slot-card"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="skills-preview-box">
+              <h3 class="section-title">Active Combat Skills</h3>
+              <div id="equipped-skills-preview" class="skills-preview-list"></div>
+            </div>
+
+            <div class="stats-sheet-box">
+              <h3 class="section-title">Hero Attributes</h3>
+              <div id="char-stats-grid" class="stats-grid"></div>
+            </div>
+          </div>
+
+          <!-- Right: Inventory Bag & Inspector -->
+          <div id="inventory-panel" class="armory-inventory">
+            <div class="inv-toolbar">
+              <div class="filter-group" id="inv-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="weapon">Weapons</button>
+                <button class="filter-btn" data-filter="armor">Armor</button>
+                <button class="filter-btn" data-filter="relic">Relics</button>
+              </div>
+              <div class="inv-meta-actions">
+                <span id="inv-count" class="inv-count">0 / 48</span>
+                <select id="inv-sort" class="rpg-select" aria-label="Sort inventory">
+                  <option value="rarity">Sort: Rarity</option>
+                  <option value="power">Sort: Power</option>
+                  <option value="level">Sort: Upgrade Lv</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="inventory-grid" class="inventory-grid"></div>
+
+            <div class="inv-footer">
+              <div id="selected-item-bar" class="selected-item-bar">
+                <span class="muted-text">Click an item to inspect, equip, sell, or salvage.</span>
+              </div>
+              <div class="bulk-actions">
+                <button id="btn-bulk-sell" class="btn btn-secondary btn-sm" title="Sell all unlocked Common & Rare items for Gold">
+                  Sell Common/Rare
+                </button>
+                <button id="btn-bulk-salvage" class="btn btn-accent btn-sm" title="Salvage all unlocked Common & Rare items into Rift Shards">
+                  Salvage Common/Rare
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. BLACKSMITH FORGE MODAL -->
+      <section id="modal-forge" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="forge-modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="forge-modal-title">&#9874; Obsidian Blacksmith &amp; Artificer</h2>
+            <p class="modal-subtitle">Temper equipped gear up to +50 with Gold, reforge bonus sub-stats, or craft missing set pieces with Rift Shards.</p>
+          </div>
+          <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+        </header>
+
+        <div class="modal-body forge-layout">
+          <!-- Left: Upgrade & Reforge Equipped Gear -->
+          <div class="forge-column">
+            <h3 class="section-title">Select Equipped Piece to Temper</h3>
+            <div id="forge-slot-tabs" class="forge-slot-tabs">
+              <button class="forge-slot-btn active" data-forge-slot="weapon">Weapon</button>
+              <button class="forge-slot-btn" data-forge-slot="armor">Armor</button>
+              <button class="forge-slot-btn" data-forge-slot="relic">Relic</button>
+            </div>
+
+            <div id="forge-selected-card" class="forge-preview-card"></div>
+
+            <div class="forge-action-panel">
+              <div class="forge-panel-block">
+                <div class="forge-block-header">
+                  <h4>Temper Upgrade (+1 to +50)</h4>
+                  <span id="forge-upgrade-cost" class="cost-badge gold-text">50 Gold</span>
+                </div>
+                <div id="forge-upgrade-delta" class="forge-delta"></div>
+                <button id="btn-forge-upgrade" class="btn btn-primary btn-block">Temper Equipment</button>
+              </div>
+
+              <div class="forge-panel-block">
+                <div class="forge-block-header">
+                  <h4>Reforge Bonus Sub-Stats</h4>
+                  <span id="forge-reroll-cost" class="cost-badge shard-text">15 Shards</span>
+                </div>
+                <div id="forge-substats-list" class="substats-list"></div>
+                <button id="btn-forge-reroll" class="btn btn-accent btn-block">Reroll Sub-Stats</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Flasks & Targeted Set Crafting -->
+          <div class="forge-column">
+            <div class="flask-shop-card">
+              <div>
+                <h3 class="section-title">Alchemical Survival Flasks</h3>
+                <p class="muted-text">Restores 45% Max HP and stabilizes active dungeon hazards in combat.</p>
+                <div id="forge-flask-owned" class="owned-pill">Owned: 3 / 10</div>
+              </div>
+              <button id="btn-buy-flask" class="btn btn-secondary">
+                Buy Flask (<span id="forge-flask-cost">75</span> Gold)
+              </button>
+            </div>
+
+            <div class="craft-section">
+              <div class="craft-header">
+                <h3 class="section-title">Rift-Forged Set Crafting</h3>
+                <span class="muted-text">Guaranteed Rare+ (High Epic/Mythic chance)</span>
+              </div>
+              <div id="craft-gear-list" class="craft-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. MERCENARY GUILD MODAL -->
+      <section id="modal-guild" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="guild-modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="guild-modal-title">&#9813; Mercenary Guild &amp; Passive Dispatch</h2>
+            <p class="modal-subtitle">Clear dungeon bosses to unlock automated mercenary squads and permanent Renown blessings.</p>
+          </div>
+          <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+        </header>
+
+        <div class="modal-body guild-layout">
+          <div class="guild-banner">
+            <div class="guild-metric">
+              <span class="metric-label">Passive Gold Income</span>
+              <span id="guild-passive-gold" class="metric-val gold-text">0 / sec</span>
+            </div>
+            <div class="guild-metric">
+              <span class="metric-label">Passive Shard Income</span>
+              <span id="guild-passive-shards" class="metric-val shard-text">0 / sec</span>
+            </div>
+            <div class="guild-metric">
+              <span class="metric-label">Available Guild Renown</span>
+              <span id="guild-renown-val" class="metric-val renown-text">0</span>
+            </div>
+          </div>
+
+          <div class="guild-columns">
+            <div class="guild-col">
+              <h3 class="section-title">Automated Dungeon Squads</h3>
+              <div id="mercenary-list" class="mercenary-list"></div>
+            </div>
+
+            <div class="guild-col">
+              <h3 class="section-title">Permanent Guild Blessings</h3>
+              <div id="blessing-list" class="blessing-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. RUN SUMMARY MODAL (VICTORY / DEFEAT) -->
+      <section id="modal-run-summary" class="rpg-modal modal-medium hidden" role="dialog" aria-labelledby="summary-title">
+        <header class="modal-header summary-header">
+          <div>
+            <h2 id="summary-title">RIFT CONQUERED</h2>
+            <p id="summary-subtitle" class="modal-subtitle">Sunken Quarry — Normal</p>
+          </div>
+        </header>
+
+        <div class="modal-body summary-body">
+          <div id="summary-stats" class="summary-stats-grid"></div>
+
+          <div class="summary-loot-section">
+            <h3 class="section-title">Spoils Collected</h3>
+            <div id="summary-loot" class="summary-loot-grid"></div>
+          </div>
+
+          <div class="summary-actions">
+            <button id="btn-summary-hub" class="btn btn-secondary btn-lg">Return to Sanctuary</button>
+            <button id="btn-summary-retry" class="btn btn-primary btn-lg">Run Rift Again</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. SETTINGS & SAVE DATA MODAL -->
+      <section id="modal-settings" class="rpg-modal modal-medium hidden" role="dialog" aria-labelledby="settings-modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="settings-modal-title">&#9881; System Settings &amp; Chronicles Save</h2>
+            <p class="modal-subtitle">Progress auto-saves locally every 15 seconds and after every expedition.</p>
+          </div>
+          <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+        </header>
+
+        <div class="modal-body settings-body">
+          <div class="settings-section">
+            <h3 class="section-title">Audio &amp; Visual Feedback</h3>
+            <div class="setting-row">
+              <label for="setting-volume">Synthesizer Volume</label>
+              <input id="setting-volume" type="range" min="0" max="100" value="45" />
+            </div>
+            <div class="setting-row">
+              <label for="setting-mute">Mute All Audio</label>
+              <input id="setting-mute" type="checkbox" />
+            </div>
+            <div class="setting-row">
+              <label for="setting-dmg-nums">Floating Damage Numbers</label>
+              <input id="setting-dmg-nums" type="checkbox" checked />
+            </div>
+            <div class="setting-row">
+              <label for="setting-shake">Impact Screen Shake</label>
+              <input id="setting-shake" type="checkbox" checked />
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3 class="section-title">Save Data Management</h3>
+            <div class="save-btn-row">
+              <button id="btn-save-now" class="btn btn-primary btn-sm">Save Now</button>
+              <button id="btn-export-save" class="btn btn-secondary btn-sm">Copy Save JSON</button>
+              <button id="btn-reset-save" class="btn btn-danger btn-sm">Hard Reset Progress</button>
+            </div>
+            <textarea id="import-save-text" class="save-textarea" rows="3" placeholder="Paste exported JSON save data here to restore progress..."></textarea>
+            <button id="btn-import-save" class="btn btn-accent btn-sm">Import Save JSON</button>
+          </div>
+
+          <div class="settings-section">
+            <h3 class="section-title">Controls Legend</h3>
+            <div class="controls-legend">
+              <div><kbd>W A S D</kbd> / <kbd>Arrows</kbd> Move (Isometric 8-Way)</div>
+              <div><kbd>Spacebar</kbd> Dash &amp; Invulnerability Dodge</div>
+              <div><kbd>Q</kbd> Cast Weapon Skill</div>
+              <div><kbd>E</kbd> Cast Armor / Relic Skill</div>
+              <div><kbd>R</kbd> Drink Survival Flask</div>
+              <div><kbd>F</kbd> Interact with Camp Station / Portal</div>
+              <div><kbd>1 - 4</kbd> Open Sanctuary Panels</div>
+              <div><kbd>M</kbd> Mute Audio</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Floating Gear Comparison Tooltip -->
+    <div id="item-tooltip" class="item-tooltip hidden" role="tooltip"></div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
