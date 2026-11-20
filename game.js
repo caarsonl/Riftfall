@@ -1,8 +1,8 @@
 /* ==========================================================================
    RIFTFALL — CORE ENGINE & RPG RUNTIME (game.js) — PART 1 OF 2
-   2.5D Isometric Canvas Engine, Procedural Dungeons, Telegraphed Boss AI,
-   Environmental Survival Hazards, Loot Physics, Web Audio Synth,
-   Idle Mercenaries, Blacksmith Forging, and LocalStorage Persistence.
+   Pixel-Art 2.5D Isometric Engine, Distinct Enemy & Boss Sprites,
+   Directional Character Eyes, Survival Hazards, Loot Physics, Web Audio Synth,
+   Idle Mercenaries, Blacksmith Forging, and Crash-Proof Game Loop.
    ========================================================================== */
 
 (() => {
@@ -29,10 +29,6 @@
     if (abs >= 1e6) return (n / 1e6).toFixed(2) + "M";
     if (abs >= 1e4) return (n / 1e3).toFixed(1) + "K";
     return Math.floor(n).toLocaleString();
-  }
-
-  function fmtPct(v) {
-    return Math.round(v * 100) + "%";
   }
 
   function fmtStatVal(key, val) {
@@ -67,64 +63,74 @@
     }
 
     init() {
-      if (this.ctx) {
-        if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
-        return;
+      try {
+        if (this.ctx) {
+          if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
+          return;
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.ctx = new AudioCtx();
+        const len = Math.floor(this.ctx.sampleRate * 0.4);
+        this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      } catch (e) {
+        this.ctx = null;
       }
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-      const len = this.ctx.sampleRate * 0.4;
-      this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const data = this.noiseBuffer.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
 
     tone(freqStart, freqEnd, duration, type = "triangle", gainPeak = 0.25, delay = 0) {
       if (this.muted || this.volume <= 0) return;
-      this.init();
-      if (!this.ctx) return;
+      try {
+        this.init();
+        if (!this.ctx) return;
 
-      const now = this.ctx.currentTime + delay;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(Math.max(30, freqStart), now);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(30, freqEnd), now + duration);
+        const now = this.ctx.currentTime + delay;
+        const dur = Math.max(0.02, duration);
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(Math.max(30, freqStart), now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(30, freqEnd), now + dur);
 
-      const peak = gainPeak * this.volume;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(peak, now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        const peak = Math.max(0.001, gainPeak * this.volume);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(peak, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + duration + 0.02);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.02);
+      } catch (e) {}
     }
 
     noise(duration, filterFreq = 900, gainPeak = 0.22, delay = 0) {
       if (this.muted || this.volume <= 0) return;
-      this.init();
-      if (!this.ctx || !this.noiseBuffer) return;
+      try {
+        this.init();
+        if (!this.ctx || !this.noiseBuffer) return;
 
-      const now = this.ctx.currentTime + delay;
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.noiseBuffer;
+        const now = this.ctx.currentTime + delay;
+        const dur = Math.max(0.02, duration);
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
 
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.setValueAtTime(filterFreq, now);
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(filterFreq, now);
 
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(gainPeak * this.volume, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(Math.max(0.001, gainPeak * this.volume), now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
 
-      src.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.ctx.destination);
-      src.start(now);
-      src.stop(now + duration + 0.02);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        src.start(now);
+        src.stop(now + dur + 0.02);
+      } catch (e) {}
     }
 
     swing() {
@@ -229,7 +235,7 @@
      ======================================================================== */
   const GearSystem = {
     getTemplate(templateId) {
-      return DATA.GEAR_TEMPLATES[templateId];
+      return DATA.GEAR_TEMPLATES[templateId] || DATA.GEAR_TEMPLATES.iron_blade;
     },
 
     getDungeonTierIndex(dungeonId) {
@@ -238,7 +244,8 @@
     },
 
     rollSubstats(rarityId, tierIndex = 1) {
-      const count = DATA.RARITIES[rarityId].substatCount;
+      const rar = DATA.RARITIES[rarityId] || DATA.RARITIES.common;
+      const count = rar.substatCount;
       const pool = [...DATA.SUBSTAT_POOL];
       const chosen = [];
       for (let i = 0; i < count && pool.length > 0; i++) {
@@ -247,10 +254,10 @@
         let val = randRange(def.min, def.max);
         if (def.scalesWithTier) {
           val *= 1 + (tierIndex - 1) * 0.65;
-          val *= DATA.RARITIES[rarityId].statMult * 0.85;
+          val *= rar.statMult * 0.85;
           val = Math.round(val);
         } else {
-          val = Number((val * (0.85 + DATA.RARITIES[rarityId].order * 0.12)).toFixed(3));
+          val = Number((val * (0.85 + rar.order * 0.12)).toFixed(3));
         }
         chosen.push({ key: def.key, value: val });
       }
@@ -259,21 +266,22 @@
 
     createItem(templateId, rarityId = "common", upgradeLevel = 0) {
       const tpl = this.getTemplate(templateId);
+      const safeRar = DATA.RARITIES[rarityId] ? rarityId : "common";
       const tierIndex = this.getDungeonTierIndex(tpl.dungeonId);
       return {
         uid: uid(),
-        templateId,
+        templateId: tpl.id,
         slot: tpl.slot,
-        rarity: rarityId,
+        rarity: safeRar,
         level: upgradeLevel,
         locked: false,
-        substats: this.rollSubstats(rarityId, tierIndex)
+        substats: this.rollSubstats(safeRar, tierIndex)
       };
     },
 
     rollRarity(luckBonus = 0, minRarity = "common") {
       const rarities = ["common", "rare", "epic", "mythic"];
-      const minOrder = DATA.RARITIES[minRarity].order;
+      const minOrder = (DATA.RARITIES[minRarity] || DATA.RARITIES.common).order;
       const weights = rarities.map((id) => {
         const r = DATA.RARITIES[id];
         if (r.order < minOrder) return 0;
@@ -294,8 +302,8 @@
     computeItemStats(item, levelOverride = null) {
       if (!item) return {};
       const tpl = this.getTemplate(item.templateId);
-      const rar = DATA.RARITIES[item.rarity];
-      const lvl = levelOverride !== null ? levelOverride : item.level;
+      const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
+      const lvl = levelOverride !== null ? levelOverride : item.level || 0;
       const mult = rar.statMult * (1 + lvl * 0.085);
       const out = {};
 
@@ -329,37 +337,37 @@
     },
 
     getSellValue(item) {
-      const rar = DATA.RARITIES[item.rarity];
+      const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       const tpl = this.getTemplate(item.templateId);
       const tier = this.getDungeonTierIndex(tpl.dungeonId);
       return Math.round(rar.sellBase * (1 + (tier - 1) * 0.85) * (1 + item.level * 0.22));
     },
 
     getSalvageValue(item) {
-      const rar = DATA.RARITIES[item.rarity];
+      const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       const tpl = this.getTemplate(item.templateId);
       const tier = this.getDungeonTierIndex(tpl.dungeonId);
       return Math.max(1, Math.round(rar.salvageBase * (1 + (tier - 1) * 0.7) * (1 + item.level * 0.14)));
     },
 
     getUpgradeCost(item) {
-      const rar = DATA.RARITIES[item.rarity];
+      const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       const tpl = this.getTemplate(item.templateId);
       const tier = this.getDungeonTierIndex(tpl.dungeonId);
       return Math.round((40 + item.level * 30) * Math.pow(1.11, item.level) * (0.85 + rar.order * 0.2) * (0.8 + tier * 0.35));
     },
 
     getRerollCost(item) {
-      const rar = DATA.RARITIES[item.rarity];
+      const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       return Math.round(C.REROLL_BASE_SHARDS * (0.75 + rar.order * 0.45));
     }
   };
 
   /* ========================================================================
-     ISOMETRIC PROJECTION & 2.5D RENDER HELPERS
+     ISOMETRIC PIXEL PROJECTION & 2.5D RENDER HELPERS
      ======================================================================== */
   const ISO = {
-    PIXEL_SCALE: 2, // Renders at 1/2 native resolution and scales up crisp with nearest-neighbor
+    PIXEL_SCALE: 2,
     TILE_W: 48,
     TILE_H: 24,
     Z_SCALE: 20,
@@ -440,7 +448,6 @@
     ctx.fillStyle = colTop;
     ctx.fill();
 
-    // Crisp retro pixel-art outline around outer silhouette & top ridge
     if (stroke) {
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 1;
@@ -454,7 +461,6 @@
       ctx.closePath();
       ctx.stroke();
 
-      // Top highlight edge
       ctx.strokeStyle = "rgba(255,255,255,0.22)";
       ctx.beginPath();
       ctx.moveTo(x - hw + 1, y - h);
@@ -465,8 +471,9 @@
   }
 
   function drawIsoGroundEllipse(ctx, sx, sy, radiusTiles, fill, stroke = null, lineWidth = 1) {
-    const rx = Math.max(1, Math.round(radiusTiles * ISO.TILE_W * 0.52));
-    const ry = Math.max(1, Math.round(radiusTiles * ISO.TILE_H * 0.52));
+    const r = Number.isFinite(radiusTiles) ? Math.max(0.05, radiusTiles) : 0.5;
+    const rx = Math.max(1, Math.round(r * ISO.TILE_W * 0.52));
+    const ry = Math.max(1, Math.round(r * ISO.TILE_H * 0.52));
     ctx.beginPath();
     ctx.ellipse(Math.round(sx), Math.round(sy), rx, ry, 0, 0, Math.PI * 2);
     if (fill) {
@@ -485,7 +492,7 @@
      ======================================================================== */
   class RiftfallGame {
     constructor() {
-      document.title = DATA.GAME_TITLE + " — 2.5D Isometric Dungeon RPG";
+      document.title = DATA.GAME_TITLE + " — Pixel 2.5D Isometric Dungeon RPG";
 
       this.canvas = document.getElementById("game-canvas");
       this.ctx = this.canvas.getContext("2d");
@@ -494,11 +501,9 @@
 
       this.sfx = new SoundEngine();
 
-      // Persistent state
       this.save = this.createDefaultSave();
       this.loadGame();
 
-      // Runtime mode: "hub" | "dungeon"
       this.mode = "hub";
       this.activeModal = null;
       this.selectedInvUid = null;
@@ -506,16 +511,12 @@
       this.invSort = "rarity";
       this.forgeSlot = "weapon";
 
-      // Input state
       this.keys = new Set();
-      this.mouse = { x: 0, y: 0 };
 
-      // World & camera
       this.world = null;
       this.cam = { x: 7.5, y: 7.5, shakeTime: 0, shakeMag: 0 };
       this.elapsed = 0;
 
-      // Player combat entity
       this.player = {
         x: 7.5,
         y: 8.5,
@@ -542,10 +543,8 @@
         afterimages: []
       };
 
-      // Active Dungeon Run State
       this.run = null;
 
-      // Visual FX arrays
       this.projectiles = [];
       this.telegraphs = [];
       this.particles = [];
@@ -553,7 +552,6 @@
       this.slashArcs = [];
       this.lootDrops = [];
 
-      // Timers
       this.lastFrame = performance.now();
       this.autoSaveTimer = 0;
       this.idleGoldFrac = 0;
@@ -573,7 +571,7 @@
     }
 
     /* ======================================================================
-       SAVE / LOAD & PERSISTENCE
+       SAVE / LOAD & SANITIZATION
        ====================================================================== */
     createDefaultSave() {
       return {
@@ -621,13 +619,32 @@
         const raw = localStorage.getItem(DATA.SAVE_KEY);
         if (!raw) return;
         const parsed = JSON.parse(raw);
-        this.save = { ...this.createDefaultSave(), ...parsed };
-        this.save.settings = { ...this.createDefaultSave().settings, ...(parsed.settings || {}) };
+        const def = this.createDefaultSave();
+        this.save = { ...def, ...parsed };
+        this.save.settings = { ...def.settings, ...(parsed.settings || {}) };
+
+        // Sanitize critical fields so old/corrupted saves never freeze dungeons
+        if (!Array.isArray(this.save.inventory)) this.save.inventory = [];
+        if (!Array.isArray(this.save.selectedMutators)) this.save.selectedMutators = [];
+        if (!DATA.DUNGEONS.some((d) => d.id === this.save.selectedDungeonId)) {
+          this.save.selectedDungeonId = "sunken_quarry";
+        }
+        if (!DATA.DIFFICULTIES[this.save.selectedDiff]) {
+          this.save.selectedDiff = "normal";
+        }
+        if (!this.save.equipped || typeof this.save.equipped !== "object") {
+          this.save.equipped = def.equipped;
+        }
+        for (const slot of ["weapon", "armor", "relic"]) {
+          const it = this.save.equipped[slot];
+          if (!it || !DATA.GEAR_TEMPLATES[it.templateId]) {
+            this.save.equipped[slot] = def.equipped[slot];
+          }
+        }
 
         this.sfx.volume = this.save.settings.volume / 100;
         this.sfx.muted = !!this.save.settings.muted;
 
-        // Calculate offline idle mercenary earnings (up to 4 hours)
         const rates = this.getPassiveRates();
         if (this.save.lastTimestamp && (rates.goldPerSec > 0 || rates.shardsPerSec > 0)) {
           const secs = clamp((Date.now() - this.save.lastTimestamp) / 1000, 0, 14400);
@@ -851,9 +868,9 @@
     }
 
     startDungeon(dungeonId, diffId, mutatorIds) {
-      const dungeon = DATA.DUNGEONS.find((d) => d.id === dungeonId);
-      const diff = DATA.DIFFICULTIES[diffId];
-      if (!dungeon || !diff) return;
+      const dungeon = DATA.DUNGEONS.find((d) => d.id === dungeonId) || DATA.DUNGEONS[0];
+      const diff = DATA.DIFFICULTIES[diffId] || DATA.DIFFICULTIES.normal;
+      const safeMutators = Array.isArray(mutatorIds) ? [...mutatorIds] : [];
 
       this.closeAllModals();
       this.sfx.portal();
@@ -861,7 +878,7 @@
 
       let rewardMult = diff.lootMult;
       let rarityLuck = diff.rarityLuck;
-      for (const mid of mutatorIds) {
+      for (const mid of safeMutators) {
         const m = DATA.MUTATORS.find((x) => x.id === mid);
         if (m) {
           rewardMult += m.rewardBonus;
@@ -872,7 +889,7 @@
       this.run = {
         dungeon,
         diff,
-        mutators: [...mutatorIds],
+        mutators: safeMutators,
         rewardMult,
         rarityLuck,
         roomIndex: 0,
@@ -912,7 +929,7 @@
       diffEl.className = "difficulty-badge diff-" + diff.id;
 
       const mutEl = document.getElementById("mutator-badges");
-      mutEl.innerHTML = mutatorIds
+      mutEl.innerHTML = safeMutators
         .map((id) => {
           const m = DATA.MUTATORS.find((x) => x.id === id);
           return m ? `<span class="mutator-chip" title="${m.name}: ${m.desc}">${m.icon} ${m.name}</span>` : "";
@@ -1029,7 +1046,7 @@
     }
 
     createEnemy(templateId, x, y, roomIndex) {
-      const tpl = DATA.ENEMIES[templateId];
+      const tpl = DATA.ENEMIES[templateId] || DATA.ENEMIES.crystal_crawler;
       const diff = this.run.diff;
       const roomScale = 1 + roomIndex * 0.14;
       const speedMult = this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0;
@@ -1131,35 +1148,40 @@
     }
 
     /* ======================================================================
-       MAIN LOOP & FIXED-SAFE UPDATE
+       CRASH-PROOF MAIN LOOP
        ====================================================================== */
     loop(now) {
-      const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
-      this.lastFrame = now;
-      this.elapsed += dt;
-
-      this.updateIdleEconomy(dt);
-
-      if (!this.activeModal) {
-        this.updateWorld(dt);
-      }
-
-      this.render();
-      this.renderMinimap();
-
-      this.hudSyncTimer += dt;
-      if (this.hudSyncTimer >= 0.1) {
-        this.hudSyncTimer = 0;
-        this.syncLiveHUD();
-      }
-
-      this.autoSaveTimer += dt;
-      if (this.autoSaveTimer >= C.AUTO_SAVE_INTERVAL) {
-        this.autoSaveTimer = 0;
-        this.saveGame(false);
-      }
-
+      // Always schedule the next frame first so a transient error can never freeze the loop
       requestAnimationFrame((t) => this.loop(t));
+
+      try {
+        const dt = Math.min(0.05, Math.max(0.001, (now - this.lastFrame) / 1000));
+        this.lastFrame = now;
+        this.elapsed += dt;
+
+        this.updateIdleEconomy(dt);
+
+        if (!this.activeModal) {
+          this.updateWorld(dt);
+        }
+
+        this.render();
+        this.renderMinimap();
+
+        this.hudSyncTimer += dt;
+        if (this.hudSyncTimer >= 0.1) {
+          this.hudSyncTimer = 0;
+          this.syncLiveHUD();
+        }
+
+        this.autoSaveTimer += dt;
+        if (this.autoSaveTimer >= C.AUTO_SAVE_INTERVAL) {
+          this.autoSaveTimer = 0;
+          this.saveGame(false);
+        }
+      } catch (err) {
+        console.error("Riftfall frame error recovered:", err);
+      }
     }
 
     updateIdleEconomy(dt) {
@@ -1226,7 +1248,7 @@
         this.updateDungeonHazard(dt, stats);
         this.updateMutatorEvents(dt);
         this.updateEnemies(dt);
-        this.updateTelegraphs(dt, stats);
+        this.updateTelegraphs(dt);
         this.updateProjectiles(dt, stats);
         this.updateLootAndPortals(dt);
       }
@@ -1773,7 +1795,7 @@
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(amount));
     }
 
-    // === END OF PART 1/2 — PASTE PART 2/2 IMMEDIATELY BELOW THIS LINE ===
+    // === END OF PART 1/2 — REPLY "2" FOR PART 2/2 ===
     /* ======================================================================
        ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
        ====================================================================== */
@@ -1884,7 +1906,7 @@
         this.run.meteorTimer -= dt;
         if (this.run.meteorTimer <= 0) {
           this.run.meteorTimer = 4.5;
-          const baseDmg = Math.round(35 * this.run.diff.dmgMult * (1 + this.getDungeonOrder() * 0.6));
+          const baseDmg = Math.round(35 * this.run.diff.dmgMult * (1 + Math.max(0, this.getDungeonOrder()) * 0.6));
           for (let i = 0; i < 2; i++) {
             const tx = clamp(this.player.x + randRange(-2.8, 2.8), 1.5, this.world.size - 1.5);
             const ty = clamp(this.player.y + randRange(-2.8, 2.8), 1.5, this.world.size - 1.5);
@@ -2214,7 +2236,7 @@
           this.sfx.loot("rare");
           this.spawnBurst(ch.x, ch.y, "#f6c453", 18, 3.2);
           this.spawnFloatingText(ch.x, ch.y, 1.3, `+${bonusGold} Gold`, "#f6c453", true);
-          if (Math.random() < 0.55) this.dropLootItem(ch.x, ch.y, false);
+          if (Math.random() < 0.45) this.dropLootItem(ch.x, ch.y, false);
         }
       }
 
@@ -2399,7 +2421,7 @@
     }
 
     /* ======================================================================
-       2.5D ISOMETRIC RENDERING ENGINE
+       2.5D PIXEL-ART ISOMETRIC RENDERING ENGINE
        ====================================================================== */
     resizeCanvas() {
       const w = Math.max(320, Math.floor(this.canvas.clientWidth / ISO.PIXEL_SCALE));
@@ -2419,7 +2441,6 @@
       ctx.fillStyle = pal.bgBottom;
       ctx.fillRect(0, 0, w, h);
 
-      // Subtle retro horizontal sky/void banding
       ctx.fillStyle = pal.bgTop;
       ctx.fillRect(0, 0, w, Math.floor(h * 0.62));
 
@@ -2442,7 +2463,6 @@
           const col = (x + y) % 2 === 0 ? pal.tileA : pal.tileB;
           drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W, ISO.TILE_H, col, pal.tileBorder, 1);
 
-          // Deterministic pixel texture details on tiles
           const hash = (x * 37 + y * 91) & 7;
           if (hash === 1 || hash === 4) {
             ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
@@ -2546,7 +2566,7 @@
       renderables.sort((a, b) => a.depth - b.depth);
       for (const r of renderables) r.draw();
 
-      // 4. Crisp Square Pixel Particles
+      // 4. Square Pixel Particles
       for (const pt of this.particles) {
         const p = toS(pt.x, pt.y, pt.z);
         const szPx = Math.max(2, Math.round(pt.size * 0.7));
@@ -2557,7 +2577,7 @@
         ctx.restore();
       }
 
-      // 5. Classic Pixel Floating Combat Numbers
+      // 5. Pixel Floating Combat Numbers
       for (const ft of this.floatingTexts) {
         const p = toS(ft.x, ft.y, ft.z);
         ctx.save();
@@ -2577,8 +2597,8 @@
       for (const v of this.world.vents) {
         const p = toS(v.x, v.y, 0);
         const pulse = 0.92 + Math.sin(this.elapsed * 3.5) * 0.08;
-        drawIsoGroundEllipse(ctx, p.x, p.y, v.radius * pulse, "rgba(56, 189, 248, 0.16)", "rgba(125, 211, 252, 0.72)", 2);
-        drawIsoBlock(ctx, p.x, p.y, 16, 8, 18, "#bae6fd", "#38bdf8", "#0284c7");
+        drawIsoGroundEllipse(ctx, p.x, p.y, v.radius * pulse, "rgba(56, 189, 248, 0.16)", "rgba(125, 211, 252, 0.72)", 1);
+        drawIsoBlock(ctx, p.x, p.y, 12, 6, 13, "#bae6fd", "#38bdf8", "#0284c7", "#07090f");
       }
 
       for (const pool of this.world.poisonPools) {
@@ -2589,28 +2609,28 @@
           p.x,
           p.y,
           pool.radius,
-          `rgba(34, 197, 94, ${0.26 * alpha})`,
-          `rgba(163, 230, 53, ${0.75 * alpha})`,
-          2
+          `rgba(34, 197, 94, ${0.28 * alpha})`,
+          `rgba(163, 230, 53, ${0.8 * alpha})`,
+          1
         );
       }
 
       if (this.world.portal) {
         const p = toS(this.world.portal.x, this.world.portal.y, 0);
         const pulse = 1 + Math.sin(this.elapsed * 5) * 0.12;
-        drawIsoGroundEllipse(ctx, p.x, p.y, 1.25 * pulse, "rgba(56, 189, 248, 0.28)", "#7dd3fc", 2.5);
+        drawIsoGroundEllipse(ctx, p.x, p.y, 1.25 * pulse, "rgba(56, 189, 248, 0.28)", "#7dd3fc", 2);
         ctx.save();
         ctx.strokeStyle = "#e0f2fe";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y - 26, 20, 32, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x, p.y - 18, 14, 22, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
         ctx.fill();
         ctx.fillStyle = "#e0f2fe";
-        ctx.font = "700 11px sans-serif";
+        ctx.font = "bold 9px 'Courier New', monospace";
         ctx.textAlign = "center";
-        ctx.fillText("NEXT ROOM", p.x, p.y - 64);
+        ctx.fillText("NEXT ROOM", p.x, p.y - 44);
         ctx.restore();
       }
 
@@ -2618,11 +2638,11 @@
         const prog = clamp(t.elapsed / t.duration, 0, 1);
         if (t.type === "circle") {
           const p = toS(t.x, t.y, 0);
-          drawIsoGroundEllipse(ctx, p.x, p.y, t.radius, "rgba(239, 68, 68, 0.16)", "rgba(248, 113, 113, 0.9)", 2);
-          drawIsoGroundEllipse(ctx, p.x, p.y, t.radius * prog, "rgba(239, 68, 68, 0.36)", null);
+          drawIsoGroundEllipse(ctx, p.x, p.y, t.radius, "rgba(239, 68, 68, 0.18)", "rgba(248, 113, 113, 0.92)", 1);
+          drawIsoGroundEllipse(ctx, p.x, p.y, Math.max(0.1, t.radius * prog), "rgba(239, 68, 68, 0.38)", null);
         } else if (t.type === "ring") {
           const p = toS(t.x, t.y, 0);
-          drawIsoGroundEllipse(ctx, p.x, p.y, t.outerRadius, "rgba(249, 115, 22, 0.22)", "#fb923c", 2.5);
+          drawIsoGroundEllipse(ctx, p.x, p.y, t.outerRadius, "rgba(249, 115, 22, 0.22)", "#fb923c", 2);
           drawIsoGroundEllipse(
             ctx,
             p.x,
@@ -2630,9 +2650,9 @@
             lerp(t.innerRadius, t.outerRadius, prog),
             null,
             "rgba(254, 240, 138, 0.9)",
-            2
+            1
           );
-          drawIsoGroundEllipse(ctx, p.x, p.y, t.innerRadius, "rgba(15, 23, 42, 0.65)", "#4ade80", 2);
+          drawIsoGroundEllipse(ctx, p.x, p.y, t.innerRadius, "rgba(15, 23, 42, 0.65)", "#4ade80", 1);
         } else if (t.type === "line") {
           const cos = Math.cos(t.angle);
           const sin = Math.sin(t.angle);
@@ -2647,10 +2667,10 @@
           ctx.moveTo(corners[0].x, corners[0].y);
           for (let k = 1; k < 4; k++) ctx.lineTo(corners[k].x, corners[k].y);
           ctx.closePath();
-          ctx.fillStyle = `rgba(239, 68, 68, ${0.15 + prog * 0.32})`;
+          ctx.fillStyle = `rgba(239, 68, 68, ${0.16 + prog * 0.34})`;
           ctx.fill();
           ctx.strokeStyle = "rgba(252, 165, 165, 0.95)";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1;
           ctx.stroke();
         }
       }
@@ -2659,16 +2679,16 @@
         const p = toS(arc.x, arc.y, 0.25);
         const alpha = clamp(arc.life / arc.maxLife, 0, 1);
         ctx.save();
-        ctx.globalAlpha = alpha * 0.78;
+        ctx.globalAlpha = alpha * 0.82;
         if (arc.span >= Math.PI * 1.9) {
-          drawIsoGroundEllipse(ctx, p.x, p.y, arc.radius * (1.15 - alpha * 0.25), null, arc.color, 4);
+          drawIsoGroundEllipse(ctx, p.x, p.y, arc.radius * (1.15 - alpha * 0.25), null, arc.color, 3);
         } else {
           const tip = toS(arc.x + Math.cos(arc.angle), arc.y + Math.sin(arc.angle), 0.25);
           const screenAng = Math.atan2(tip.y - p.y, tip.x - p.x);
           ctx.strokeStyle = arc.color;
-          ctx.lineWidth = 6;
+          ctx.lineWidth = 4;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, arc.radius * 26, screenAng - arc.span * 0.45, screenAng + arc.span * 0.45);
+          ctx.arc(p.x, p.y, arc.radius * 18, screenAng - arc.span * 0.45, screenAng + arc.span * 0.45);
           ctx.stroke();
         }
         ctx.restore();
@@ -2678,44 +2698,44 @@
     drawStation(ctx, st, toS) {
       const p = toS(st.x, st.y, 0);
       const pulse = 0.94 + Math.sin(this.elapsed * 3) * 0.06;
-      drawIsoGroundEllipse(ctx, p.x, p.y, 1.35 * pulse, st.glow.replace(/0\.\d+/, "0.18"), st.color, 2);
+      drawIsoGroundEllipse(ctx, p.x, p.y, 1.35 * pulse, st.glow.replace(/0\.\d+/, "0.18"), st.color, 1);
 
       if (st.shape === "portal") {
-        drawIsoBlock(ctx, p.x - 22, p.y, 18, 9, 48, "#475569", "#1e293b", "#0f172a");
-        drawIsoBlock(ctx, p.x + 22, p.y, 18, 9, 48, "#475569", "#1e293b", "#0f172a");
+        drawIsoBlock(ctx, p.x - 16, p.y, 12, 6, 34, "#475569", "#1e293b", "#0f172a", "#07090f");
+        drawIsoBlock(ctx, p.x + 16, p.y, 12, 6, 34, "#475569", "#1e293b", "#0f172a", "#07090f");
         ctx.save();
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y - 28, 17, 26, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x, p.y - 20, 12, 18, 0, 0, Math.PI * 2);
         ctx.fillStyle = st.glow;
         ctx.fill();
         ctx.strokeStyle = "#e0f2fe";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
       } else {
-        drawIsoBlock(ctx, p.x, p.y, 34, 17, 24, st.color, "#1e293b", "#0f172a", "rgba(255,255,255,0.22)");
+        drawIsoBlock(ctx, p.x, p.y, 24, 12, 18, st.color, "#1e293b", "#0f172a", "#07090f");
       }
 
       ctx.save();
-      ctx.font = "700 12px 'Segoe UI', sans-serif";
+      ctx.font = "bold 9px 'Courier New', monospace";
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(8, 12, 22, 0.85)";
-      const label = `${st.icon} ${st.name}`;
-      const tw = ctx.measureText(label).width + 16;
-      ctx.fillRect(p.x - tw * 0.5, p.y - 72, tw, 20);
+      ctx.fillStyle = "rgba(8, 12, 22, 0.9)";
+      const label = st.name.toUpperCase();
+      const tw = ctx.measureText(label).width + 10;
+      ctx.fillRect(p.x - Math.floor(tw * 0.5), p.y - 50, tw, 14);
       ctx.strokeStyle = st.color;
       ctx.lineWidth = 1;
-      ctx.strokeRect(p.x - tw * 0.5, p.y - 72, tw, 20);
+      ctx.strokeRect(p.x - Math.floor(tw * 0.5), p.y - 50, tw, 14);
       ctx.fillStyle = "#f8fafc";
-      ctx.fillText(label, p.x, p.y - 58);
+      ctx.fillText(label, p.x, p.y - 40);
       ctx.restore();
     }
 
     drawChest(ctx, ch, toS) {
       const p = toS(ch.x, ch.y, 0);
-      drawIsoGroundEllipse(ctx, p.x, p.y, 0.65, "rgba(0,0,0,0.45)");
+      drawIsoGroundEllipse(ctx, p.x, p.y, 0.65, "rgba(0,0,0,0.48)");
       const topCol = ch.opened ? "#475569" : "#f59e0b";
-      drawIsoBlock(ctx, p.x, p.y, 26, 13, ch.opened ? 10 : 18, topCol, "#78350f", "#451a03", "#fef08a");
+      drawIsoBlock(ctx, p.x, p.y, 18, 9, ch.opened ? 7 : 13, topCol, "#78350f", "#451a03", "#07090f");
     }
 
     drawLootDrop(ctx, drop, toS) {
@@ -2724,26 +2744,26 @@
       const bob = Math.sin(this.elapsed * 5 + drop.life) * 0.14;
       const p = toS(drop.x, drop.y, drop.z + 0.3 + bob);
 
-      drawIsoGroundEllipse(ctx, ground.x, ground.y, 0.36, "rgba(0,0,0,0.5)");
+      drawIsoGroundEllipse(ctx, ground.x, ground.y, 0.36, "rgba(0,0,0,0.52)");
 
       if (drop.item.rarity !== "common") {
-        const beamH = drop.item.rarity === "mythic" ? 85 : drop.item.rarity === "epic" ? 56 : 36;
+        const beamH = drop.item.rarity === "mythic" ? 56 : drop.item.rarity === "epic" ? 38 : 24;
         const grad = ctx.createLinearGradient(ground.x, ground.y, ground.x, ground.y - beamH);
         grad.addColorStop(0, rar.color);
         grad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = grad;
-        ctx.fillRect(ground.x - 4, ground.y - beamH, 8, beamH);
+        ctx.fillRect(ground.x - 3, ground.y - beamH, 6, beamH);
       }
 
       ctx.save();
       ctx.fillStyle = rar.color;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(p.x, p.y - 9);
-      ctx.lineTo(p.x + 7, p.y);
-      ctx.lineTo(p.x, p.y + 9);
-      ctx.lineTo(p.x - 7, p.y);
+      ctx.moveTo(p.x, p.y - 6);
+      ctx.lineTo(p.x + 5, p.y);
+      ctx.lineTo(p.x, p.y + 6);
+      ctx.lineTo(p.x - 5, p.y);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -2763,7 +2783,6 @@
       const f = ISO.worldDirToScreen(this.player.facing.x, this.player.facing.y);
       const facingAway = f.y < -0.35;
 
-      // Ground Drop Shadow + Set Aura
       drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
       if (vis.aura) {
         drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, vis.aura, vis.trim, 1);
@@ -2777,7 +2796,7 @@
       const cloakCol = this.player.hurtFlash > 0 ? "#fecaca" : vis.cloak;
       const trimCol = this.player.iframeTimer > 0 ? "#7dd3fc" : vis.trim;
 
-      // Cape behind the hero (opposite facing direction)
+      // Cape behind hero
       if (!facingAway) {
         const capeX = Math.round(p.x - f.x * 5);
         const capeY = Math.round(p.y - 14 - bob - f.y * 2);
@@ -2791,7 +2810,7 @@
       // 2.5D Pixel Torso
       drawIsoBlock(ctx, p.x, p.y - bob, 18, 9, 18, trimCol, cloakCol, bodyCol, "#07090f");
 
-      // Cape in front of torso when facing North (away from camera)
+      // Cape in front when facing North (away from camera)
       if (facingAway) {
         ctx.fillStyle = cloakCol;
         ctx.fillRect(p.x - 6, p.y - 17 - bob, 12, 13);
@@ -2804,16 +2823,14 @@
       const headY = p.y - 18 - bob;
       drawIsoBlock(ctx, p.x, headY, 14, 7, 10, trimCol, bodyCol, "#0f172a", "#07090f");
 
-      // Directional Face Visor & Pixel Eyes (changes cleanly across all 8 directions!)
+      // Directional Face Visor & Pixel Eyes
       const eyeY = headY - 6;
       if (f.y > -0.62) {
         const shiftX = Math.round(f.x * 3);
         if (f.y >= -0.22) {
-          // Front or 3/4 Front View: Skin/Visor slit + 2 crisp pixel eyes
           ctx.fillStyle = "#fde68a";
           ctx.fillRect(p.x - 4 + shiftX, eyeY - 1, 8, 3);
 
-          // Left & Right Pixel Eyes + Pupils
           const leftEyeX = p.x - 3 + shiftX;
           const rightEyeX = p.x + 2 + shiftX;
           ctx.fillStyle = "#ffffff";
@@ -2825,7 +2842,6 @@
           ctx.fillRect(leftEyeX + pupilShift, eyeY - 1, 1, 2);
           ctx.fillRect(rightEyeX + pupilShift, eyeY - 1, 1, 2);
         } else {
-          // 3/4 Back-Side Turn: Single profile eye peeking on the turned side
           const sideSign = f.x >= 0 ? 1 : -1;
           const peekX = p.x + sideSign * 4;
           ctx.fillStyle = "#ffffff";
@@ -2834,7 +2850,6 @@
           ctx.fillRect(peekX + (sideSign > 0 ? 1 : 0), eyeY - 1, 1, 2);
         }
       } else {
-        // Pure North (Facing Away): Helmet crest / plume on back of head
         ctx.fillStyle = trimCol;
         ctx.fillRect(p.x - 1, headY - 11, 2, 5);
       }
@@ -2869,14 +2884,8 @@
       const p = toS(e.x, e.y, 0);
       const hurt = e.hurtFlash > 0;
       const stunned = e.stunTimer > 0;
+      const f = ISO.worldDirToScreen(e.facing.x, e.facing.y);
 
-      // Screen-space direction toward the player
-      const rawSx = (e.facing.x - e.facing.y) * 0.5;
-      const rawSy = (e.facing.x + e.facing.y) * 0.25;
-      const sLen = Math.hypot(rawSx, rawSy) || 1;
-      const f = { x: rawSx / sLen, y: rawSy / sLen };
-
-      // Dynamic ground shadow
       drawIsoGroundEllipse(ctx, p.x, p.y + 1, e.radius * 1.2, "rgba(0, 0, 0, 0.58)");
 
       if (e.isBoss) {
@@ -2885,7 +2894,6 @@
         this.drawMobSprite(ctx, e, p, f, hurt, stunned);
       }
 
-      // Stunned pixel stars overhead
       if (stunned) {
         const topOffset = Math.round(e.height * 22) + (e.isBoss ? 18 : 10);
         const spin = this.elapsed * 7;
@@ -2895,7 +2903,6 @@
         ctx.fillRect(p.x + Math.round(Math.cos(spin + Math.PI) * 7) - 1, p.y - topOffset + 1, 2, 2);
       }
 
-      // Crisp Pixel HP Bar (non-bosses)
       if (!e.isBoss && e.hp < e.maxHp) {
         const barW = 26;
         const topY = p.y - Math.round(e.height * 22) - 12;
@@ -2918,14 +2925,11 @@
       const stride = Math.sin(this.elapsed * 12 + e.x * 3);
       const bob = Math.round(Math.abs(stride) * 2);
 
-      // --------------------------------------------------------------------
-      // 1. CHASER ARCHETYPES (Spiders, Hounds, Stalkers, Wraiths)
-      // --------------------------------------------------------------------
+      // 1. CHASERS
       if (id === "crystal_crawler") {
-        // Scuttling 6-legged crystal spider
         ctx.strokeStyle = "#07090f";
         ctx.lineWidth = 2;
-        for (let side of [-1, 1]) {
+        for (const side of [-1, 1]) {
           for (let i = -1; i <= 1; i++) {
             const legLift = Math.round(Math.sin(this.elapsed * 16 + i * 2 + side) * 2);
             ctx.beginPath();
@@ -2935,10 +2939,8 @@
             ctx.stroke();
           }
         }
-        // Flat carapace + jagged crystal spire on back
         drawIsoBlock(ctx, p.x, p.y - bob, 20, 10, 7, cMain, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x - Math.round(f.x * 2), p.y - 7 - bob, 10, 5, 10, "#ffffff", cTrim, cMain, "#07090f");
-        // Cluster of 4 spider eyes
         if (f.y > -0.45) {
           ctx.fillStyle = eyeCol;
           ctx.fillRect(p.x - 4 + eyeShiftX, p.y - 5 - bob, 2, 2);
@@ -2950,7 +2952,6 @@
       }
 
       if (id === "clockwork_hound") {
-        // 4 mechanical running legs
         ctx.fillStyle = cDark;
         const l1 = Math.round(stride * 3);
         ctx.fillRect(p.x - 8, p.y - 5 + l1, 3, 6);
@@ -2958,12 +2959,9 @@
         ctx.fillRect(p.x - 4, p.y - 3 - l1, 3, 5);
         ctx.fillRect(p.x + 2, p.y - 3 + l1, 3, 5);
 
-        // Armored hound chassis
         drawIsoBlock(ctx, p.x, p.y - 3 - bob, 22, 11, 9, cTrim, cMain, cDark, "#07090f");
-        // Exhaust pipe & spinning gear on back
         ctx.fillStyle = "#475569";
         ctx.fillRect(p.x - Math.round(f.x * 4) - 2, p.y - 16 - bob, 3, 5);
-        // Snout / Head block shifted toward facing direction
         const hx = p.x + Math.round(f.x * 6);
         const hy = p.y - 7 - bob + Math.round(f.y * 3);
         drawIsoBlock(ctx, hx, hy, 12, 6, 7, cTrim, cMain, cDark, "#07090f");
@@ -2976,13 +2974,10 @@
       }
 
       if (id === "spore_stalker") {
-        // Hunched fungal stalker with wide spotted mushroom cap
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 5, p.y - 5 + Math.round(stride * 2), 3, 6);
         ctx.fillRect(p.x + 2, p.y - 5 - Math.round(stride * 2), 3, 6);
-        // Stalk body
         drawIsoBlock(ctx, p.x, p.y - 3 - bob, 14, 7, 10, cMain, cMain, cDark, "#07090f");
-        // Wide spotted mushroom cap
         const capY = p.y - 12 - bob;
         drawIsoBlock(ctx, p.x, capY, 26, 13, 7, cTrim, cMain, cDark, "#07090f");
         ctx.fillStyle = "#fef08a";
@@ -2997,17 +2992,13 @@
       }
 
       if (id === "void_wraith" || ai === "chaser") {
-        // Hovering spectral reaper with tattered cloak & horns
         const hover = 5 + Math.round(Math.sin(this.elapsed * 5 + e.x) * 2);
-        // Tattered cloak tail pixels
         ctx.fillStyle = cMain;
         ctx.fillRect(p.x - 7, p.y - hover - 2, 3, 5);
         ctx.fillRect(p.x - 1, p.y - hover, 3, 6);
         ctx.fillRect(p.x + 5, p.y - hover - 2, 3, 5);
-        // Tapered spectral robe + hooded head
         drawIsoBlock(ctx, p.x, p.y - hover, 18, 9, 13, cMain, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 13 - hover, 13, 7, 8, cTrim, cMain, cDark, "#07090f");
-        // Spectral claws
         ctx.fillStyle = cTrim;
         ctx.fillRect(p.x - 11, p.y - 10 - hover + bob, 3, 3);
         ctx.fillRect(p.x + 8, p.y - 10 - hover - bob, 3, 3);
@@ -3019,23 +3010,18 @@
         return;
       }
 
-      // --------------------------------------------------------------------
-      // 2. BRUISER ARCHETYPES (Golems, Slag Brutes, Mire Hulks, Sentinels)
-      // --------------------------------------------------------------------
+      // 2. BRUISERS
       if (id === "quarry_golem" || id === "mire_hulk" || id === "slag_brutes" || id === "astral_sentinel" || ai === "bruiser") {
         const isSlag = id === "slag_brutes";
         const isHulk = id === "mire_hulk";
         const isSentinel = id === "astral_sentinel";
 
-        // Heavy stomping legs
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 9, p.y - 6 + Math.round(stride * 2), 5, 7);
         ctx.fillRect(p.x + 4, p.y - 6 - Math.round(stride * 2), 5, 7);
 
-        // Broad hulking torso
         drawIsoBlock(ctx, p.x, p.y - 4 - bob, 28, 14, 18, cTrim, cMain, cDark, "#07090f");
 
-        // Chest Core / Furnace Grate
         if (f.y > -0.3) {
           ctx.fillStyle = isSlag ? "#f97316" : isHulk ? "#a3e635" : "#38bdf8";
           ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 14 - bob, 6, 5);
@@ -3046,10 +3032,8 @@
           }
         }
 
-        // Detached massive fists / shield & blade
         const swing = Math.round(stride * 3);
         if (isSentinel) {
-          // Floating tower shield left + energy blade right
           drawIsoBlock(ctx, p.x - 16, p.y - 8 - bob, 8, 5, 16, "#38bdf8", "#1d4ed8", "#0f172a", "#07090f");
           ctx.fillStyle = "#e879f9";
           ctx.fillRect(p.x + 14, p.y - 24 - bob + swing, 3, 18);
@@ -3058,7 +3042,6 @@
           drawIsoBlock(ctx, p.x + 16, p.y - 6 - bob - swing, 10, 5, 10, cTrim, cMain, cDark, "#07090f");
         }
 
-        // Head / Smokestacks / Horns
         drawIsoBlock(ctx, p.x, p.y - 22 - bob, 16, 8, 8, cTrim, cMain, cDark, "#07090f");
         if (isSlag) {
           ctx.fillStyle = "#475569";
@@ -3078,13 +3061,10 @@
         return;
       }
 
-      // --------------------------------------------------------------------
-      // 3. RANGED ARCHETYPES (Prism Slinger, Ember Turret, Spitter, Pulsar)
-      // --------------------------------------------------------------------
+      // 3. RANGED ARCHETYPES
       const hover = 4 + Math.round(Math.sin(this.elapsed * 4.5 + e.y) * 2);
 
       if (id === "ember_turret") {
-        // Tripod mechanical artillery turret
         ctx.strokeStyle = "#07090f";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -3097,7 +3077,6 @@
         ctx.stroke();
 
         drawIsoBlock(ctx, p.x, p.y - 7, 18, 9, 11, cTrim, cMain, cDark, "#07090f");
-        // Aimed cannon barrel
         const bx = p.x + Math.round(f.x * 11);
         const by = p.y - 13 + Math.round(f.y * 5);
         ctx.strokeStyle = "#07090f";
@@ -3116,7 +3095,6 @@
       }
 
       if (id === "blight_spitter") {
-        // Bulbous toxic spore-pod plant
         drawIsoBlock(ctx, p.x, p.y, 20, 10, 9, cMain, cMain, cDark, "#07090f");
         const pulse = Math.round(Math.sin(this.elapsed * 6) * 2);
         drawIsoBlock(ctx, p.x, p.y - 9, 14 + pulse, 7 + Math.floor(pulse * 0.5), 8, "#bef264", cTrim, cMain, "#07090f");
@@ -3128,9 +3106,7 @@
         return;
       }
 
-      // Prism Slinger & Pulsar Orb: Levitating crystal/cosmic construct with orbiting ring
       drawIsoBlock(ctx, p.x, p.y - hover - 4, 14, 7, 14, "#ffffff", cTrim, cMain, "#07090f");
-      // Orbiting satellite shards
       const orbA = this.elapsed * 3.5 + e.x;
       const ox1 = p.x + Math.round(Math.cos(orbA) * 14);
       const oy1 = p.y - hover - 10 + Math.round(Math.sin(orbA) * 6);
@@ -3139,7 +3115,6 @@
       ctx.fillStyle = cTrim;
       ctx.fillRect(ox1 - 2, oy1 - 2, 4, 4);
       ctx.fillRect(ox2 - 2, oy2 - 2, 4, 4);
-      // Central glowing cyclops eye
       if (f.y > -0.5) {
         ctx.fillStyle = "#07090f";
         ctx.fillRect(p.x - 3 + eyeShiftX, p.y - hover - 13, 6, 4);
@@ -3156,35 +3131,27 @@
       const eyeShiftX = Math.round(f.x * 5);
       const bob = Math.round(Math.abs(Math.sin(this.elapsed * 6)) * 3);
 
-      // --------------------------------------------------------------------
-      // BOSS 1: OBSIDIAN COLOSSUS (Sunken Quarry — Crystal-Spired Titan)
-      // --------------------------------------------------------------------
+      // BOSS 1: OBSIDIAN COLOSSUS
       if (id === "obsidian_colossus") {
-        // Pillar legs
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 14, p.y - 8, 8, 9);
         ctx.fillRect(p.x + 6, p.y - 8, 8, 9);
 
-        // Massive obsidian torso
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 44, 22, 26, "#334155", cMain, cDark, "#07090f");
 
-        // Glowing cyan chest fissure
         if (f.y > -0.3) {
           ctx.fillStyle = "#38bdf8";
           ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 24 - bob, 4, 12);
           ctx.fillRect(p.x - 5 + eyeShiftX, p.y - 20 - bob, 10, 3);
         }
 
-        // Giant crystal-topped shoulder pauldrons
         drawIsoBlock(ctx, p.x - 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
 
-        // Floating crushing stone fists
         const fistWave = Math.round(Math.sin(this.elapsed * 5) * 4);
         drawIsoBlock(ctx, p.x - 28, p.y - 4 - bob + fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 28, p.y - 4 - bob - fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
 
-        // Monolith head + central crystal horn
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 12, cTrim, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 44 - bob, 8, 4, 9, "#e0f2fe", "#38bdf8", "#0284c7", "#07090f");
 
@@ -3196,11 +3163,8 @@
         return;
       }
 
-      // --------------------------------------------------------------------
-      // BOSS 2: IGNIS PRIME (Cinder Foundry — Arch-Forge War Automaton)
-      // --------------------------------------------------------------------
+      // BOSS 2: IGNIS PRIME
       if (id === "arch_forge_automaton") {
-        // Rotating clockwork gear halo behind torso
         const haloY = p.y - 28 - bob;
         ctx.strokeStyle = cTrim;
         ctx.lineWidth = 3;
@@ -3213,15 +3177,12 @@
           ctx.fillRect(p.x + Math.round(Math.cos(a) * 25) - 2, haloY + Math.round(Math.sin(a) * 25) - 2, 4, 4);
         }
 
-        // Heavy boiler legs
         ctx.fillStyle = "#1e293b";
         ctx.fillRect(p.x - 14, p.y - 8, 9, 9);
         ctx.fillRect(p.x + 5, p.y - 8, 9, 9);
 
-        // Furnace boiler chassis
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 46, 23, 26, cTrim, cMain, cDark, "#07090f");
 
-        // Roaring open furnace belly grille
         if (f.y > -0.3) {
           ctx.fillStyle = "#f97316";
           ctx.fillRect(p.x - 9 + eyeShiftX, p.y - 22 - bob, 18, 10);
@@ -3233,15 +3194,12 @@
           }
         }
 
-        // Twin tall smokestacks
         drawIsoBlock(ctx, p.x - 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
         drawIsoBlock(ctx, p.x + 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
 
-        // Piston cannon arms
         drawIsoBlock(ctx, p.x - 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
 
-        // Horned brass helm
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 11, "#fde047", cTrim, cMain, "#07090f");
         if (f.y > -0.45) {
           ctx.fillStyle = "#ef4444";
@@ -3250,29 +3208,22 @@
         return;
       }
 
-      // --------------------------------------------------------------------
-      // BOSS 3: VESPERA THE ROT-QUEEN (Whispering Marsh — Fungal Sovereign)
-      // --------------------------------------------------------------------
+      // BOSS 3: VESPERA THE ROT-QUEEN
       if (id === "mycelial_matriarch") {
-        // Swaying root-tendril skirt around base
         for (let t = -3; t <= 3; t++) {
           const sway = Math.round(Math.sin(this.elapsed * 5 + t) * 3);
           ctx.fillStyle = t % 2 === 0 ? cMain : "#166534";
           ctx.fillRect(p.x + t * 6 + sway - 2, p.y - 9, 4, 10);
         }
 
-        // Tall gnarled stem body
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 32, 16, 26, cTrim, cMain, cDark, "#07090f");
 
-        // Pulsing spore sacs on shoulders
         drawIsoBlock(ctx, p.x - 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
 
-        // Giant wide multi-tiered bioluminescent mushroom canopy crown
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 56, 28, 10, "#bef264", "#16a34a", "#14532d", "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 42 - bob, 34, 17, 8, "#fef08a", "#4ade80", "#15803d", "#07090f");
 
-        // Glowing toxic eyes beneath the cap
         if (f.y > -0.45) {
           ctx.fillStyle = "#fef08a";
           ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 26 - bob, 3, 3);
@@ -3282,12 +3233,8 @@
         return;
       }
 
-      // --------------------------------------------------------------------
-      // BOSS 4: AETHELGARD, STAR-EATER (Astral Observatory — Void Archon)
-      // --------------------------------------------------------------------
+      // BOSS 4: AETHELGARD, STAR-EATER
       const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
-
-      // Orbiting double singularity halo
       drawIsoGroundEllipse(ctx, p.x, p.y - hover - 22, 1.55, null, "#e879f9", 2);
       for (let m = 0; m < 4; m++) {
         const a = this.elapsed * 2.8 + (m * Math.PI) / 2;
@@ -3297,22 +3244,18 @@
         ctx.fillRect(mx - 3, my - 3, 6, 6);
       }
 
-      // Floating crystalline astral wing-blades
       const wingFlap = Math.round(Math.sin(this.elapsed * 5) * 4);
       drawIsoBlock(ctx, p.x - 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
       drawIsoBlock(ctx, p.x + 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
 
-      // Eldritch void core torso
       drawIsoBlock(ctx, p.x, p.y - hover, 34, 17, 26, cTrim, cMain, cDark, "#07090f");
 
-      // Celestial 3-spire crown head
       drawIsoBlock(ctx, p.x, p.y - hover - 26, 22, 11, 11, "#f5d0fe", "#7e22ce", cDark, "#07090f");
       ctx.fillStyle = "#fde047";
       ctx.fillRect(p.x - 8, p.y - hover - 42, 3, 6);
       ctx.fillRect(p.x - 1, p.y - hover - 45, 3, 9);
       ctx.fillRect(p.x + 6, p.y - hover - 42, 3, 6);
 
-      // Glowing starlight triad eyes
       if (f.y > -0.45) {
         ctx.fillStyle = "#38bdf8";
         ctx.fillRect(p.x - 6 + eyeShiftX, p.y - hover - 32, 3, 3);
@@ -3320,6 +3263,16 @@
         ctx.fillStyle = "#fde047";
         ctx.fillRect(p.x - 1 + eyeShiftX, p.y - hover - 35, 3, 3);
       }
+    }
+
+    drawProjectile(ctx, pr, toS) {
+      const p = toS(pr.x, pr.y, 0.45);
+      const rOuter = Math.max(3, Math.round(pr.radius * 14));
+      const rInner = Math.max(1, Math.round(pr.radius * 6));
+      ctx.fillStyle = pr.color;
+      ctx.fillRect(p.x - rOuter, p.y - rOuter, rOuter * 2, rOuter * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(p.x - rInner, p.y - rInner, rInner * 2, rInner * 2);
     }
 
     renderMinimap() {
@@ -3343,9 +3296,7 @@
 
       for (const v of this.world.vents) {
         mctx.fillStyle = "#38bdf8";
-        mctx.beginPath();
-        mctx.arc(ox + v.x * scale, oy + v.y * scale, 2.5, 0, Math.PI * 2);
-        mctx.fill();
+        mctx.fillRect(ox + v.x * scale - 2, oy + v.y * scale - 2, 4, 4);
       }
 
       for (const st of this.world.stations) {
@@ -3355,22 +3306,17 @@
 
       if (this.world.portal) {
         mctx.fillStyle = "#7dd3fc";
-        mctx.beginPath();
-        mctx.arc(ox + this.world.portal.x * scale, oy + this.world.portal.y * scale, 3.5, 0, Math.PI * 2);
-        mctx.fill();
+        mctx.fillRect(ox + this.world.portal.x * scale - 3, oy + this.world.portal.y * scale - 3, 6, 6);
       }
 
       for (const e of this.world.enemies) {
         mctx.fillStyle = e.isBoss ? "#f59e0b" : "#ef4444";
-        mctx.beginPath();
-        mctx.arc(ox + e.x * scale, oy + e.y * scale, e.isBoss ? 4 : 2.2, 0, Math.PI * 2);
-        mctx.fill();
+        const s = e.isBoss ? 6 : 4;
+        mctx.fillRect(ox + e.x * scale - s * 0.5, oy + e.y * scale - s * 0.5, s, s);
       }
 
       mctx.fillStyle = "#4ade80";
-      mctx.beginPath();
-      mctx.arc(ox + this.player.x * scale, oy + this.player.y * scale, 3, 0, Math.PI * 2);
-      mctx.fill();
+      mctx.fillRect(ox + this.player.x * scale - 2.5, oy + this.player.y * scale - 2.5, 5, 5);
     }
 
     /* ======================================================================
@@ -3379,8 +3325,8 @@
     syncAllHUD() {
       const wep = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
       const rel = GearSystem.getTemplate(this.save.equipped.relic.templateId);
-      const qSk = DATA.SKILLS[wep.skillId];
-      const eSk = DATA.SKILLS[rel.skillId];
+      const qSk = DATA.SKILLS[wep.skillId] || DATA.SKILLS.iron_cleave;
+      const eSk = DATA.SKILLS[rel.skillId] || DATA.SKILLS.sanctuary_aegis;
 
       document.getElementById("skill-auto-icon").textContent = wep.icon;
       document.getElementById("skill-auto-name").textContent = wep.name.split(" ")[0];
@@ -3441,8 +3387,10 @@
       const stats = this.getHeroStats();
       const wep = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
       const rel = GearSystem.getTemplate(this.save.equipped.relic.templateId);
-      this.syncCooldownSlot("skill-q", this.player.qCd, DATA.SKILLS[wep.skillId].cooldown * (1 - stats.cdr));
-      this.syncCooldownSlot("skill-e", this.player.eCd, DATA.SKILLS[rel.skillId].cooldown * (1 - stats.cdr));
+      const qSk = DATA.SKILLS[wep.skillId] || DATA.SKILLS.iron_cleave;
+      const eSk = DATA.SKILLS[rel.skillId] || DATA.SKILLS.sanctuary_aegis;
+      this.syncCooldownSlot("skill-q", this.player.qCd, qSk.cooldown * (1 - stats.cdr));
+      this.syncCooldownSlot("skill-e", this.player.eCd, eSk.cooldown * (1 - stats.cdr));
       this.syncCooldownSlot("skill-dash", this.player.dashCd, C.DASH_COOLDOWN * (1 - stats.cdr * 0.5));
 
       if (this.mode === "dungeon" && this.run) {
@@ -3628,8 +3576,8 @@
 
       const wep = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
       const rel = GearSystem.getTemplate(this.save.equipped.relic.templateId);
-      const qSk = DATA.SKILLS[wep.skillId];
-      const eSk = DATA.SKILLS[rel.skillId];
+      const qSk = DATA.SKILLS[wep.skillId] || DATA.SKILLS.iron_cleave;
+      const eSk = DATA.SKILLS[rel.skillId] || DATA.SKILLS.sanctuary_aegis;
       document.getElementById("equipped-skills-preview").innerHTML = `
         <div class="skill-preview-item">
           <kbd>Q</kbd>
@@ -3658,7 +3606,7 @@
       let items = this.save.inventory.filter((it) => this.invFilter === "all" || it.slot === this.invFilter);
       items.sort((a, b) => {
         if (this.invSort === "rarity") {
-          const diff = DATA.RARITIES[b.rarity].order - DATA.RARITIES[a.rarity].order;
+          const diff = (DATA.RARITIES[b.rarity]?.order || 1) - (DATA.RARITIES[a.rarity]?.order || 1);
           return diff !== 0 ? diff : GearSystem.computeItemPower(b) - GearSystem.computeItemPower(a);
         }
         if (this.invSort === "level") return b.level - a.level;
@@ -3694,7 +3642,7 @@
         bar.innerHTML = `
           <div>
             <strong class="text-${sel.rarity}">${tpl.name} ${sel.level > 0 ? "+" + sel.level : ""}</strong>
-            <span class="muted-text">(${DATA.RARITIES[sel.rarity].name} ${sel.slot})</span>
+            <span class="muted-text">(${(DATA.RARITIES[sel.rarity] || DATA.RARITIES.common).name} ${sel.slot})</span>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button id="act-equip" class="btn btn-primary btn-sm">Equip</button>
@@ -3749,6 +3697,7 @@
       this.renderArmoryModal();
       this.saveGame(false);
     }
+
     equipBestGear() {
       const oldPower = this.getHeroPowerScore();
       let changedCount = 0;
@@ -3800,6 +3749,7 @@
         "success"
       );
     }
+
     sellInventoryItem(uidVal) {
       const idx = this.save.inventory.findIndex((x) => x.uid === uidVal);
       if (idx < 0 || this.save.inventory[idx].locked) return;
@@ -3871,8 +3821,8 @@
       card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div class="text-${item.rarity}" style="font-size:16px;font-weight:800">${tpl.icon} ${tpl.name} ${item.level > 0 ? "+" + item.level : ""}</div>
-            <div class="muted-text">${DATA.RARITIES[item.rarity].name} ${tpl.setTag} ${tpl.slot}</div>
+            <div class="text-${item.rarity}" style="font-size:15px;font-weight:900">${tpl.icon} ${tpl.name} ${item.level > 0 ? "+" + item.level : ""}</div>
+            <div class="muted-text">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot}</div>
           </div>
           <div class="power-score">PWR ${GearSystem.computeItemPower(item)}</div>
         </div>
@@ -4100,7 +4050,7 @@
         <div class="tooltip-card rarity-${item.rarity}">
           <div class="tooltip-tag">${labelTag}</div>
           <div class="tooltip-title text-${item.rarity}">${tpl.icon} ${tpl.name} ${item.level > 0 ? "+" + item.level : ""}</div>
-          <div class="tooltip-type">${DATA.RARITIES[item.rarity].name} ${tpl.setTag} ${tpl.slot} &bull; PWR ${GearSystem.computeItemPower(item)}</div>
+          <div class="tooltip-type">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot} &bull; PWR ${GearSystem.computeItemPower(item)}</div>
           <div class="tooltip-divider"></div>
           ${statsHTML}
           ${subHTML ? `<div class="tooltip-divider"></div>${subHTML}` : ""}
@@ -4174,24 +4124,24 @@
         });
       });
 
-      document.getElementById("btn-retreat").addEventListener("click", () => {
+      document.getElementById("btn-retreat")?.addEventListener("click", () => {
         this.sfx.uiClick();
         this.enterSanctuary();
         this.toast("Retreated safely to Sanctuary.", "info");
       });
 
-      document.getElementById("skill-q").addEventListener("click", () => this.castSkillQ());
-      document.getElementById("skill-e").addEventListener("click", () => this.castSkillE());
-      document.getElementById("skill-dash").addEventListener("click", () => this.triggerDash());
-      document.getElementById("btn-flask").addEventListener("click", () => this.useFlask());
+      document.getElementById("skill-q")?.addEventListener("click", () => this.castSkillQ());
+      document.getElementById("skill-e")?.addEventListener("click", () => this.castSkillE());
+      document.getElementById("skill-dash")?.addEventListener("click", () => this.triggerDash());
+      document.getElementById("btn-flask")?.addEventListener("click", () => this.useFlask());
 
-      document.getElementById("btn-mute").addEventListener("click", () => this.toggleMute());
-      document.getElementById("btn-settings").addEventListener("click", () => this.openModal("settings"));
+      document.getElementById("btn-mute")?.addEventListener("click", () => this.toggleMute());
+      document.getElementById("btn-settings")?.addEventListener("click", () => this.openModal("settings"));
 
       document.querySelectorAll("[data-close-modal]").forEach((btn) => {
         btn.addEventListener("click", () => this.closeAllModals());
       });
-      document.getElementById("modal-backdrop").addEventListener("click", (e) => {
+      document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
         if (e.target.id === "modal-backdrop" && this.activeModal !== "run-summary") {
           this.closeAllModals();
         }
@@ -4204,7 +4154,7 @@
           this.renderDungeonModal();
         });
       });
-      document.getElementById("btn-enter-dungeon").addEventListener("click", () => {
+      document.getElementById("btn-enter-dungeon")?.addEventListener("click", () => {
         this.startDungeon(this.save.selectedDungeonId, this.save.selectedDiff, this.save.selectedMutators);
       });
 
@@ -4215,13 +4165,13 @@
           this.renderArmoryModal();
         });
       });
-      document.getElementById("inv-sort").addEventListener("change", (e) => {
+      document.getElementById("inv-sort")?.addEventListener("change", (e) => {
         this.invSort = e.target.value;
         this.renderArmoryModal();
       });
-      document.getElementById("btn-equip-best").addEventListener("click", () => this.equipBestGear());
-      document.getElementById("btn-bulk-sell").addEventListener("click", () => this.bulkDispose("sell"));
-      document.getElementById("btn-bulk-salvage").addEventListener("click", () => this.bulkDispose("salvage"));
+      document.getElementById("btn-equip-best")?.addEventListener("click", () => this.equipBestGear());
+      document.getElementById("btn-bulk-sell")?.addEventListener("click", () => this.bulkDispose("sell"));
+      document.getElementById("btn-bulk-salvage")?.addEventListener("click", () => this.bulkDispose("salvage"));
 
       document.querySelectorAll(".forge-slot-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -4231,7 +4181,7 @@
         });
       });
 
-      document.getElementById("btn-forge-upgrade").addEventListener("click", () => {
+      document.getElementById("btn-forge-upgrade")?.addEventListener("click", () => {
         const item = this.save.equipped[this.forgeSlot];
         const cost = GearSystem.getUpgradeCost(item);
         if (item.level >= C.MAX_UPGRADE_LEVEL || this.save.gold < cost) return;
@@ -4243,7 +4193,7 @@
         this.saveGame(false);
       });
 
-      document.getElementById("btn-forge-reroll").addEventListener("click", () => {
+      document.getElementById("btn-forge-reroll")?.addEventListener("click", () => {
         const item = this.save.equipped[this.forgeSlot];
         const cost = GearSystem.getRerollCost(item);
         if (this.save.shards < cost) return;
@@ -4256,7 +4206,7 @@
         this.saveGame(false);
       });
 
-      document.getElementById("btn-buy-flask").addEventListener("click", () => {
+      document.getElementById("btn-buy-flask")?.addEventListener("click", () => {
         if (this.save.flasks >= C.MAX_FLASKS || this.save.gold < C.FLASK_COST_GOLD) return;
         this.save.gold -= C.FLASK_COST_GOLD;
         this.save.flasks += 1;
@@ -4265,47 +4215,47 @@
         this.renderForgeModal();
       });
 
-      document.getElementById("btn-summary-hub").addEventListener("click", () => {
+      document.getElementById("btn-summary-hub")?.addEventListener("click", () => {
         this.closeAllModals();
         this.enterSanctuary();
       });
-      document.getElementById("btn-summary-retry").addEventListener("click", () => {
+      document.getElementById("btn-summary-retry")?.addEventListener("click", () => {
         const dId = this.run.dungeon.id;
         const diffId = this.run.diff.id;
         const muts = [...this.run.mutators];
         this.startDungeon(dId, diffId, muts);
       });
 
-      document.getElementById("setting-volume").addEventListener("input", (e) => {
+      document.getElementById("setting-volume")?.addEventListener("input", (e) => {
         this.save.settings.volume = Number(e.target.value);
         this.sfx.volume = this.save.settings.volume / 100;
       });
-      document.getElementById("setting-mute").addEventListener("change", (e) => {
+      document.getElementById("setting-mute")?.addEventListener("change", (e) => {
         this.save.settings.muted = e.target.checked;
         this.sfx.muted = e.target.checked;
         this.syncAllHUD();
       });
-      document.getElementById("setting-dmg-nums").addEventListener("change", (e) => {
+      document.getElementById("setting-dmg-nums")?.addEventListener("change", (e) => {
         this.save.settings.showDmgNums = e.target.checked;
       });
-      document.getElementById("setting-shake").addEventListener("change", (e) => {
+      document.getElementById("setting-shake")?.addEventListener("change", (e) => {
         this.save.settings.screenShake = e.target.checked;
       });
 
-      document.getElementById("btn-save-now").addEventListener("click", () => this.saveGame(true));
+      document.getElementById("btn-save-now")?.addEventListener("click", () => this.saveGame(true));
 
-      document.getElementById("btn-export-save").addEventListener("click", () => {
+      document.getElementById("btn-export-save")?.addEventListener("click", () => {
         const json = JSON.stringify(this.save);
         const area = document.getElementById("import-save-text");
-        area.value = json;
+        if (area) area.value = json;
         if (navigator.clipboard) {
           navigator.clipboard.writeText(json).catch(() => {});
         }
         this.toast("Save JSON copied & placed in text box!", "success");
       });
 
-      document.getElementById("btn-import-save").addEventListener("click", () => {
-        const raw = document.getElementById("import-save-text").value.trim();
+      document.getElementById("btn-import-save")?.addEventListener("click", () => {
+        const raw = (document.getElementById("import-save-text")?.value || "").trim();
         if (!raw) return;
         try {
           const parsed = JSON.parse(raw);
@@ -4320,7 +4270,7 @@
         }
       });
 
-      document.getElementById("btn-reset-save").addEventListener("click", () => {
+      document.getElementById("btn-reset-save")?.addEventListener("click", () => {
         if (!window.confirm("Erase all Riftfall progress, gear, and mercenaries?")) return;
         localStorage.removeItem(DATA.SAVE_KEY);
         this.save = this.createDefaultSave();
