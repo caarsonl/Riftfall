@@ -2424,20 +2424,26 @@
        2.5D PIXEL-ART ISOMETRIC RENDERING ENGINE
        ====================================================================== */
     resizeCanvas() {
-      const w = Math.max(320, Math.floor(this.canvas.clientWidth / ISO.PIXEL_SCALE));
-      const h = Math.max(200, Math.floor(this.canvas.clientHeight / ISO.PIXEL_SCALE));
-      this.canvas.width = w;
-      this.canvas.height = h;
-      this.ctx.imageSmoothingEnabled = false;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = this.canvas.clientWidth;
+      const h = this.canvas.clientHeight;
+      this.canvas.width = Math.floor(w * dpr);
+      this.canvas.height = Math.floor(h * dpr);
+      this.dpr = dpr;
+      this.worldZoom = 1.4;
     }
 
     render() {
       const ctx = this.ctx;
-      const w = this.canvas.width;
-      const h = this.canvas.height;
+      const dpr = this.dpr || 1;
+      const zoom = this.worldZoom || 1.4;
+      const w = this.canvas.clientWidth / zoom;
+      const h = this.canvas.clientHeight / zoom;
       const pal = this.world.palette;
 
+      ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, 0, 0);
       ctx.imageSmoothingEnabled = false;
+
       ctx.fillStyle = pal.bgBottom;
       ctx.fillRect(0, 0, w, h);
 
@@ -2455,7 +2461,7 @@
 
       const toS = (wx, wy, wz = 0) => ISO.toScreen(wx, wy, wz, this.cam.x, this.cam.y, halfW, halfH);
 
-      // 1. Floor Tiles with Retro Pixel Stone Speckling
+      // 1. Floor Tiles with Retro Stone Speckling
       const sz = this.world.size;
       for (let y = 0; y < sz; y++) {
         for (let x = 0; x < sz; x++) {
@@ -2577,22 +2583,24 @@
         ctx.restore();
       }
 
-      // 5. Pixel Floating Combat Numbers
+      // 5. Native HiDPI Smooth Floating Combat Numbers
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const ft of this.floatingTexts) {
         const p = toS(ft.x, ft.y, ft.z);
-        ctx.save();
+        const sx = p.x * zoom;
+        const sy = p.y * zoom;
         ctx.globalAlpha = clamp(ft.life / (ft.maxLife * 0.6), 0, 1);
-        ctx.font = ft.big ? "bold 11px 'Courier New', monospace" : "bold 9px 'Courier New', monospace";
+        ctx.font = ft.big ? "700 16px 'Trebuchet MS', sans-serif" : "700 13px 'Trebuchet MS', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillStyle = "#05070c";
-        ctx.fillText(ft.text, p.x + 1, p.y + 1);
-        ctx.fillText(ft.text, p.x - 1, p.y + 1);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#05070c";
+        ctx.strokeText(ft.text, sx, sy);
         ctx.fillStyle = ft.color;
-        ctx.fillText(ft.text, p.x, p.y);
-        ctx.restore();
+        ctx.fillText(ft.text, sx, sy);
       }
+      ctx.restore();
     }
-
     renderGroundEffects(ctx, toS) {
       for (const v of this.world.vents) {
         const p = toS(v.x, v.y, 0);
@@ -2627,13 +2635,19 @@
         ctx.stroke();
         ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
         ctx.fill();
-        ctx.fillStyle = "#e0f2fe";
-        ctx.font = "bold 9px 'Courier New', monospace";
+
+        const dpr = this.dpr || 1;
+        const zoom = this.worldZoom || 1.4;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.font = "700 12px 'Trebuchet MS', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("NEXT ROOM", p.x, p.y - 44);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#05070c";
+        ctx.strokeText("NEXT ROOM", p.x * zoom, (p.y - 44) * zoom);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillText("NEXT ROOM", p.x * zoom, (p.y - 44) * zoom);
         ctx.restore();
       }
-
       for (const t of this.telegraphs) {
         const prog = clamp(t.elapsed / t.duration, 0, 1);
         if (t.type === "circle") {
@@ -2717,17 +2731,22 @@
       }
 
       ctx.save();
-      ctx.font = "bold 9px 'Courier New', monospace";
+      const dpr = this.dpr || 1;
+      const zoom = this.worldZoom || 1.4;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = "700 12px 'Trebuchet MS', sans-serif";
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(8, 12, 22, 0.9)";
       const label = st.name.toUpperCase();
-      const tw = ctx.measureText(label).width + 10;
-      ctx.fillRect(p.x - Math.floor(tw * 0.5), p.y - 50, tw, 14);
+      const sx = Math.round(p.x * zoom);
+      const sy = Math.round((p.y - 46) * zoom);
+      const tw = Math.ceil(ctx.measureText(label).width) + 14;
+      ctx.fillStyle = "rgba(8, 12, 22, 0.92)";
+      ctx.fillRect(sx - Math.floor(tw * 0.5), sy - 13, tw, 18);
       ctx.strokeStyle = st.color;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(p.x - Math.floor(tw * 0.5), p.y - 50, tw, 14);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx - Math.floor(tw * 0.5), sy - 13, tw, 18);
       ctx.fillStyle = "#f8fafc";
-      ctx.fillText(label, p.x, p.y - 40);
+      ctx.fillText(label, sx, sy);
       ctx.restore();
     }
 
