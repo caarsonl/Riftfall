@@ -2867,58 +2867,459 @@
 
     drawEnemy(ctx, e, toS) {
       const p = toS(e.x, e.y, 0);
-      const bob = Math.round(Math.abs(Math.sin(this.elapsed * 8 + e.x)) * (e.isBoss ? 3 : 2));
-      const bw = Math.round(e.radius * 34);
-      const bh = Math.round(e.radius * 17);
-      const hPx = Math.round(e.height * 20);
+      const hurt = e.hurtFlash > 0;
+      const stunned = e.stunTimer > 0;
 
-      drawIsoGroundEllipse(ctx, p.x, p.y + 1, e.radius * 1.15, "rgba(0,0,0,0.55)");
+      // Screen-space direction toward the player
+      const rawSx = (e.facing.x - e.facing.y) * 0.5;
+      const rawSy = (e.facing.x + e.facing.y) * 0.25;
+      const sLen = Math.hypot(rawSx, rawSy) || 1;
+      const f = { x: rawSx / sLen, y: rawSy / sLen };
+
+      // Dynamic ground shadow
+      drawIsoGroundEllipse(ctx, p.x, p.y + 1, e.radius * 1.2, "rgba(0, 0, 0, 0.58)");
 
       if (e.isBoss) {
-        drawIsoGroundEllipse(ctx, p.x, p.y, e.radius * 1.35, "rgba(239, 68, 68, 0.16)", e.trim, 1);
+        this.drawBossSprite(ctx, e, p, f, hurt, stunned);
+      } else {
+        this.drawMobSprite(ctx, e, p, f, hurt, stunned);
       }
 
-      const topC = e.hurtFlash > 0 ? "#ffffff" : e.trim;
-      const leftC = e.hurtFlash > 0 ? "#fecaca" : e.color;
-      const rightC = e.hurtFlash > 0 ? "#f87171" : "#0b0f1c";
-
-      drawIsoBlock(ctx, p.x, p.y - bob, bw, bh, hPx, topC, leftC, rightC, "#07090f");
-
-      // Directional Glowing Pixel Eyes tracking player
-      const ef = ISO.worldDirToScreen(e.facing.x, e.facing.y);
-      const eyeShiftX = Math.round(ef.x * (e.isBoss ? 5 : 3));
-      const eyeY = p.y - Math.round(hPx * 0.68) - bob;
-      ctx.fillStyle = e.stunTimer > 0 ? "#38bdf8" : "#fef08a";
-      if (ef.y > -0.5) {
-        ctx.fillRect(p.x - 4 + eyeShiftX, eyeY, 2, 2);
-        ctx.fillRect(p.x + 2 + eyeShiftX, eyeY, 2, 2);
+      // Stunned pixel stars overhead
+      if (stunned) {
+        const topOffset = Math.round(e.height * 22) + (e.isBoss ? 18 : 10);
+        const spin = this.elapsed * 7;
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(p.x + Math.round(Math.cos(spin) * 7) - 1, p.y - topOffset, 2, 2);
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(p.x + Math.round(Math.cos(spin + Math.PI) * 7) - 1, p.y - topOffset + 1, 2, 2);
       }
 
       // Crisp Pixel HP Bar (non-bosses)
       if (!e.isBoss && e.hp < e.maxHp) {
         const barW = 26;
+        const topY = p.y - Math.round(e.height * 22) - 12;
         const pct = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = "#07090f";
-        ctx.fillRect(p.x - Math.floor(barW * 0.5) - 1, p.y - hPx - 12, barW + 2, 5);
+        ctx.fillRect(p.x - Math.floor(barW * 0.5) - 1, topY, barW + 2, 5);
         ctx.fillStyle = "#ef4444";
-        ctx.fillRect(p.x - Math.floor(barW * 0.5), p.y - hPx - 11, Math.round(barW * pct), 3);
+        ctx.fillRect(p.x - Math.floor(barW * 0.5), topY + 1, Math.round(barW * pct), 3);
       }
     }
 
-    drawProjectile(ctx, pr, toS) {
-      const p = toS(pr.x, pr.y, 0.45);
-      ctx.save();
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = pr.color;
-      ctx.fillStyle = pr.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, pr.radius * 18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, pr.radius * 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+    drawMobSprite(ctx, e, p, f, hurt, stunned) {
+      const id = e.template.id;
+      const ai = e.template.ai;
+      const cMain = hurt ? "#ffffff" : e.color;
+      const cTrim = hurt ? "#fef08a" : e.trim;
+      const cDark = hurt ? "#fca5a5" : "#0b0f1c";
+      const eyeCol = stunned ? "#38bdf8" : "#fef08a";
+      const eyeShiftX = Math.round(f.x * 3);
+      const stride = Math.sin(this.elapsed * 12 + e.x * 3);
+      const bob = Math.round(Math.abs(stride) * 2);
+
+      // --------------------------------------------------------------------
+      // 1. CHASER ARCHETYPES (Spiders, Hounds, Stalkers, Wraiths)
+      // --------------------------------------------------------------------
+      if (id === "crystal_crawler") {
+        // Scuttling 6-legged crystal spider
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 2;
+        for (let side of [-1, 1]) {
+          for (let i = -1; i <= 1; i++) {
+            const legLift = Math.round(Math.sin(this.elapsed * 16 + i * 2 + side) * 2);
+            ctx.beginPath();
+            ctx.moveTo(p.x + side * 5, p.y - 4);
+            ctx.lineTo(p.x + side * 12, p.y - 6 + i * 2 + legLift);
+            ctx.lineTo(p.x + side * 14, p.y + 1 + i * 2);
+            ctx.stroke();
+          }
+        }
+        // Flat carapace + jagged crystal spire on back
+        drawIsoBlock(ctx, p.x, p.y - bob, 20, 10, 7, cMain, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x - Math.round(f.x * 2), p.y - 7 - bob, 10, 5, 10, "#ffffff", cTrim, cMain, "#07090f");
+        // Cluster of 4 spider eyes
+        if (f.y > -0.45) {
+          ctx.fillStyle = eyeCol;
+          ctx.fillRect(p.x - 4 + eyeShiftX, p.y - 5 - bob, 2, 2);
+          ctx.fillRect(p.x + 2 + eyeShiftX, p.y - 5 - bob, 2, 2);
+          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 3 - bob, 1, 1);
+          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 3 - bob, 1, 1);
+        }
+        return;
+      }
+
+      if (id === "clockwork_hound") {
+        // 4 mechanical running legs
+        ctx.fillStyle = cDark;
+        const l1 = Math.round(stride * 3);
+        ctx.fillRect(p.x - 8, p.y - 5 + l1, 3, 6);
+        ctx.fillRect(p.x + 5, p.y - 5 - l1, 3, 6);
+        ctx.fillRect(p.x - 4, p.y - 3 - l1, 3, 5);
+        ctx.fillRect(p.x + 2, p.y - 3 + l1, 3, 5);
+
+        // Armored hound chassis
+        drawIsoBlock(ctx, p.x, p.y - 3 - bob, 22, 11, 9, cTrim, cMain, cDark, "#07090f");
+        // Exhaust pipe & spinning gear on back
+        ctx.fillStyle = "#475569";
+        ctx.fillRect(p.x - Math.round(f.x * 4) - 2, p.y - 16 - bob, 3, 5);
+        // Snout / Head block shifted toward facing direction
+        const hx = p.x + Math.round(f.x * 6);
+        const hy = p.y - 7 - bob + Math.round(f.y * 3);
+        drawIsoBlock(ctx, hx, hy, 12, 6, 7, cTrim, cMain, cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(hx - 3 + Math.round(f.x * 2), hy - 5, 2, 2);
+          ctx.fillRect(hx + 2 + Math.round(f.x * 2), hy - 5, 2, 2);
+        }
+        return;
+      }
+
+      if (id === "spore_stalker") {
+        // Hunched fungal stalker with wide spotted mushroom cap
+        ctx.fillStyle = cDark;
+        ctx.fillRect(p.x - 5, p.y - 5 + Math.round(stride * 2), 3, 6);
+        ctx.fillRect(p.x + 2, p.y - 5 - Math.round(stride * 2), 3, 6);
+        // Stalk body
+        drawIsoBlock(ctx, p.x, p.y - 3 - bob, 14, 7, 10, cMain, cMain, cDark, "#07090f");
+        // Wide spotted mushroom cap
+        const capY = p.y - 12 - bob;
+        drawIsoBlock(ctx, p.x, capY, 26, 13, 7, cTrim, cMain, cDark, "#07090f");
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(p.x - 5, capY - 7, 2, 2);
+        ctx.fillRect(p.x + 3, capY - 6, 2, 2);
+        if (f.y > -0.45) {
+          ctx.fillStyle = eyeCol;
+          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 10 - bob, 2, 2);
+          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 10 - bob, 2, 2);
+        }
+        return;
+      }
+
+      if (id === "void_wraith" || ai === "chaser") {
+        // Hovering spectral reaper with tattered cloak & horns
+        const hover = 5 + Math.round(Math.sin(this.elapsed * 5 + e.x) * 2);
+        // Tattered cloak tail pixels
+        ctx.fillStyle = cMain;
+        ctx.fillRect(p.x - 7, p.y - hover - 2, 3, 5);
+        ctx.fillRect(p.x - 1, p.y - hover, 3, 6);
+        ctx.fillRect(p.x + 5, p.y - hover - 2, 3, 5);
+        // Tapered spectral robe + hooded head
+        drawIsoBlock(ctx, p.x, p.y - hover, 18, 9, 13, cMain, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 13 - hover, 13, 7, 8, cTrim, cMain, cDark, "#07090f");
+        // Spectral claws
+        ctx.fillStyle = cTrim;
+        ctx.fillRect(p.x - 11, p.y - 10 - hover + bob, 3, 3);
+        ctx.fillRect(p.x + 8, p.y - 10 - hover - bob, 3, 3);
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#f0abfc";
+          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 18 - hover, 2, 2);
+          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 18 - hover, 2, 2);
+        }
+        return;
+      }
+
+      // --------------------------------------------------------------------
+      // 2. BRUISER ARCHETYPES (Golems, Slag Brutes, Mire Hulks, Sentinels)
+      // --------------------------------------------------------------------
+      if (id === "quarry_golem" || id === "mire_hulk" || id === "slag_brutes" || id === "astral_sentinel" || ai === "bruiser") {
+        const isSlag = id === "slag_brutes";
+        const isHulk = id === "mire_hulk";
+        const isSentinel = id === "astral_sentinel";
+
+        // Heavy stomping legs
+        ctx.fillStyle = cDark;
+        ctx.fillRect(p.x - 9, p.y - 6 + Math.round(stride * 2), 5, 7);
+        ctx.fillRect(p.x + 4, p.y - 6 - Math.round(stride * 2), 5, 7);
+
+        // Broad hulking torso
+        drawIsoBlock(ctx, p.x, p.y - 4 - bob, 28, 14, 18, cTrim, cMain, cDark, "#07090f");
+
+        // Chest Core / Furnace Grate
+        if (f.y > -0.3) {
+          ctx.fillStyle = isSlag ? "#f97316" : isHulk ? "#a3e635" : "#38bdf8";
+          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 14 - bob, 6, 5);
+          if (isSlag) {
+            ctx.fillStyle = "#07090f";
+            ctx.fillRect(p.x - 1 + eyeShiftX, p.y - 14 - bob, 1, 5);
+            ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 14 - bob, 1, 5);
+          }
+        }
+
+        // Detached massive fists / shield & blade
+        const swing = Math.round(stride * 3);
+        if (isSentinel) {
+          // Floating tower shield left + energy blade right
+          drawIsoBlock(ctx, p.x - 16, p.y - 8 - bob, 8, 5, 16, "#38bdf8", "#1d4ed8", "#0f172a", "#07090f");
+          ctx.fillStyle = "#e879f9";
+          ctx.fillRect(p.x + 14, p.y - 24 - bob + swing, 3, 18);
+        } else {
+          drawIsoBlock(ctx, p.x - 16, p.y - 6 - bob + swing, 10, 5, 10, cTrim, cMain, cDark, "#07090f");
+          drawIsoBlock(ctx, p.x + 16, p.y - 6 - bob - swing, 10, 5, 10, cTrim, cMain, cDark, "#07090f");
+        }
+
+        // Head / Smokestacks / Horns
+        drawIsoBlock(ctx, p.x, p.y - 22 - bob, 16, 8, 8, cTrim, cMain, cDark, "#07090f");
+        if (isSlag) {
+          ctx.fillStyle = "#475569";
+          ctx.fillRect(p.x - 11, p.y - 29 - bob, 4, 7);
+          ctx.fillRect(p.x + 7, p.y - 29 - bob, 4, 7);
+        } else if (isHulk || isSentinel) {
+          ctx.fillStyle = cTrim;
+          ctx.fillRect(p.x - 8, p.y - 31 - bob, 2, 6);
+          ctx.fillRect(p.x + 6, p.y - 31 - bob, 2, 6);
+        }
+
+        if (f.y > -0.45) {
+          ctx.fillStyle = eyeCol;
+          ctx.fillRect(p.x - 4 + eyeShiftX, p.y - 27 - bob, 2, 2);
+          ctx.fillRect(p.x + 2 + eyeShiftX, p.y - 27 - bob, 2, 2);
+        }
+        return;
+      }
+
+      // --------------------------------------------------------------------
+      // 3. RANGED ARCHETYPES (Prism Slinger, Ember Turret, Spitter, Pulsar)
+      // --------------------------------------------------------------------
+      const hover = 4 + Math.round(Math.sin(this.elapsed * 4.5 + e.y) * 2);
+
+      if (id === "ember_turret") {
+        // Tripod mechanical artillery turret
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 8);
+        ctx.lineTo(p.x - 11, p.y + 2);
+        ctx.moveTo(p.x, p.y - 8);
+        ctx.lineTo(p.x + 11, p.y + 2);
+        ctx.moveTo(p.x, p.y - 8);
+        ctx.lineTo(p.x, p.y + 4);
+        ctx.stroke();
+
+        drawIsoBlock(ctx, p.x, p.y - 7, 18, 9, 11, cTrim, cMain, cDark, "#07090f");
+        // Aimed cannon barrel
+        const bx = p.x + Math.round(f.x * 11);
+        const by = p.y - 13 + Math.round(f.y * 5);
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 13);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.strokeStyle = "#fde047";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 13);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        return;
+      }
+
+      if (id === "blight_spitter") {
+        // Bulbous toxic spore-pod plant
+        drawIsoBlock(ctx, p.x, p.y, 20, 10, 9, cMain, cMain, cDark, "#07090f");
+        const pulse = Math.round(Math.sin(this.elapsed * 6) * 2);
+        drawIsoBlock(ctx, p.x, p.y - 9, 14 + pulse, 7 + Math.floor(pulse * 0.5), 8, "#bef264", cTrim, cMain, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 6, 2, 2);
+          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 6, 2, 2);
+        }
+        return;
+      }
+
+      // Prism Slinger & Pulsar Orb: Levitating crystal/cosmic construct with orbiting ring
+      drawIsoBlock(ctx, p.x, p.y - hover - 4, 14, 7, 14, "#ffffff", cTrim, cMain, "#07090f");
+      // Orbiting satellite shards
+      const orbA = this.elapsed * 3.5 + e.x;
+      const ox1 = p.x + Math.round(Math.cos(orbA) * 14);
+      const oy1 = p.y - hover - 10 + Math.round(Math.sin(orbA) * 6);
+      const ox2 = p.x + Math.round(Math.cos(orbA + Math.PI) * 14);
+      const oy2 = p.y - hover - 10 + Math.round(Math.sin(orbA + Math.PI) * 6);
+      ctx.fillStyle = cTrim;
+      ctx.fillRect(ox1 - 2, oy1 - 2, 4, 4);
+      ctx.fillRect(ox2 - 2, oy2 - 2, 4, 4);
+      // Central glowing cyclops eye
+      if (f.y > -0.5) {
+        ctx.fillStyle = "#07090f";
+        ctx.fillRect(p.x - 3 + eyeShiftX, p.y - hover - 13, 6, 4);
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(p.x - 1 + eyeShiftX, p.y - hover - 12, 3, 2);
+      }
+    }
+
+    drawBossSprite(ctx, boss, p, f, hurt, stunned) {
+      const id = boss.template.id;
+      const cMain = hurt ? "#ffffff" : boss.color;
+      const cTrim = hurt ? "#fef08a" : boss.trim;
+      const cDark = hurt ? "#fca5a5" : "#090c16";
+      const eyeShiftX = Math.round(f.x * 5);
+      const bob = Math.round(Math.abs(Math.sin(this.elapsed * 6)) * 3);
+
+      // --------------------------------------------------------------------
+      // BOSS 1: OBSIDIAN COLOSSUS (Sunken Quarry — Crystal-Spired Titan)
+      // --------------------------------------------------------------------
+      if (id === "obsidian_colossus") {
+        // Pillar legs
+        ctx.fillStyle = cDark;
+        ctx.fillRect(p.x - 14, p.y - 8, 8, 9);
+        ctx.fillRect(p.x + 6, p.y - 8, 8, 9);
+
+        // Massive obsidian torso
+        drawIsoBlock(ctx, p.x, p.y - 6 - bob, 44, 22, 26, "#334155", cMain, cDark, "#07090f");
+
+        // Glowing cyan chest fissure
+        if (f.y > -0.3) {
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 24 - bob, 4, 12);
+          ctx.fillRect(p.x - 5 + eyeShiftX, p.y - 20 - bob, 10, 3);
+        }
+
+        // Giant crystal-topped shoulder pauldrons
+        drawIsoBlock(ctx, p.x - 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
+        drawIsoBlock(ctx, p.x + 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
+
+        // Floating crushing stone fists
+        const fistWave = Math.round(Math.sin(this.elapsed * 5) * 4);
+        drawIsoBlock(ctx, p.x - 28, p.y - 4 - bob + fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x + 28, p.y - 4 - bob - fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
+
+        // Monolith head + central crystal horn
+        drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 12, cTrim, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 44 - bob, 8, 4, 9, "#e0f2fe", "#38bdf8", "#0284c7", "#07090f");
+
+        if (f.y > -0.45) {
+          ctx.fillStyle = stunned ? "#38bdf8" : "#fef08a";
+          ctx.fillRect(p.x - 6 + eyeShiftX, p.y - 38 - bob, 4, 3);
+          ctx.fillRect(p.x + 2 + eyeShiftX, p.y - 38 - bob, 4, 3);
+        }
+        return;
+      }
+
+      // --------------------------------------------------------------------
+      // BOSS 2: IGNIS PRIME (Cinder Foundry — Arch-Forge War Automaton)
+      // --------------------------------------------------------------------
+      if (id === "arch_forge_automaton") {
+        // Rotating clockwork gear halo behind torso
+        const haloY = p.y - 28 - bob;
+        ctx.strokeStyle = cTrim;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, haloY, 24, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let k = 0; k < 8; k++) {
+          const a = this.elapsed * 2 + (k * Math.PI) / 4;
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(p.x + Math.round(Math.cos(a) * 25) - 2, haloY + Math.round(Math.sin(a) * 25) - 2, 4, 4);
+        }
+
+        // Heavy boiler legs
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(p.x - 14, p.y - 8, 9, 9);
+        ctx.fillRect(p.x + 5, p.y - 8, 9, 9);
+
+        // Furnace boiler chassis
+        drawIsoBlock(ctx, p.x, p.y - 6 - bob, 46, 23, 26, cTrim, cMain, cDark, "#07090f");
+
+        // Roaring open furnace belly grille
+        if (f.y > -0.3) {
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(p.x - 9 + eyeShiftX, p.y - 22 - bob, 18, 10);
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 20 - bob, 14, 6);
+          ctx.fillStyle = "#07090f";
+          for (let gx = -5; gx <= 5; gx += 4) {
+            ctx.fillRect(p.x + gx + eyeShiftX, p.y - 22 - bob, 1, 10);
+          }
+        }
+
+        // Twin tall smokestacks
+        drawIsoBlock(ctx, p.x - 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
+        drawIsoBlock(ctx, p.x + 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
+
+        // Piston cannon arms
+        drawIsoBlock(ctx, p.x - 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
+        drawIsoBlock(ctx, p.x + 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
+
+        // Horned brass helm
+        drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 11, "#fde047", cTrim, cMain, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 38 - bob, 14, 3);
+        }
+        return;
+      }
+
+      // --------------------------------------------------------------------
+      // BOSS 3: VESPERA THE ROT-QUEEN (Whispering Marsh — Fungal Sovereign)
+      // --------------------------------------------------------------------
+      if (id === "mycelial_matriarch") {
+        // Swaying root-tendril skirt around base
+        for (let t = -3; t <= 3; t++) {
+          const sway = Math.round(Math.sin(this.elapsed * 5 + t) * 3);
+          ctx.fillStyle = t % 2 === 0 ? cMain : "#166534";
+          ctx.fillRect(p.x + t * 6 + sway - 2, p.y - 9, 4, 10);
+        }
+
+        // Tall gnarled stem body
+        drawIsoBlock(ctx, p.x, p.y - 6 - bob, 32, 16, 26, cTrim, cMain, cDark, "#07090f");
+
+        // Pulsing spore sacs on shoulders
+        drawIsoBlock(ctx, p.x - 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
+        drawIsoBlock(ctx, p.x + 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
+
+        // Giant wide multi-tiered bioluminescent mushroom canopy crown
+        drawIsoBlock(ctx, p.x, p.y - 32 - bob, 56, 28, 10, "#bef264", "#16a34a", "#14532d", "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 42 - bob, 34, 17, 8, "#fef08a", "#4ade80", "#15803d", "#07090f");
+
+        // Glowing toxic eyes beneath the cap
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 26 - bob, 3, 3);
+          ctx.fillRect(p.x + 4 + eyeShiftX, p.y - 26 - bob, 3, 3);
+          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 23 - bob, 4, 2);
+        }
+        return;
+      }
+
+      // --------------------------------------------------------------------
+      // BOSS 4: AETHELGARD, STAR-EATER (Astral Observatory — Void Archon)
+      // --------------------------------------------------------------------
+      const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
+
+      // Orbiting double singularity halo
+      drawIsoGroundEllipse(ctx, p.x, p.y - hover - 22, 1.55, null, "#e879f9", 2);
+      for (let m = 0; m < 4; m++) {
+        const a = this.elapsed * 2.8 + (m * Math.PI) / 2;
+        const mx = p.x + Math.round(Math.cos(a) * 34);
+        const my = p.y - hover - 22 + Math.round(Math.sin(a) * 14);
+        ctx.fillStyle = m % 2 === 0 ? "#38bdf8" : "#fde047";
+        ctx.fillRect(mx - 3, my - 3, 6, 6);
+      }
+
+      // Floating crystalline astral wing-blades
+      const wingFlap = Math.round(Math.sin(this.elapsed * 5) * 4);
+      drawIsoBlock(ctx, p.x - 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
+      drawIsoBlock(ctx, p.x + 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
+
+      // Eldritch void core torso
+      drawIsoBlock(ctx, p.x, p.y - hover, 34, 17, 26, cTrim, cMain, cDark, "#07090f");
+
+      // Celestial 3-spire crown head
+      drawIsoBlock(ctx, p.x, p.y - hover - 26, 22, 11, 11, "#f5d0fe", "#7e22ce", cDark, "#07090f");
+      ctx.fillStyle = "#fde047";
+      ctx.fillRect(p.x - 8, p.y - hover - 42, 3, 6);
+      ctx.fillRect(p.x - 1, p.y - hover - 45, 3, 9);
+      ctx.fillRect(p.x + 6, p.y - hover - 42, 3, 6);
+
+      // Glowing starlight triad eyes
+      if (f.y > -0.45) {
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(p.x - 6 + eyeShiftX, p.y - hover - 32, 3, 3);
+        ctx.fillRect(p.x + 3 + eyeShiftX, p.y - hover - 32, 3, 3);
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(p.x - 1 + eyeShiftX, p.y - hover - 35, 3, 3);
+      }
     }
 
     renderMinimap() {
