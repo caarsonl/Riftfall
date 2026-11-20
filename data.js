@@ -1,7 +1,6 @@
 /* ==========================================================================
    RIFTFALL — DATA CONFIGURATION (data.js)
-   Data-driven definitions for Dungeons, Survival Hazards, Enemies, Bosses,
-   Equipment Sets, Active Skills, Mutators, Mercenaries, and Blessings.
+   Balanced progression, tighter rarity curves, and retro pixel palettes.
    ========================================================================== */
 
 window.GAME_DATA = {
@@ -37,7 +36,7 @@ window.GAME_DATA = {
   },
 
   /* ------------------------------------------------------------------------
-     RARITY SYSTEM
+     RARITY SYSTEM (Classic ARPG Drop Weights & Balanced Multipliers)
      ------------------------------------------------------------------------ */
   RARITIES: {
     common: {
@@ -46,43 +45,43 @@ window.GAME_DATA = {
       order: 1,
       statMult: 1.0,
       substatCount: 1,
-      color: "#94a3b8",
-      sellBase: 28,
+      color: "#a8b5c8",
+      sellBase: 26,
       salvageBase: 4,
-      dropWeight: 54
+      dropWeight: 76.0
     },
     rare: {
       id: "rare",
       name: "Rare",
       order: 2,
-      statMult: 1.32,
+      statMult: 1.28,
       substatCount: 2,
       color: "#38bdf8",
-      sellBase: 72,
-      salvageBase: 11,
-      dropWeight: 30
+      sellBase: 75,
+      salvageBase: 12,
+      dropWeight: 18.0
     },
     epic: {
       id: "epic",
       name: "Epic",
       order: 3,
-      statMult: 1.75,
+      statMult: 1.65,
       substatCount: 3,
       color: "#c084fc",
-      sellBase: 185,
-      salvageBase: 28,
-      dropWeight: 12
+      sellBase: 210,
+      salvageBase: 32,
+      dropWeight: 4.8
     },
     mythic: {
       id: "mythic",
       name: "Mythic",
       order: 4,
-      statMult: 2.35,
+      statMult: 2.15,
       substatCount: 4,
-      color: "#f59e0b",
-      sellBase: 460,
-      salvageBase: 75,
-      dropWeight: 4
+      color: "#ffae19",
+      sellBase: 550,
+      salvageBase: 90,
+      dropWeight: 1.2
     }
   },
 
@@ -110,7 +109,7 @@ window.GAME_DATA = {
       hazardMult: 1.35,
       lootMult: 2.2,
       xpMult: 2.0,
-      rarityLuck: 0.45,
+      rarityLuck: 0.3,
       renownFirstClear: 4,
       powerMult: 2.1
     },
@@ -122,7 +121,7 @@ window.GAME_DATA = {
       hazardMult: 1.75,
       lootMult: 4.5,
       xpMult: 3.8,
-      rarityLuck: 1.05,
+      rarityLuck: 0.7,
       renownFirstClear: 8,
       powerMult: 4.2
     }
@@ -137,7 +136,7 @@ window.GAME_DATA = {
       name: "Twin Guardians",
       desc: "Final room spawns TWO bosses simultaneously (65% HP each).",
       rewardBonus: 0.75,
-      rarityLuck: 0.35,
+      rarityLuck: 0.22,
       icon: "☠"
     },
     {
@@ -145,7 +144,7 @@ window.GAME_DATA = {
       name: "Hyper-Speed Rift",
       desc: "Enemies move and attack 35% faster; Hero gains +15% Move Speed.",
       rewardBonus: 0.45,
-      rarityLuck: 0.2,
+      rarityLuck: 0.12,
       icon: "⚡"
     },
     {
@@ -153,7 +152,7 @@ window.GAME_DATA = {
       name: "Astral Meteor Shower",
       desc: "Telegraphed burning meteors rain across combat rooms every 4.5s.",
       rewardBonus: 0.55,
-      rarityLuck: 0.25,
+      rarityLuck: 0.15,
       icon: "☄"
     },
     {
@@ -161,7 +160,7 @@ window.GAME_DATA = {
       name: "Shattered Veil",
       desc: "All damage dealt by both Hero and Enemies is increased by +50%.",
       rewardBonus: 0.50,
-      rarityLuck: 0.2,
+      rarityLuck: 0.14,
       icon: "⚔"
     },
     {
@@ -169,26 +168,26 @@ window.GAME_DATA = {
       name: "Volatile Blood",
       desc: "Slain monsters erupt after 0.9s, dealing AoE blast damage.",
       rewardBonus: 0.40,
-      rarityLuck: 0.15,
+      rarityLuck: 0.10,
       icon: "✹"
     }
   ],
 
   /* ------------------------------------------------------------------------
-     SANCTUARY BASE CAMP STATIONS (World Grid Coordinates)
+     SANCTUARY BASE CAMP STATIONS
      ------------------------------------------------------------------------ */
   SANCTUARY: {
     size: 15,
     spawn: { x: 7.5, y: 8.5 },
     palette: {
-      bgTop: "#0c1324",
-      bgBottom: "#060912",
-      tileA: "#1d2842",
-      tileB: "#182238",
-      tileBorder: "#29385a",
-      wallTop: "#334155",
-      wallLeft: "#1e293b",
-      wallRight: "#0f172a",
+      bgTop: "#0b101e",
+      bgBottom: "#05070e",
+      tileA: "#1d2740",
+      tileB: "#172036",
+      tileBorder: "#0d1322",
+      wallTop: "#3b4963",
+      wallLeft: "#232d42",
+      wallRight: "#131926",
       accent: "#38bdf8"
     },
     stations: [
@@ -271,14 +270,14 @@ window.GAME_DATA = {
         suffocateDpsPct: 0.055
       },
       palette: {
-        bgTop: "#0a1724",
-        bgBottom: "#050b12",
-        tileA: "#1b2e3c",
-        tileB: "#162632",
-        tileBorder: "#254054",
-        wallTop: "#33546b",
-        wallLeft: "#1e3647",
-        wallRight: "#12222e",
+        bgTop: "#091521",
+        bgBottom: "#040a10",
+        tileA: "#1b2e3d",
+        tileB: "#152532",
+        tileBorder: "#0c1721",
+        wallTop: "#365870",
+        wallLeft: "#1f374a",
+        wallRight: "#12212e",
         pillarTop: "#38bdf8",
         accent: "#38bdf8"
       },
@@ -312,14 +311,14 @@ window.GAME_DATA = {
         burnDpsPct: 0.065
       },
       palette: {
-        bgTop: "#1f0e0a",
-        bgBottom: "#0e0604",
+        bgTop: "#1c0c09",
+        bgBottom: "#0c0503",
         tileA: "#331d19",
-        tileB: "#2a1714",
-        tileBorder: "#4d2a22",
-        wallTop: "#6e3828",
+        tileB: "#291613",
+        tileBorder: "#170b09",
+        wallTop: "#703929",
         wallLeft: "#4a2319",
-        wallRight: "#2e150e",
+        wallRight: "#2c140d",
         pillarTop: "#f97316",
         accent: "#fb923c"
       },
@@ -354,14 +353,14 @@ window.GAME_DATA = {
         poisonDpsPct: 0.06
       },
       palette: {
-        bgTop: "#0a1c14",
-        bgBottom: "#040d09",
+        bgTop: "#091912",
+        bgBottom: "#040b08",
         tileA: "#162d22",
-        tileB: "#12251c",
-        tileBorder: "#204231",
-        wallTop: "#2d5c42",
+        tileB: "#11241b",
+        tileBorder: "#09140f",
+        wallTop: "#2f5e44",
         wallLeft: "#1b3b29",
-        wallRight: "#102419",
+        wallRight: "#0f2117",
         pillarTop: "#4ade80",
         accent: "#22c55e"
       },
@@ -395,14 +394,14 @@ window.GAME_DATA = {
         heavyGSpeedPenalty: 0.20
       },
       palette: {
-        bgTop: "#130b24",
-        bgBottom: "#07040f",
+        bgTop: "#110a20",
+        bgBottom: "#06030d",
         tileA: "#21163a",
-        tileB: "#1a112f",
-        tileBorder: "#34225c",
-        wallTop: "#54388c",
+        tileB: "#19102e",
+        tileBorder: "#0e081a",
+        wallTop: "#573a91",
         wallLeft: "#35215c",
-        wallRight: "#20133a",
+        wallRight: "#1e1236",
         pillarTop: "#e879f9",
         accent: "#c084fc"
       },
@@ -417,7 +416,6 @@ window.GAME_DATA = {
      ENEMY TEMPLATES
      ------------------------------------------------------------------------ */
   ENEMIES: {
-    // Sunken Quarry
     crystal_crawler: {
       id: "crystal_crawler",
       name: "Crystal Crawler",
@@ -469,7 +467,6 @@ window.GAME_DATA = {
       xp: 22
     },
 
-    // Cinder Foundry
     clockwork_hound: {
       id: "clockwork_hound",
       name: "Clockwork Hound",
@@ -521,7 +518,6 @@ window.GAME_DATA = {
       xp: 40
     },
 
-    // Whispering Marsh
     spore_stalker: {
       id: "spore_stalker",
       name: "Spore Stalker",
@@ -573,7 +569,6 @@ window.GAME_DATA = {
       xp: 72
     },
 
-    // Astral Observatory
     void_wraith: {
       id: "void_wraith",
       name: "Void Wraith",
@@ -717,7 +712,6 @@ window.GAME_DATA = {
      ACTIVE SKILLS (Q = Weapon Skill, E = Relic Skill)
      ------------------------------------------------------------------------ */
   SKILLS: {
-    // Weapon Skills (Q)
     iron_cleave: {
       id: "iron_cleave",
       name: "Whirl Cleave",
@@ -737,25 +731,25 @@ window.GAME_DATA = {
       cooldown: 5.5,
       type: "shockwave",
       radius: 3.4,
-      atkMult: 2.75,
-      spellMult: 0.6,
+      atkMult: 2.65,
+      spellMult: 0.5,
       stunDuration: 1.4,
       color: "#38bdf8",
-      desc: "Crush the earth for 275% ATK damage in a large radius and stun enemies for 1.4s."
+      desc: "Crush the earth for 265% ATK damage in a large radius and stun enemies for 1.4s."
     },
     inferno_ring: {
       id: "inferno_ring",
       name: "Blaze Orbit",
       icon: "✴",
-      cooldown: 4.8,
+      cooldown: 5.0,
       type: "proj_fan",
       count: 6,
       range: 6.5,
-      atkMult: 1.65,
-      spellMult: 0.9,
+      atkMult: 1.5,
+      spellMult: 0.75,
       guaranteedCrit: true,
       color: "#fb923c",
-      desc: "Hurl 6 flaming chakrams outward; guaranteed Critical Hits for 165% ATK + 90% Spell."
+      desc: "Hurl 6 flaming chakrams outward; guaranteed Critical Hits for 150% ATK + 75% Spell."
     },
     spore_eruption: {
       id: "spore_eruption",
@@ -764,11 +758,11 @@ window.GAME_DATA = {
       cooldown: 5.2,
       type: "drain_nova",
       radius: 3.5,
-      atkMult: 0.8,
-      spellMult: 2.5,
-      healPctDmg: 0.30,
+      atkMult: 0.7,
+      spellMult: 2.35,
+      healPctDmg: 0.25,
       color: "#4ade80",
-      desc: "Detonate toxic spores for 250% Spell damage and heal for 30% of damage dealt."
+      desc: "Detonate toxic spores for 235% Spell damage and heal for 25% of damage dealt."
     },
     starfall_cataclysm: {
       id: "starfall_cataclysm",
@@ -778,13 +772,12 @@ window.GAME_DATA = {
       type: "meteor_cluster",
       count: 4,
       radius: 2.3,
-      atkMult: 0.5,
-      spellMult: 3.1,
+      atkMult: 0.45,
+      spellMult: 2.85,
       color: "#e879f9",
-      desc: "Call down 4 astral meteors on nearby foes, each dealing 310% Spell Power damage."
+      desc: "Call down 4 astral meteors on nearby foes, each dealing 285% Spell Power damage."
     },
 
-    // Relic / Armor Skills (E)
     sanctuary_aegis: {
       id: "sanctuary_aegis",
       name: "Gate Aegis",
@@ -802,11 +795,11 @@ window.GAME_DATA = {
       icon: "◈",
       cooldown: 10.0,
       type: "shield_cleanse",
-      shieldPctHp: 0.45,
+      shieldPctHp: 0.42,
       hazardRestore: 55,
       duration: 6.0,
       color: "#38bdf8",
-      desc: "Gain a 45% Max HP crystalline shield and restore/stabilize 55% of active dungeon hazards."
+      desc: "Gain a 42% Max HP crystalline shield and restore/stabilize 55% of active dungeon hazards."
     },
     overclock_surge: {
       id: "overclock_surge",
@@ -814,12 +807,12 @@ window.GAME_DATA = {
       icon: "⚡",
       cooldown: 10.5,
       type: "haste_buff",
-      speedBonus: 0.40,
-      atkSpeedBonus: 0.55,
-      critBonus: 0.25,
+      speedBonus: 0.38,
+      atkSpeedBonus: 0.48,
+      critBonus: 0.22,
       duration: 6.0,
       color: "#f97316",
-      desc: "Vent furnace steam: +55% Attack Speed, +25% Crit Chance, and +40% Move Speed for 6s."
+      desc: "Vent furnace steam: +48% Attack Speed, +22% Crit Chance, and +38% Move Speed for 6s."
     },
     venom_bloom: {
       id: "venom_bloom",
@@ -827,11 +820,11 @@ window.GAME_DATA = {
       icon: "❦",
       cooldown: 9.5,
       type: "heal_pulse",
-      healPctHp: 0.38,
+      healPctHp: 0.35,
       radius: 3.2,
-      spellMult: 1.8,
+      spellMult: 1.75,
       color: "#22c55e",
-      desc: "Instantly restore 38% Max HP, cleanse Toxin buildup, and lash nearby foes for 180% Spell damage."
+      desc: "Instantly restore 35% Max HP, cleanse Toxin buildup, and lash nearby foes for 175% Spell damage."
     },
     singularity_rift: {
       id: "singularity_rift",
@@ -840,15 +833,15 @@ window.GAME_DATA = {
       cooldown: 11.0,
       type: "vortex_pull",
       radius: 4.5,
-      spellMult: 2.9,
+      spellMult: 2.75,
       shieldPctHp: 0.25,
       color: "#c084fc",
-      desc: "Collapse space, pulling enemies inward for 290% Spell damage and granting a 25% HP barrier."
+      desc: "Collapse space, pulling enemies inward for 275% Spell damage and granting a 25% HP barrier."
     }
   },
 
   /* ------------------------------------------------------------------------
-     GEAR TEMPLATES (Weapons, Armors, Relics)
+     REBALANCED GEAR TEMPLATES (Smooth Tier Curve Across All 4 Dungeons)
      ------------------------------------------------------------------------ */
   GEAR_TEMPLATES: {
     // --- STARTER LOADOUT ---
@@ -895,7 +888,7 @@ window.GAME_DATA = {
       slot: "weapon",
       setTag: "Earthshaker",
       dungeonId: "sunken_quarry",
-      craftCost: 35,
+      craftCost: 30,
       icon: "🔨",
       attackType: "melee_heavy",
       range: 2.25,
@@ -903,7 +896,7 @@ window.GAME_DATA = {
       weaponColor: "#38bdf8",
       trailColor: "#7dd3fc",
       skillId: "seismic_shatter",
-      baseStats: { atk: 34, hp: 75, crit: 0.04 },
+      baseStats: { atk: 34, hp: 70, crit: 0.04 },
       desc: "Massive crystal-bound maul that cleaves wide arcs and crushes armor."
     },
     earthshaker_plate: {
@@ -912,10 +905,10 @@ window.GAME_DATA = {
       slot: "armor",
       setTag: "Earthshaker",
       dungeonId: "sunken_quarry",
-      craftCost: 35,
+      craftCost: 30,
       icon: "🛡",
       visuals: { body: "#1e3a5f", cloak: "#0284c7", trim: "#7dd3fc", aura: "rgba(56,189,248,0.28)" },
-      baseStats: { hp: 230, armor: 22, hazardResist: 0.18 },
+      baseStats: { hp: 200, armor: 20, hazardResist: 0.16 },
       desc: "Heavy quarry plate infused with oxygen-retaining crystal veins."
     },
     crystal_heart_relic: {
@@ -924,10 +917,10 @@ window.GAME_DATA = {
       slot: "relic",
       setTag: "Earthshaker",
       dungeonId: "sunken_quarry",
-      craftCost: 35,
+      craftCost: 30,
       icon: "◈",
       skillId: "crystal_bastion",
-      baseStats: { hp: 130, atk: 12, hazardResist: 0.15 },
+      baseStats: { hp: 115, atk: 12, hazardResist: 0.14 },
       desc: "A resonant geode core that fortifies vitality and purifies dungeon air."
     },
 
@@ -938,16 +931,16 @@ window.GAME_DATA = {
       slot: "weapon",
       setTag: "Forge-Lord",
       dungeonId: "cinder_foundry",
-      craftCost: 75,
+      craftCost: 65,
       icon: "✴",
       attackType: "ranged_proj",
       range: 5.4,
-      attackRate: 1.85,
+      attackRate: 1.65,
       projSpeed: 10.5,
       weaponColor: "#f97316",
       trailColor: "#fde047",
       skillId: "inferno_ring",
-      baseStats: { atk: 54, crit: 0.14, speed: 0.35 },
+      baseStats: { atk: 42, crit: 0.10, speed: 0.30 },
       desc: "Twin razor-edged furnace rings hurled at blistering speed."
     },
     forgelord_mail: {
@@ -956,10 +949,10 @@ window.GAME_DATA = {
       slot: "armor",
       setTag: "Forge-Lord",
       dungeonId: "cinder_foundry",
-      craftCost: 75,
+      craftCost: 65,
       icon: "🔥",
       visuals: { body: "#7c2d12", cloak: "#ea580c", trim: "#facc15", aura: "rgba(249,115,22,0.3)" },
-      baseStats: { hp: 310, atk: 24, crit: 0.09, speed: 0.45, hazardResist: 0.16 },
+      baseStats: { hp: 290, atk: 22, crit: 0.07, speed: 0.40, hazardResist: 0.16 },
       desc: "Clockwork-vented battle armor engineered for agile critical strikers."
     },
     furnace_core_relic: {
@@ -968,10 +961,10 @@ window.GAME_DATA = {
       slot: "relic",
       setTag: "Forge-Lord",
       dungeonId: "cinder_foundry",
-      craftCost: 75,
+      craftCost: 65,
       icon: "⚙",
       skillId: "overclock_surge",
-      baseStats: { atk: 28, crit: 0.10, cdr: 0.08 },
+      baseStats: { hp: 90, atk: 24, crit: 0.08, cdr: 0.07 },
       desc: "A pressurized brass turbine that supercharges reflexes on demand."
     },
 
@@ -982,16 +975,16 @@ window.GAME_DATA = {
       slot: "weapon",
       setTag: "Venom-Weaver",
       dungeonId: "whispering_marsh",
-      craftCost: 140,
+      craftCost: 120,
       icon: "🌿",
       attackType: "ranged_orb",
       range: 5.8,
-      attackRate: 1.55,
+      attackRate: 1.50,
       projSpeed: 9.2,
       weaponColor: "#22c55e",
       trailColor: "#a3e635",
       skillId: "spore_eruption",
-      baseStats: { atk: 44, spell: 88, lifesteal: 0.08 },
+      baseStats: { atk: 36, spell: 76, lifesteal: 0.06 },
       desc: "Living mycelial staff firing volatile bio-orbs that siphon vitality."
     },
     venomweaver_shroud: {
@@ -1000,10 +993,10 @@ window.GAME_DATA = {
       slot: "armor",
       setTag: "Venom-Weaver",
       dungeonId: "whispering_marsh",
-      craftCost: 140,
+      craftCost: 120,
       icon: "☣",
       visuals: { body: "#14532d", cloak: "#16a34a", trim: "#bef264", aura: "rgba(34,197,94,0.3)" },
-      baseStats: { hp: 480, spell: 46, lifesteal: 0.07, hazardResist: 0.24 },
+      baseStats: { hp: 450, spell: 44, lifesteal: 0.05, hazardResist: 0.20 },
       desc: "Symbiotic marsh-silk cloak that converts toxins into cellular regeneration."
     },
     emerald_gland_relic: {
@@ -1012,10 +1005,10 @@ window.GAME_DATA = {
       slot: "relic",
       setTag: "Venom-Weaver",
       dungeonId: "whispering_marsh",
-      craftCost: 140,
+      craftCost: 120,
       icon: "❦",
       skillId: "venom_bloom",
-      baseStats: { hp: 220, spell: 42, lifesteal: 0.06, hazardResist: 0.18 },
+      baseStats: { hp: 200, spell: 38, lifesteal: 0.05, hazardResist: 0.16 },
       desc: "A pulsing floral core that blooms with restorative nectar in battle."
     },
 
@@ -1026,16 +1019,16 @@ window.GAME_DATA = {
       slot: "weapon",
       setTag: "Starlight",
       dungeonId: "astral_observatory",
-      craftCost: 260,
+      craftCost: 210,
       icon: "✦",
       attackType: "ranged_nova",
       range: 6.4,
-      attackRate: 1.65,
+      attackRate: 1.55,
       projSpeed: 11.4,
       weaponColor: "#c084fc",
       trailColor: "#f0abfc",
       skillId: "starfall_cataclysm",
-      baseStats: { atk: 62, spell: 155, crit: 0.12, cdr: 0.10 },
+      baseStats: { atk: 52, spell: 132, crit: 0.10, cdr: 0.08 },
       desc: "An unbound tome of starlight firing piercing cosmic bolts."
     },
     starlight_vestments: {
@@ -1044,10 +1037,10 @@ window.GAME_DATA = {
       slot: "armor",
       setTag: "Starlight",
       dungeonId: "astral_observatory",
-      craftCost: 260,
+      craftCost: 210,
       icon: "✧",
       visuals: { body: "#3b0764", cloak: "#7e22ce", trim: "#f5d0fe", aura: "rgba(192,132,252,0.36)" },
-      baseStats: { hp: 720, spell: 95, crit: 0.10, cdr: 0.10, speed: 0.5, hazardResist: 0.25 },
+      baseStats: { hp: 680, spell: 84, crit: 0.08, cdr: 0.08, speed: 0.40, hazardResist: 0.22 },
       desc: "Celestial robes stitched from compressed nebula threads."
     },
     singularity_prism_relic: {
@@ -1056,31 +1049,30 @@ window.GAME_DATA = {
       slot: "relic",
       setTag: "Starlight",
       dungeonId: "astral_observatory",
-      craftCost: 260,
+      craftCost: 210,
       icon: "◎",
       skillId: "singularity_rift",
-      baseStats: { hp: 340, spell: 92, crit: 0.09, cdr: 0.12 },
+      baseStats: { hp: 320, spell: 78, crit: 0.08, cdr: 0.10 },
       desc: "A miniature black hole trapped in glass that bends spacetime around foes."
     }
   },
 
   /* ------------------------------------------------------------------------
-     BONUS SUB-STAT POOL (Rolled on Drops & Reforged at Blacksmith)
+     BONUS SUB-STAT POOL
      ------------------------------------------------------------------------ */
   SUBSTAT_POOL: [
-    { key: "crit", label: "Crit Chance", min: 0.02, max: 0.09, isPct: true },
-    { key: "lifesteal", label: "Lifesteal", min: 0.015, max: 0.06, isPct: true },
-    { key: "cdr", label: "Cooldown Reduction", min: 0.03, max: 0.10, isPct: true },
-    { key: "speed", label: "Move Speed", min: 0.18, max: 0.65, isPct: false },
-    { key: "hazardResist", label: "Hazard Resist", min: 0.05, max: 0.18, isPct: true },
-    { key: "atk", label: "Bonus ATK", min: 8, max: 32, isPct: false, scalesWithTier: true },
-    { key: "spell", label: "Spell Power", min: 8, max: 36, isPct: false, scalesWithTier: true },
-    { key: "hp", label: "Max HP", min: 35, max: 145, isPct: false, scalesWithTier: true }
+    { key: "crit", label: "Crit Chance", min: 0.015, max: 0.07, isPct: true },
+    { key: "lifesteal", label: "Lifesteal", min: 0.01, max: 0.045, isPct: true },
+    { key: "cdr", label: "Cooldown Reduction", min: 0.025, max: 0.085, isPct: true },
+    { key: "speed", label: "Move Speed", min: 0.15, max: 0.55, isPct: false },
+    { key: "hazardResist", label: "Hazard Resist", min: 0.04, max: 0.15, isPct: true },
+    { key: "atk", label: "Bonus ATK", min: 8, max: 28, isPct: false, scalesWithTier: true },
+    { key: "spell", label: "Spell Power", min: 8, max: 30, isPct: false, scalesWithTier: true },
+    { key: "hp", label: "Max HP", min: 35, max: 130, isPct: false, scalesWithTier: true }
   ],
 
   /* ------------------------------------------------------------------------
-     MERCENARY GUILD SQUADS (Idle Background Dungeon Farming)
-     Unlocked by clearing the corresponding dungeon's Boss once.
+     MERCENARY GUILD SQUADS
      ------------------------------------------------------------------------ */
   MERCENARIES: [
     {
@@ -1134,7 +1126,7 @@ window.GAME_DATA = {
   ],
 
   /* ------------------------------------------------------------------------
-     PERMANENT GUILD BLESSINGS (Purchased with Guild Renown)
+     PERMANENT GUILD BLESSINGS
      ------------------------------------------------------------------------ */
   BLESSINGS: [
     {

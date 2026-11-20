@@ -277,10 +277,10 @@
       const weights = rarities.map((id) => {
         const r = DATA.RARITIES[id];
         if (r.order < minOrder) return 0;
-        if (id === "common") return Math.max(8, r.dropWeight - luckBonus * 26);
-        if (id === "rare") return r.dropWeight + luckBonus * 10;
-        if (id === "epic") return r.dropWeight + luckBonus * 14;
-        return r.dropWeight + luckBonus * 9;
+        if (id === "common") return Math.max(36, r.dropWeight - luckBonus * 14);
+        if (id === "rare") return r.dropWeight + luckBonus * 8.0;
+        if (id === "epic") return r.dropWeight + luckBonus * 3.8;
+        return r.dropWeight + luckBonus * 1.4;
       });
       const total = weights.reduce((a, b) => a + b, 0);
       let roll = Math.random() * total;
@@ -359,26 +359,38 @@
      ISOMETRIC PROJECTION & 2.5D RENDER HELPERS
      ======================================================================== */
   const ISO = {
-    TILE_W: 68,
-    TILE_H: 34,
-    Z_SCALE: 28,
+    PIXEL_SCALE: 2, // Renders at 1/2 native resolution and scales up crisp with nearest-neighbor
+    TILE_W: 48,
+    TILE_H: 24,
+    Z_SCALE: 20,
 
     toScreen(wx, wy, wz = 0, camX = 0, camY = 0, halfW = 0, halfH = 0) {
       const rx = wx - camX;
       const ry = wy - camY;
       return {
-        x: (rx - ry) * (this.TILE_W * 0.5) + halfW,
-        y: (rx + ry) * (this.TILE_H * 0.5) - wz * this.Z_SCALE + halfH
+        x: Math.round((rx - ry) * (this.TILE_W * 0.5) + halfW),
+        y: Math.round((rx + ry) * (this.TILE_H * 0.5) - wz * this.Z_SCALE + halfH)
       };
+    },
+
+    worldDirToScreen(wx, wy) {
+      const sx = (wx - wy) * (this.TILE_W * 0.5);
+      const sy = (wx + wy) * (this.TILE_H * 0.5);
+      const len = Math.hypot(sx, sy) || 1;
+      return { x: sx / len, y: sy / len };
     }
   };
 
   function drawIsoDiamond(ctx, cx, cy, w, h, fill, stroke = null, lineWidth = 1) {
+    const x = Math.round(cx);
+    const y = Math.round(cy);
+    const hw = Math.round(w * 0.5);
+    const hh = Math.round(h * 0.5);
     ctx.beginPath();
-    ctx.moveTo(cx, cy - h * 0.5);
-    ctx.lineTo(cx + w * 0.5, cy);
-    ctx.lineTo(cx, cy + h * 0.5);
-    ctx.lineTo(cx - w * 0.5, cy);
+    ctx.moveTo(x, y - hh);
+    ctx.lineTo(x + hw, y);
+    ctx.lineTo(x, y + hh);
+    ctx.lineTo(x - hw, y);
     ctx.closePath();
     if (fill) {
       ctx.fillStyle = fill;
@@ -391,52 +403,72 @@
     }
   }
 
-  function drawIsoBlock(ctx, sx, sy, tileW, tileH, heightPx, colTop, colLeft, colRight, stroke = null) {
-    const hw = tileW * 0.5;
-    const hh = tileH * 0.5;
+  function drawIsoBlock(ctx, sx, sy, tileW, tileH, heightPx, colTop, colLeft, colRight, stroke = "#090c14") {
+    const x = Math.round(sx);
+    const y = Math.round(sy);
+    const hw = Math.round(tileW * 0.5);
+    const hh = Math.round(tileH * 0.5);
+    const h = Math.round(heightPx);
 
     // Left face
     ctx.beginPath();
-    ctx.moveTo(sx - hw, sy - heightPx);
-    ctx.lineTo(sx, sy + hh - heightPx);
-    ctx.lineTo(sx, sy + hh);
-    ctx.lineTo(sx - hw, sy);
+    ctx.moveTo(x - hw, y - h);
+    ctx.lineTo(x, y + hh - h);
+    ctx.lineTo(x, y + hh);
+    ctx.lineTo(x - hw, y);
     ctx.closePath();
     ctx.fillStyle = colLeft;
     ctx.fill();
 
     // Right face
     ctx.beginPath();
-    ctx.moveTo(sx + hw, sy - heightPx);
-    ctx.lineTo(sx, sy + hh - heightPx);
-    ctx.lineTo(sx, sy + hh);
-    ctx.lineTo(sx + hw, sy);
+    ctx.moveTo(x + hw, y - h);
+    ctx.lineTo(x, y + hh - h);
+    ctx.lineTo(x, y + hh);
+    ctx.lineTo(x + hw, y);
     ctx.closePath();
     ctx.fillStyle = colRight;
     ctx.fill();
 
     // Top face
     ctx.beginPath();
-    ctx.moveTo(sx, sy - hh - heightPx);
-    ctx.lineTo(sx + hw, sy - heightPx);
-    ctx.lineTo(sx, sy + hh - heightPx);
-    ctx.lineTo(sx - hw, sy - heightPx);
+    ctx.moveTo(x, y - hh - h);
+    ctx.lineTo(x + hw, y - h);
+    ctx.lineTo(x, y + hh - h);
+    ctx.lineTo(x - hw, y - h);
     ctx.closePath();
     ctx.fillStyle = colTop;
     ctx.fill();
 
+    // Crisp retro pixel-art outline around outer silhouette & top ridge
     if (stroke) {
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y - hh - h);
+      ctx.lineTo(x + hw, y - h);
+      ctx.lineTo(x + hw, y);
+      ctx.lineTo(x, y + hh);
+      ctx.lineTo(x - hw, y);
+      ctx.lineTo(x - hw, y - h);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Top highlight edge
+      ctx.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx.beginPath();
+      ctx.moveTo(x - hw + 1, y - h);
+      ctx.lineTo(x, y - hh - h + 1);
+      ctx.lineTo(x + hw - 1, y - h);
       ctx.stroke();
     }
   }
 
-  function drawIsoGroundEllipse(ctx, sx, sy, radiusTiles, fill, stroke = null, lineWidth = 2) {
-    const rx = radiusTiles * ISO.TILE_W * 0.52;
-    const ry = radiusTiles * ISO.TILE_H * 0.52;
+  function drawIsoGroundEllipse(ctx, sx, sy, radiusTiles, fill, stroke = null, lineWidth = 1) {
+    const rx = Math.max(1, Math.round(radiusTiles * ISO.TILE_W * 0.52));
+    const ry = Math.max(1, Math.round(radiusTiles * ISO.TILE_H * 0.52));
     ctx.beginPath();
-    ctx.ellipse(sx, sy, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2);
+    ctx.ellipse(Math.round(sx), Math.round(sy), rx, ry, 0, 0, Math.PI * 2);
     if (fill) {
       ctx.fillStyle = fill;
       ctx.fill();
@@ -1631,10 +1663,10 @@
         this.run.shardsEarned += shardGain;
         this.addScreenShake(0.4, 12);
         this.dropLootItem(enemy.x, enemy.y, true);
-        if (Math.random() < 0.6 + this.run.rarityLuck * 0.25) {
+        if (Math.random() < 0.35 + this.run.rarityLuck * 0.2) {
           this.dropLootItem(enemy.x + randRange(-0.8, 0.8), enemy.y + randRange(-0.8, 0.8), true);
         }
-      } else if (Math.random() < 0.2 + this.run.rarityLuck * 0.08) {
+      } else if (Math.random() < 0.13 + this.run.rarityLuck * 0.04) {
         this.dropLootItem(enemy.x, enemy.y, false);
       }
 
@@ -1662,8 +1694,11 @@
     dropLootItem(x, y, isBossDrop) {
       const pool = this.run.dungeon.lootPool;
       const tplId = pick(pool);
-      const minRarity = isBossDrop ? (this.run.diff.id === "abyssal" ? "epic" : "rare") : "common";
-      const rarity = GearSystem.rollRarity(this.run.rarityLuck + (isBossDrop ? 0.45 : 0), minRarity);
+      const minRarity =
+        isBossDrop && (this.run.diff.id === "nightmare" || this.run.diff.id === "abyssal")
+          ? "rare"
+          : "common";
+      const rarity = GearSystem.rollRarity(this.run.rarityLuck + (isBossDrop ? 0.25 : 0), minRarity);
       const item = GearSystem.createItem(tplId, rarity, 0);
 
       this.lootDrops.push({
@@ -2367,44 +2402,56 @@
        2.5D ISOMETRIC RENDERING ENGINE
        ====================================================================== */
     resizeCanvas() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = this.canvas.clientWidth;
-      const h = this.canvas.clientHeight;
-      this.canvas.width = Math.floor(w * dpr);
-      this.canvas.height = Math.floor(h * dpr);
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = Math.max(320, Math.floor(this.canvas.clientWidth / ISO.PIXEL_SCALE));
+      const h = Math.max(200, Math.floor(this.canvas.clientHeight / ISO.PIXEL_SCALE));
+      this.canvas.width = w;
+      this.canvas.height = h;
+      this.ctx.imageSmoothingEnabled = false;
     }
 
     render() {
       const ctx = this.ctx;
-      const w = this.canvas.clientWidth;
-      const h = this.canvas.clientHeight;
+      const w = this.canvas.width;
+      const h = this.canvas.height;
       const pal = this.world.palette;
 
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, pal.bgTop);
-      grad.addColorStop(1, pal.bgBottom);
-      ctx.fillStyle = grad;
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = pal.bgBottom;
       ctx.fillRect(0, 0, w, h);
+
+      // Subtle retro horizontal sky/void banding
+      ctx.fillStyle = pal.bgTop;
+      ctx.fillRect(0, 0, w, Math.floor(h * 0.62));
 
       let shakeX = 0;
       let shakeY = 0;
       if (this.cam.shakeTime > 0) {
-        shakeX = randRange(-this.cam.shakeMag, this.cam.shakeMag);
-        shakeY = randRange(-this.cam.shakeMag, this.cam.shakeMag);
+        shakeX = Math.round(randRange(-this.cam.shakeMag, this.cam.shakeMag) * 0.5);
+        shakeY = Math.round(randRange(-this.cam.shakeMag, this.cam.shakeMag) * 0.5);
       }
-      const halfW = w * 0.5 + shakeX;
-      const halfH = h * 0.52 + shakeY;
+      const halfW = Math.floor(w * 0.5) + shakeX;
+      const halfH = Math.floor(h * 0.52) + shakeY;
 
       const toS = (wx, wy, wz = 0) => ISO.toScreen(wx, wy, wz, this.cam.x, this.cam.y, halfW, halfH);
 
-      // 1. Floor Tiles
+      // 1. Floor Tiles with Retro Pixel Stone Speckling
       const sz = this.world.size;
       for (let y = 0; y < sz; y++) {
         for (let x = 0; x < sz; x++) {
           const p = toS(x + 0.5, y + 0.5, 0);
           const col = (x + y) % 2 === 0 ? pal.tileA : pal.tileB;
           drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W, ISO.TILE_H, col, pal.tileBorder, 1);
+
+          // Deterministic pixel texture details on tiles
+          const hash = (x * 37 + y * 91) & 7;
+          if (hash === 1 || hash === 4) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+            ctx.fillRect(p.x - 4, p.y - 1, 2, 1);
+            ctx.fillRect(p.x + 3, p.y + 2, 2, 1);
+          } else if (hash === 2) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+            ctx.fillRect(p.x - 2, p.y + 1, 3, 1);
+          }
         }
       }
 
@@ -2419,7 +2466,7 @@
           const cell = this.world.grid[y][x];
           if (cell === 1 || cell === 2) {
             const isFrontBorder = cell === 1 && (x === sz - 1 || y === sz - 1);
-            const heightPx = isFrontBorder ? 12 : cell === 2 ? 44 : 26;
+            const heightPx = isFrontBorder ? 9 : cell === 2 ? 32 : 19;
             const topCol = cell === 2 && pal.pillarTop ? pal.pillarTop : pal.wallTop;
             renderables.push({
               depth: x + y + 0.5,
@@ -2435,7 +2482,7 @@
                   topCol,
                   pal.wallLeft,
                   pal.wallRight,
-                  "rgba(255,255,255,0.08)"
+                  "#07090f"
                 );
               }
             });
@@ -2471,7 +2518,7 @@
             const p = toS(img.x, img.y, 0);
             ctx.save();
             ctx.globalAlpha = img.life * 2.2;
-            drawIsoBlock(ctx, p.x, p.y, 24, 12, 32, "#7dd3fc", "#0ea5e9", "#0284c7");
+            drawIsoBlock(ctx, p.x, p.y, 18, 9, 22, "#7dd3fc", "#0ea5e9", "#0284c7", "#07090f");
             ctx.restore();
           }
         });
@@ -2499,27 +2546,27 @@
       renderables.sort((a, b) => a.depth - b.depth);
       for (const r of renderables) r.draw();
 
-      // 4. Particles & Floating Combat Text
+      // 4. Crisp Square Pixel Particles
       for (const pt of this.particles) {
         const p = toS(pt.x, pt.y, pt.z);
+        const szPx = Math.max(2, Math.round(pt.size * 0.7));
         ctx.save();
         ctx.globalAlpha = clamp(pt.life / pt.maxLife, 0, 1);
         ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, pt.size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(p.x - Math.floor(szPx * 0.5), p.y - Math.floor(szPx * 0.5), szPx, szPx);
         ctx.restore();
       }
 
+      // 5. Classic Pixel Floating Combat Numbers
       for (const ft of this.floatingTexts) {
         const p = toS(ft.x, ft.y, ft.z);
         ctx.save();
         ctx.globalAlpha = clamp(ft.life / (ft.maxLife * 0.6), 0, 1);
-        ctx.font = ft.big ? "800 17px 'Segoe UI', sans-serif" : "700 13px 'Segoe UI', sans-serif";
+        ctx.font = ft.big ? "bold 11px 'Courier New', monospace" : "bold 9px 'Courier New', monospace";
         ctx.textAlign = "center";
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "rgba(4,6,12,0.9)";
-        ctx.strokeText(ft.text, p.x, p.y);
+        ctx.fillStyle = "#05070c";
+        ctx.fillText(ft.text, p.x + 1, p.y + 1);
+        ctx.fillText(ft.text, p.x - 1, p.y + 1);
         ctx.fillStyle = ft.color;
         ctx.fillText(ft.text, p.x, p.y);
         ctx.restore();
@@ -2710,70 +2757,151 @@
 
       const p = toS(this.player.x, this.player.y, 0);
       const moving = Math.hypot(this.player.vx, this.player.vy) > 0.2;
-      const bob = moving ? Math.abs(Math.sin(this.elapsed * 13)) * 5 : Math.sin(this.elapsed * 3) * 1.5;
+      const bob = moving ? Math.round(Math.abs(Math.sin(this.elapsed * 14)) * 3) : Math.round(Math.sin(this.elapsed * 3));
 
-      drawIsoGroundEllipse(ctx, p.x, p.y + 2, 0.55, "rgba(0, 0, 0, 0.52)");
+      // Screen-space 8-way facing direction
+      const f = ISO.worldDirToScreen(this.player.facing.x, this.player.facing.y);
+      const facingAway = f.y < -0.35;
+
+      // Ground Drop Shadow + Set Aura
+      drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
       if (vis.aura) {
-        drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, vis.aura, vis.trim, 1.2);
+        drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, vis.aura, vis.trim, 1);
       }
 
       if (this.player.shield > 0) {
-        drawIsoGroundEllipse(ctx, p.x, p.y - 16, 0.75, "rgba(56, 189, 248, 0.16)", "#7dd3fc", 2);
+        drawIsoGroundEllipse(ctx, p.x, p.y - 11, 0.75, "rgba(56, 189, 248, 0.16)", "#7dd3fc", 1);
       }
 
       const bodyCol = this.player.hurtFlash > 0 ? "#ffffff" : vis.body;
       const cloakCol = this.player.hurtFlash > 0 ? "#fecaca" : vis.cloak;
       const trimCol = this.player.iframeTimer > 0 ? "#7dd3fc" : vis.trim;
 
-      drawIsoBlock(ctx, p.x, p.y - bob, 24, 12, 26, trimCol, cloakCol, bodyCol, "rgba(255,255,255,0.22)");
-      drawIsoBlock(ctx, p.x, p.y - 26 - bob, 16, 8, 13, "#f8fafc", trimCol, bodyCol);
+      // Cape behind the hero (opposite facing direction)
+      if (!facingAway) {
+        const capeX = Math.round(p.x - f.x * 5);
+        const capeY = Math.round(p.y - 14 - bob - f.y * 2);
+        ctx.fillStyle = cloakCol;
+        ctx.fillRect(capeX - 5, capeY, 10, 12);
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(capeX - 5, capeY, 10, 12);
+      }
 
-      const swingOffset = this.player.swingAnim > 0 ? Math.sin(this.player.swingAnim * 28) * 10 : 0;
-      ctx.save();
-      ctx.strokeStyle = wepTpl.weaponColor;
-      ctx.lineWidth = wepTpl.attackType === "melee_heavy" ? 5 : 3.2;
-      ctx.lineCap = "round";
+      // 2.5D Pixel Torso
+      drawIsoBlock(ctx, p.x, p.y - bob, 18, 9, 18, trimCol, cloakCol, bodyCol, "#07090f");
+
+      // Cape in front of torso when facing North (away from camera)
+      if (facingAway) {
+        ctx.fillStyle = cloakCol;
+        ctx.fillRect(p.x - 6, p.y - 17 - bob, 12, 13);
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x - 6, p.y - 17 - bob, 12, 13);
+      }
+
+      // 2.5D Pixel Head / Helm
+      const headY = p.y - 18 - bob;
+      drawIsoBlock(ctx, p.x, headY, 14, 7, 10, trimCol, bodyCol, "#0f172a", "#07090f");
+
+      // Directional Face Visor & Pixel Eyes (changes cleanly across all 8 directions!)
+      const eyeY = headY - 6;
+      if (f.y > -0.62) {
+        const shiftX = Math.round(f.x * 3);
+        if (f.y >= -0.22) {
+          // Front or 3/4 Front View: Skin/Visor slit + 2 crisp pixel eyes
+          ctx.fillStyle = "#fde68a";
+          ctx.fillRect(p.x - 4 + shiftX, eyeY - 1, 8, 3);
+
+          // Left & Right Pixel Eyes + Pupils
+          const leftEyeX = p.x - 3 + shiftX;
+          const rightEyeX = p.x + 2 + shiftX;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(leftEyeX, eyeY - 1, 2, 2);
+          ctx.fillRect(rightEyeX, eyeY - 1, 2, 2);
+
+          const pupilShift = f.x > 0.25 ? 1 : 0;
+          ctx.fillStyle = "#07090f";
+          ctx.fillRect(leftEyeX + pupilShift, eyeY - 1, 1, 2);
+          ctx.fillRect(rightEyeX + pupilShift, eyeY - 1, 1, 2);
+        } else {
+          // 3/4 Back-Side Turn: Single profile eye peeking on the turned side
+          const sideSign = f.x >= 0 ? 1 : -1;
+          const peekX = p.x + sideSign * 4;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(peekX, eyeY - 1, 2, 2);
+          ctx.fillStyle = "#07090f";
+          ctx.fillRect(peekX + (sideSign > 0 ? 1 : 0), eyeY - 1, 1, 2);
+        }
+      } else {
+        // Pure North (Facing Away): Helmet crest / plume on back of head
+        ctx.fillStyle = trimCol;
+        ctx.fillRect(p.x - 1, headY - 11, 2, 5);
+      }
+
+      // Directional Equipped Weapon
+      const swingAng = this.player.swingAnim > 0 ? Math.sin(this.player.swingAnim * 30) * 1.1 : 0;
+      const baseAng = Math.atan2(f.y, f.x) + swingAng;
+      const handX = Math.round(p.x + f.x * 6 - f.y * 4);
+      const handY = Math.round(p.y - 12 - bob + f.y * 3);
+      const tipX = Math.round(handX + Math.cos(baseAng) * 13);
+      const tipY = Math.round(handY + Math.sin(baseAng) * 10 - 4);
+
+      ctx.strokeStyle = "#07090f";
+      ctx.lineWidth = wepTpl.attackType === "melee_heavy" ? 5 : 4;
       ctx.beginPath();
-      ctx.moveTo(p.x + 12, p.y - 18 - bob);
-      ctx.lineTo(p.x + 24 + swingOffset, p.y - 32 - bob);
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
       ctx.stroke();
-      ctx.fillStyle = wepTpl.trailColor;
+
+      ctx.strokeStyle = wepTpl.weaponColor;
+      ctx.lineWidth = wepTpl.attackType === "melee_heavy" ? 3 : 2;
       ctx.beginPath();
-      ctx.arc(p.x + 24 + swingOffset, p.y - 32 - bob, wepTpl.attackType === "melee_heavy" ? 5.5 : 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      ctx.fillStyle = wepTpl.trailColor;
+      ctx.fillRect(tipX - 2, tipY - 2, 4, 4);
     }
 
     drawEnemy(ctx, e, toS) {
       const p = toS(e.x, e.y, 0);
-      const bob = Math.abs(Math.sin(this.elapsed * 8 + e.x)) * (e.isBoss ? 4 : 2.5);
-      const bw = e.radius * 46;
-      const bh = e.radius * 23;
-      const hPx = e.height * 28;
+      const bob = Math.round(Math.abs(Math.sin(this.elapsed * 8 + e.x)) * (e.isBoss ? 3 : 2));
+      const bw = Math.round(e.radius * 34);
+      const bh = Math.round(e.radius * 17);
+      const hPx = Math.round(e.height * 20);
 
-      drawIsoGroundEllipse(ctx, p.x, p.y + 2, e.radius * 1.15, "rgba(0,0,0,0.52)");
+      drawIsoGroundEllipse(ctx, p.x, p.y + 1, e.radius * 1.15, "rgba(0,0,0,0.55)");
 
       if (e.isBoss) {
-        drawIsoGroundEllipse(ctx, p.x, p.y, e.radius * 1.35, "rgba(239, 68, 68, 0.14)", e.trim, 2);
+        drawIsoGroundEllipse(ctx, p.x, p.y, e.radius * 1.35, "rgba(239, 68, 68, 0.16)", e.trim, 1);
       }
 
       const topC = e.hurtFlash > 0 ? "#ffffff" : e.trim;
       const leftC = e.hurtFlash > 0 ? "#fecaca" : e.color;
-      const rightC = e.hurtFlash > 0 ? "#f87171" : "#0f172a";
+      const rightC = e.hurtFlash > 0 ? "#f87171" : "#0b0f1c";
 
-      drawIsoBlock(ctx, p.x, p.y - bob, bw, bh, hPx, topC, leftC, rightC, "rgba(255,255,255,0.16)");
+      drawIsoBlock(ctx, p.x, p.y - bob, bw, bh, hPx, topC, leftC, rightC, "#07090f");
 
+      // Directional Glowing Pixel Eyes tracking player
+      const ef = ISO.worldDirToScreen(e.facing.x, e.facing.y);
+      const eyeShiftX = Math.round(ef.x * (e.isBoss ? 5 : 3));
+      const eyeY = p.y - Math.round(hPx * 0.68) - bob;
       ctx.fillStyle = e.stunTimer > 0 ? "#38bdf8" : "#fef08a";
-      ctx.fillRect(p.x - 5, p.y - hPx * 0.72 - bob, 3, 3);
-      ctx.fillRect(p.x + 2, p.y - hPx * 0.72 - bob, 3, 3);
+      if (ef.y > -0.5) {
+        ctx.fillRect(p.x - 4 + eyeShiftX, eyeY, 2, 2);
+        ctx.fillRect(p.x + 2 + eyeShiftX, eyeY, 2, 2);
+      }
 
+      // Crisp Pixel HP Bar (non-bosses)
       if (!e.isBoss && e.hp < e.maxHp) {
-        const barW = 36;
+        const barW = 26;
         const pct = clamp(e.hp / e.maxHp, 0, 1);
-        ctx.fillStyle = "rgba(8, 12, 22, 0.85)";
-        ctx.fillRect(p.x - barW * 0.5, p.y - hPx - 16, barW, 5);
+        ctx.fillStyle = "#07090f";
+        ctx.fillRect(p.x - Math.floor(barW * 0.5) - 1, p.y - hPx - 12, barW + 2, 5);
         ctx.fillStyle = "#ef4444";
-        ctx.fillRect(p.x - barW * 0.5, p.y - hPx - 16, barW * pct, 5);
+        ctx.fillRect(p.x - Math.floor(barW * 0.5), p.y - hPx - 11, Math.round(barW * pct), 3);
       }
     }
 
@@ -3393,7 +3521,7 @@
         row.querySelector("button").onclick = () => {
           if (this.save.shards < tplDef.craftCost || this.save.inventory.length >= C.INVENTORY_CAPACITY) return;
           this.save.shards -= tplDef.craftCost;
-          const rar = GearSystem.rollRarity(0.7, "rare");
+          const rar = GearSystem.rollRarity(0.35, "common");
           const crafted = GearSystem.createItem(tplDef.id, rar, 0);
           this.save.inventory.push(crafted);
           this.sfx.loot(rar);
