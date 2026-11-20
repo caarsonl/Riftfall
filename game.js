@@ -3220,7 +3220,57 @@
       this.renderArmoryModal();
       this.saveGame(false);
     }
+    equipBestGear() {
+      const oldPower = this.getHeroPowerScore();
+      let changedCount = 0;
 
+      for (const slot of ["weapon", "armor", "relic"]) {
+        const current = this.save.equipped[slot];
+        let bestItem = current;
+        let bestPower = current ? GearSystem.computeItemPower(current) : -1;
+
+        for (const candidate of this.save.inventory) {
+          if (candidate.slot !== slot) continue;
+          const pwr = GearSystem.computeItemPower(candidate);
+          if (pwr > bestPower) {
+            bestPower = pwr;
+            bestItem = candidate;
+          }
+        }
+
+        if (bestItem && bestItem !== current) {
+          const invIdx = this.save.inventory.indexOf(bestItem);
+          if (invIdx >= 0) {
+            this.save.inventory.splice(invIdx, 1);
+            if (current) this.save.inventory.push(current);
+            this.save.equipped[slot] = bestItem;
+            changedCount++;
+          }
+        }
+      }
+
+      if (changedCount === 0) {
+        this.sfx.uiClick();
+        this.toast("Already wearing your highest-power gear!", "info");
+        return;
+      }
+
+      const stats = this.getHeroStats();
+      this.player.maxHp = stats.hp;
+      if (this.mode === "hub") this.player.hp = stats.hp;
+
+      const newPower = this.getHeroPowerScore();
+      const delta = newPower - oldPower;
+      this.selectedInvUid = null;
+      this.sfx.upgrade();
+      this.syncAllHUD();
+      this.renderArmoryModal();
+      this.saveGame(false);
+      this.toast(
+        `Equipped ${changedCount} upgrade${changedCount > 1 ? "s" : ""}! (+${fmtNum(delta)} PWR)`,
+        "success"
+      );
+    }
     sellInventoryItem(uidVal) {
       const idx = this.save.inventory.findIndex((x) => x.uid === uidVal);
       if (idx < 0 || this.save.inventory[idx].locked) return;
@@ -3640,6 +3690,7 @@
         this.invSort = e.target.value;
         this.renderArmoryModal();
       });
+      document.getElementById("btn-equip-best").addEventListener("click", () => this.equipBestGear());
       document.getElementById("btn-bulk-sell").addEventListener("click", () => this.bulkDispose("sell"));
       document.getElementById("btn-bulk-salvage").addEventListener("click", () => this.bulkDispose("salvage"));
 
