@@ -56,7 +56,7 @@
               <div id="xp-bar-fill" class="bar-fill xp-fill" style="width: 0%"></div>
             </div>
             <div class="xp-subrow">
-              <span id="xp-text" class="xp-text">0 / 100 XP</span>
+              <span id="xp-text" class="xp-text">0 / 95 XP</span>
             </div>
           </div>
         </div>
@@ -81,9 +81,9 @@
           <kbd>3</kbd>
           <span id="badge-forge" class="tab-badge hidden">!</span>
         </button>
-        <button id="btn-tab-guild" class="hud-tab" data-tab="guild" title="Mercenary Guild [4]">
+        <button id="btn-tab-guild" class="hud-tab" data-tab="guild" title="Guild Bounties & Blessings [4]">
           <span class="tab-icon">&#9813;</span>
-          <span class="tab-label">Mercenaries</span>
+          <span class="tab-label">Guild Hall</span>
           <kbd>4</kbd>
           <span id="badge-guild" class="tab-badge hidden">!</span>
         </button>
@@ -101,24 +101,22 @@
         </button>
       </div>
 
-      <!-- Right: Currencies & Audio/Settings -->
+      <!-- Right: Active Currencies & Audio/Settings -->
       <div class="hud-group hud-right">
         <div class="currency-strip">
-          <div class="currency-pill currency-gold" title="Gold Coins (Used at Blacksmith & Guild)">
+          <div class="currency-pill currency-gold" title="Gold Coins (Earned in combat, chests, bounties & gear sales)">
             <span class="currency-dot gold-dot"></span>
             <div class="currency-vals">
               <span id="hud-gold" class="currency-amount">0</span>
-              <span id="hud-gold-rate" class="currency-rate hidden">+0/s</span>
             </div>
           </div>
-          <div class="currency-pill currency-shards" title="Rift Shards (Used to Reroll & Craft Gear)">
+          <div class="currency-pill currency-shards" title="Rift Shards (Earned from bosses, elites, bounties & salvaging)">
             <span class="currency-dot shard-dot"></span>
             <div class="currency-vals">
               <span id="hud-shards" class="currency-amount">0</span>
-              <span id="hud-shards-rate" class="currency-rate hidden">+0/s</span>
             </div>
           </div>
-          <div class="currency-pill currency-renown" title="Guild Renown (Earned from first-time Boss clears)">
+          <div class="currency-pill currency-renown" title="Guild Renown (Earned from Boss clears & Bounties)">
             <span class="currency-dot renown-dot"></span>
             <div class="currency-vals">
               <span id="hud-renown" class="currency-amount">0</span>
@@ -138,7 +136,7 @@
     </header>
 
     <!-- =========================================================
-         LIVE OBJECTIVE TRACKER & ACTIVE RUN BOONS
+         LIVE OBJECTIVE TRACKER, SURVIVAL HAZARD & ACTIVE RUN BOONS
          ========================================================= -->
     <div id="left-stack" class="left-hud-stack">
       <div id="objective-pill" class="objective-pill">
@@ -146,7 +144,6 @@
         <span id="objective-text">Enter the Rift Gate [1] to begin your expedition.</span>
       </div>
 
-      <!-- Survival Hazard Meter (Active inside Dungeons) -->
       <aside id="survival-hud" class="survival-hud hidden" aria-label="Environmental Hazard">
         <div class="survival-header">
           <span id="hazard-icon" class="hazard-icon">&#10022;</span>
@@ -159,12 +156,11 @@
         <div id="hazard-tip" class="hazard-tip">Stand near glowing crystal vents to restore oxygen.</div>
       </aside>
 
-      <!-- Active Run Boons Strip -->
       <div id="boons-hud" class="boons-hud hidden" aria-label="Active Run Boons"></div>
     </div>
 
     <!-- =========================================================
-         COMBO MOMENTUM COUNTER (Right Side during Combat)
+         COMBO MOMENTUM COUNTER
          ========================================================= -->
     <div id="combo-hud" class="combo-hud hidden" aria-live="off">
       <div class="combo-num"><span id="combo-count">0</span>x</div>
@@ -256,7 +252,7 @@
       </div>
 
       <div class="minimap-panel">
-        <canvas id="minimap-canvas" width="154" height="98"></canvas>
+        <canvas id="minimap-canvas" width="160" height="104"></canvas>
         <div class="controls-hint">
           <span><kbd>WASD</kbd> Move</span>
           <span><kbd>SPACE</kbd> Dash</span>
@@ -274,8 +270,8 @@
       <section id="modal-dungeon" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="dungeon-modal-title">
         <header class="modal-header">
           <div>
-            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — Expedition Selector</h2>
-            <p class="modal-subtitle">Select a dungeon realm, check your readiness rating, and add Rift Key Mutators for bigger rewards.</p>
+            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — 8 Realm Expeditions</h2>
+            <p class="modal-subtitle">Explore massive multi-shape dungeon chambers, check your readiness rating, and toggle Rift Mutators.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -474,12 +470,12 @@
         </div>
       </section>
 
-      <!-- 4. MERCENARY GUILD MODAL -->
+      <!-- 4. GUILD HALL MODAL (ACTIVE BOUNTIES & PERMANENT BLESSINGS — ZERO PASSIVE INCOME) -->
       <section id="modal-guild" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="guild-modal-title">
         <header class="modal-header">
           <div>
-            <h2 id="guild-modal-title">&#9813; Mercenary Guild &amp; Passive Dispatch</h2>
-            <p class="modal-subtitle">Clear a dungeon's Boss once to hire automated mercenary squads and earn passive Gold &amp; Shards.</p>
+            <h2 id="guild-modal-title">&#9813; Riftbreaker Guild Hall — Bounties &amp; Blessings</h2>
+            <p class="modal-subtitle">Complete active combat bounties for instant rewards and invest Guild Renown into permanent blessings.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -487,12 +483,12 @@
         <div class="modal-body guild-layout">
           <div class="guild-banner">
             <div class="guild-metric">
-              <span class="metric-label">Passive Gold Income</span>
-              <span id="guild-passive-gold" class="metric-val gold-text">0 / sec</span>
+              <span class="metric-label">Dungeon Clears</span>
+              <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 24</span>
             </div>
             <div class="guild-metric">
-              <span class="metric-label">Passive Shard Income</span>
-              <span id="guild-passive-shards" class="metric-val shard-text">0 / sec</span>
+              <span class="metric-label">Bounties Claimed</span>
+              <span id="guild-bounties-done" class="metric-val shard-text">0</span>
             </div>
             <div class="guild-metric">
               <span class="metric-label">Available Guild Renown</span>
@@ -502,8 +498,8 @@
 
           <div class="guild-columns">
             <div class="guild-col">
-              <h3 class="section-title">Automated Dungeon Squads</h3>
-              <div id="mercenary-list" class="mercenary-list"></div>
+              <h3 class="section-title">Active Combat Bounties</h3>
+              <div id="bounty-list" class="mercenary-list"></div>
             </div>
 
             <div class="guild-col">

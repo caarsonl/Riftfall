@@ -1,8 +1,8 @@
 /* ==========================================================================
    RIFTFALL — CORE ENGINE & RPG RUNTIME (game.js) — PART 1 OF 3
-   Non-Square 2.5D Isometric Dungeons with Chasms & Bridges, BFS Reachability,
-   Rift Boons, Combo Momentum, Elites, Smashable Urns, 4 Base + 8 Advanced
-   Classes, 2.5D Ability Animations, Smart HUD Badges, and Crash-Proof Loop.
+   8 Themed Dungeons, Larger 21x21 & 25x25 Non-Square Rooms, Active Guild
+   Bounties (Zero Passive Income), Custom Animated Weapons & Multi-Stage
+   Ability Animations, 4 Base + 8 Advanced Classes, and Crash-Proof Loop.
    ========================================================================== */
 
 (() => {
@@ -165,8 +165,18 @@
     }
 
     lightning() {
-      this.tone(920, 320, 0.11, "sawtooth", 0.13);
-      this.noise(0.09, 2400, 0.12);
+      this.tone(980, 290, 0.13, "sawtooth", 0.16);
+      this.noise(0.11, 2600, 0.14);
+    }
+
+    solarFlare() {
+      this.tone(220, 660, 0.34, "sawtooth", 0.24);
+      this.noise(0.32, 1100, 0.22, 0.04);
+    }
+
+    timeFreeze() {
+      this.tone(880, 220, 0.38, "sine", 0.22);
+      this.tone(1320, 330, 0.34, "triangle", 0.14, 0.04);
     }
 
     urnBreak() {
@@ -318,7 +328,7 @@
       const weights = rarities.map((id) => {
         const r = DATA.RARITIES[id];
         if (r.order < minOrder) return 0;
-        if (id === "common") return Math.max(34, r.dropWeight - luckBonus * 14);
+        if (id === "common") return Math.max(32, r.dropWeight - luckBonus * 14);
         if (id === "rare") return r.dropWeight + luckBonus * 8.0;
         if (id === "epic") return r.dropWeight + luckBonus * 3.8;
         return r.dropWeight + luckBonus * 1.4;
@@ -573,14 +583,14 @@
       this.keys = new Set();
 
       this.world = null;
-      this.cam = { x: 7.5, y: 7.5, shakeTime: 0, shakeMag: 0 };
+      this.cam = { x: 8.5, y: 8.5, shakeTime: 0, shakeMag: 0 };
       this.elapsed = 0;
       this.dpr = 1;
-      this.worldZoom = 1.4;
+      this.worldZoom = 1.32;
 
       this.player = {
-        x: 7.5,
-        y: 7.5,
+        x: 8.5,
+        y: 8.5,
         z: 0,
         vx: 0,
         vy: 0,
@@ -601,6 +611,7 @@
         flaskCd: 0,
         hurtFlash: 0,
         swingAnim: 0,
+        castAnim: null,
         hasteTimer: 0,
         hasteData: null,
         combo: 0,
@@ -621,8 +632,6 @@
 
       this.lastFrame = performance.now();
       this.autoSaveTimer = 0;
-      this.idleGoldFrac = 0;
-      this.idleShardFrac = 0;
       this.hudSyncTimer = 0;
       this.bossBannerTimer = 0;
       this.hazardDamageFlash = 0;
@@ -638,15 +647,23 @@
     }
 
     /* ======================================================================
-       SAVE / LOAD & SANITIZATION
+       SAVE / LOAD & BOUNTY INITIALIZATION (ZERO PASSIVE INCOME)
        ====================================================================== */
+    createDefaultBounties() {
+      const out = {};
+      for (const b of DATA.BOUNTY_TEMPLATES) {
+        out[b.id] = { progress: 0, tier: 1 };
+      }
+      return out;
+    }
+
     createDefaultSave() {
       return {
-        version: 3,
+        version: 4,
         level: 1,
         xp: 0,
-        gold: 120,
-        shards: 18,
+        gold: 140,
+        shards: 20,
         renown: 0,
         flasks: 3,
         classId: "vanguard",
@@ -658,7 +675,8 @@
         },
         inventory: [],
         cleared: {},
-        mercenaries: {},
+        bounties: this.createDefaultBounties(),
+        bountiesClaimed: 0,
         blessings: {},
         selectedDungeonId: "sunken_quarry",
         selectedDiff: "normal",
@@ -692,13 +710,20 @@
         this.save = { ...def, ...parsed };
         this.save.settings = { ...def.settings, ...(parsed.settings || {}) };
 
-        // Sanitize inventory & equipped items against current templates
         if (!Array.isArray(this.save.inventory)) {
           this.save.inventory = [];
         } else {
           this.save.inventory = this.save.inventory.filter(
             (it) => it && typeof it === "object" && DATA.GEAR_TEMPLATES[it.templateId] && DATA.RARITIES[it.rarity]
           );
+        }
+
+        if (!this.save.bounties || typeof this.save.bounties !== "object") {
+          this.save.bounties = this.createDefaultBounties();
+        } else {
+          for (const b of DATA.BOUNTY_TEMPLATES) {
+            if (!this.save.bounties[b.id]) this.save.bounties[b.id] = { progress: 0, tier: 1 };
+          }
         }
 
         if (!Array.isArray(this.save.selectedMutators)) this.save.selectedMutators = [];
@@ -722,34 +747,62 @@
 
         this.sfx.volume = this.save.settings.volume / 100;
         this.sfx.muted = !!this.save.settings.muted;
-
-        // Offline Mercenary Earnings (up to 4 hours)
-        const rates = this.getPassiveRates();
-        if (this.save.lastTimestamp && (rates.goldPerSec > 0 || rates.shardsPerSec > 0)) {
-          const secs = clamp((Date.now() - this.save.lastTimestamp) / 1000, 0, 14400);
-          if (secs >= 30) {
-            const gEarned = Math.floor(secs * rates.goldPerSec);
-            const sEarned = Math.floor(secs * rates.shardsPerSec);
-            if (gEarned > 0 || sEarned > 0) {
-              this.save.gold += gEarned;
-              this.save.shards += sEarned;
-              setTimeout(() => {
-                this.toast(
-                  `Mercenaries gathered +${fmtNum(gEarned)} Gold & +${fmtNum(sEarned)} Shards while away!`,
-                  "success"
-                );
-              }, 500);
-            }
-          }
-        }
       } catch (err) {
         console.warn("Save load failed, using default state.", err);
       }
     }
 
     /* ======================================================================
-       CLASS, BOON, COMBO & HERO STAT COMPUTATION
+       ACTIVE BOUNTY TRACKING, CLASS & HERO STATS
        ====================================================================== */
+    getBountyTarget(tpl, tier) {
+      return tpl.baseTarget + (tier - 1) * tpl.targetStep;
+    }
+
+    getBountyRewards(tpl, tier) {
+      const currencyMult = 1 + this.getBlessingBonus("currencyPct");
+      const scale = 1 + (tier - 1) * 0.55;
+      return {
+        gold: Math.round(tpl.baseGold * scale * currencyMult),
+        shards: Math.round(tpl.baseShards * scale * currencyMult),
+        renown: tpl.baseRenown + Math.floor((tier - 1) / 3)
+      };
+    }
+
+    incrementBounty(trackKey, amount = 1) {
+      for (const tpl of DATA.BOUNTY_TEMPLATES) {
+        if (tpl.track !== trackKey) continue;
+        const st = this.save.bounties[tpl.id];
+        if (!st) continue;
+        const target = this.getBountyTarget(tpl, st.tier);
+        const wasReady = st.progress >= target;
+        st.progress = Math.min(target, st.progress + amount);
+        if (!wasReady && st.progress >= target) {
+          this.toast(`Bounty Complete: ${tpl.name}! Claim in Guild Hall [4].`, "success");
+        }
+      }
+    }
+
+    hasClaimableBounty() {
+      for (const tpl of DATA.BOUNTY_TEMPLATES) {
+        const st = this.save.bounties[tpl.id];
+        if (st && st.progress >= this.getBountyTarget(tpl, st.tier)) return true;
+      }
+      return false;
+    }
+
+    getTotalClearsCount() {
+      let total = 0;
+      for (const d of DATA.DUNGEONS) {
+        const rec = this.save.cleared[d.id];
+        if (!rec) continue;
+        if (rec.normal) total++;
+        if (rec.nightmare) total++;
+        if (rec.abyssal) total++;
+      }
+      return total;
+    }
+
     getActiveClass() {
       return DATA.CLASSES[this.save.classId] || DATA.CLASSES.vanguard;
     }
@@ -872,7 +925,7 @@
       s.cdr = clamp(s.cdr, 0, 0.60);
       s.hazardResist = clamp(s.hazardResist, 0, 0.80);
       s.lifesteal = clamp(s.lifesteal, 0, 0.45);
-      s.speed = clamp(s.speed, 2.2, 10.5);
+      s.speed = clamp(s.speed, 2.4, 11.0);
       return s;
     }
 
@@ -916,55 +969,31 @@
       }
     }
 
-    getPassiveRates() {
-      const currencyMult = 1 + this.getBlessingBonus("currencyPct");
-      let goldPerSec = 0;
-      let shardsPerSec = 0;
-      for (const m of DATA.MERCENARIES) {
-        const lvl = this.save.mercenaries[m.id] || 0;
-        if (lvl <= 0) continue;
-        const mult = Math.pow(1.28, lvl - 1) * lvl;
-        goldPerSec += m.goldPerSecBase * mult * currencyMult;
-        shardsPerSec += m.shardsPerSecBase * mult * currencyMult;
-      }
-      return { goldPerSec, shardsPerSec };
-    }
-
-    isDungeonCleared(dungeonId, diff = null) {
-      const rec = this.save.cleared[dungeonId];
-      if (!rec) return false;
-      if (diff) return !!rec[diff];
-      return !!(rec.normal || rec.nightmare || rec.abyssal);
-    }
-
     /* ======================================================================
-       SANCTUARY CAMP & NON-SQUARE PROCEDURAL DUNGEON ROOM GENERATOR
-       Grid values: -1 = Abyssal Chasm (projectiles fly over), 0 = Walkable
-                    Floor, 1 = Outer/Divider Wall, 2 = Extruded Pillar
+       SANCTUARY (17x17) & GRAND NON-SQUARE DUNGEON ROOMS (21x21 & 25x25)
+       Grid: -1 = Abyssal Chasm, 0 = Walkable Floor, 1 = Wall, 2 = Pillar
        ====================================================================== */
     enterSanctuary() {
       this.mode = "hub";
       this.run = null;
       this.clearCombatFX();
 
-      // Octagonal floating stone sanctuary courtyard
       const sz = DATA.SANCTUARY.size;
       const grid = Array.from({ length: sz }, (_, y) =>
         Array.from({ length: sz }, (_, x) => {
-          const cornerSum =
-            Math.min(x, sz - 1 - x) + Math.min(y, sz - 1 - y);
-          if (cornerSum < 2) return -1;
-          if (x === 0 || y === 0 || x === sz - 1 || y === sz - 1 || cornerSum === 2) {
+          const cornerSum = Math.min(x, sz - 1 - x) + Math.min(y, sz - 1 - y);
+          if (cornerSum < 3) return -1;
+          if (x === 0 || y === 0 || cornerSum === 3) {
             return x === 0 || y === 0 ? 1 : 0;
           }
           return 0;
         })
       );
       [
-        [3, 3],
-        [sz - 4, 3],
-        [3, sz - 4],
-        [sz - 4, sz - 4]
+        [4, 4],
+        [sz - 5, 4],
+        [4, sz - 5],
+        [sz - 5, sz - 5]
       ].forEach(([px, py]) => {
         grid[py][px] = 2;
       });
@@ -979,6 +1008,8 @@
         vents: [],
         braziers: [],
         lightOrbs: [],
+        conduits: [],
+        umbralWards: [],
         poisonPools: [],
         chests: [],
         urns: [],
@@ -988,6 +1019,8 @@
       const stats = this.getHeroStats();
       this.player.x = DATA.SANCTUARY.spawn.x;
       this.player.y = DATA.SANCTUARY.spawn.y;
+      this.player.z = 0;
+      this.player.castAnim = null;
       this.player.maxHp = stats.hp;
       this.player.hp = stats.hp;
       this.player.shield = 0;
@@ -1025,7 +1058,7 @@
       this.mode = "dungeon";
 
       let rewardMult = diff.lootMult;
-      let rarityLuck = diff.rarityLuck;
+      let rarityLuck = diff.rarityLuck + this.getBlessingBonus("rarityLuck");
       for (const mid of safeMutators) {
         const m = DATA.MUTATORS.find((x) => x.id === mid);
         if (m) {
@@ -1067,6 +1100,8 @@
       const stats = this.getHeroStats();
       this.player.maxHp = stats.hp;
       this.player.hp = stats.hp;
+      this.player.z = 0;
+      this.player.castAnim = null;
       this.player.shield = 0;
       this.player.qCd = 0;
       this.player.eCd = 0;
@@ -1116,7 +1151,8 @@
       }
       this.run.lastLayout = chosen;
 
-      const size = isBossRoom ? 17 : 15;
+      // Much larger grand chambers: 21x21 combat rooms & 25x25 Boss arenas
+      const size = isBossRoom ? 25 : 21;
       const cx = Math.floor(size / 2);
       const cy = Math.floor(size / 2);
       const grid = Array.from({ length: size }, () => Array(size).fill(-1));
@@ -1129,87 +1165,98 @@
         }
       };
 
-      let layoutName = "Vault";
+      let layoutName = "Grand Vault";
 
       if (chosen === "cruciform" || chosen === "cruciform_boss") {
-        layoutName = "Cruciform Vault";
-        // Vertical & horizontal intersecting wings
-        fillRect(cx - 3, 1, cx + 3, size - 2, 0);
-        fillRect(1, cy - 3, size - 2, cy + 3, 0);
-        grid[cy - 2][cx - 2] = 2;
-        grid[cy - 2][cx + 2] = 2;
-        grid[cy + 2][cx - 2] = 2;
-        grid[cy + 2][cx + 2] = 2;
+        layoutName = "Grand Cruciform";
+        const arm = isBossRoom ? 5 : 4;
+        fillRect(cx - arm, 1, cx + arm, size - 2, 0);
+        fillRect(1, cy - arm, size - 2, cy + arm, 0);
+        // Symmetric grand colonnade pillars
+        [
+          [cx - arm + 1, cy - arm + 1],
+          [cx + arm - 1, cy - arm + 1],
+          [cx - arm + 1, cy + arm - 1],
+          [cx + arm - 1, cy + arm - 1]
+        ].forEach(([px, py]) => {
+          grid[py][px] = 2;
+        });
       } else if (chosen === "twin_bridge") {
         layoutName = "Twin-Bridge Chasm";
-        // North & South stone islands connected by two wide bridges over abyssal chasm
-        fillRect(2, 1, size - 3, 5, 0);
-        fillRect(2, size - 6, size - 3, size - 2, 0);
-        fillRect(3, 5, 5, size - 6, 0);
-        fillRect(size - 6, 5, size - 4, size - 6, 0);
-        // Central connecting dais
-        fillRect(cx - 1, cy - 1, cx + 1, cy + 1, 0);
-        grid[3][4] = 2;
-        grid[3][size - 5] = 2;
+        // Expansive north & south islands linked by wide side bridges and a central duel dais
+        fillRect(2, 1, size - 3, 7, 0);
+        fillRect(2, size - 8, size - 3, size - 2, 0);
+        fillRect(3, 7, 6, size - 8, 0);
+        fillRect(size - 7, 7, size - 4, size - 8, 0);
+        fillRect(cx - 2, cy - 2, cx + 2, cy + 2, 0);
+        fillRect(6, cy - 1, size - 7, cy + 1, 0);
+        grid[4][5] = 2;
+        grid[4][size - 6] = 2;
+        grid[size - 5][5] = 2;
+        grid[size - 5][size - 6] = 2;
       } else if (chosen === "octagon") {
-        layoutName = "Octagonal Cavern";
+        layoutName = "Octagonal Sanctuary";
         for (let y = 1; y <= size - 2; y++) {
           for (let x = 1; x <= size - 2; x++) {
             const dx = Math.abs(x - cx);
             const dy = Math.abs(y - cy);
-            if (dx + dy <= size - 5) grid[y][x] = 0;
-          }
-        }
-        grid[cy - 2][cx - 3] = 2;
-        grid[cy - 2][cx + 3] = 2;
-        grid[cy + 2][cx - 3] = 2;
-        grid[cy + 2][cx + 3] = 2;
-      } else if (chosen === "ringed" || chosen === "ringed_boss") {
-        layoutName = "Ringed Sanctum";
-        fillRect(2, 1, size - 3, size - 2, 0);
-        // Cut outer corners slightly + open a dramatic central chasm pit
-        grid[1][2] = -1;
-        grid[1][size - 3] = -1;
-        grid[size - 2][2] = -1;
-        grid[size - 2][size - 3] = -1;
-        fillRect(cx - 1, cy - 1, cx + 1, cy + 1, -1);
-        grid[cy - 3][cx - 3] = 2;
-        grid[cy - 3][cx + 3] = 2;
-        grid[cy + 3][cx - 3] = 2;
-        grid[cy + 3][cx + 3] = 2;
-      } else if (chosen === "split_hall") {
-        layoutName = "Split-Hall Catacomb";
-        fillRect(1, 1, size - 2, size - 2, 0);
-        // Carve recessed alcoves and a central spine wall with 3 doorways
-        fillRect(1, 1, 2, 2, -1);
-        fillRect(size - 3, 1, size - 2, 2, -1);
-        fillRect(1, size - 3, 2, size - 2, -1);
-        fillRect(size - 3, size - 3, size - 2, size - 2, -1);
-        fillRect(cx - 3, cy, cx + 3, cy, 1);
-        grid[cy][cx] = 0; // central arch
-        grid[cy - 3][cx - 4] = 2;
-        grid[cy - 3][cx + 4] = 2;
-      } else {
-        layoutName = "Grand Amphitheater";
-        // Wide chamfered boss chamber with dramatic wing balconies
-        for (let y = 1; y <= size - 2; y++) {
-          for (let x = 1; x <= size - 2; x++) {
-            const dx = Math.abs(x - cx);
-            const dy = Math.abs(y - cy);
-            if (dx + dy <= size - 4) grid[y][x] = 0;
+            if (dx + dy <= size - 7) grid[y][x] = 0;
           }
         }
         grid[cy - 3][cx - 4] = 2;
         grid[cy - 3][cx + 4] = 2;
         grid[cy + 3][cx - 4] = 2;
         grid[cy + 3][cx + 4] = 2;
+      } else if (chosen === "ringed" || chosen === "ringed_boss") {
+        layoutName = "Abyssal Ring Arena";
+        fillRect(2, 1, size - 3, size - 2, 0);
+        // Chamfered corners + wide central chasm pit for tactical kiting
+        fillRect(2, 1, 3, 2, -1);
+        fillRect(size - 4, 1, size - 3, 2, -1);
+        fillRect(2, size - 3, 3, size - 2, -1);
+        fillRect(size - 4, size - 3, size - 3, size - 2, -1);
+        const pit = isBossRoom ? 3 : 2;
+        fillRect(cx - pit, cy - pit, cx + pit, cy + pit, -1);
+        grid[cy - pit - 2][cx - pit - 2] = 2;
+        grid[cy - pit - 2][cx + pit + 2] = 2;
+        grid[cy + pit + 2][cx - pit - 2] = 2;
+        grid[cy + pit + 2][cx + pit + 2] = 2;
+      } else if (chosen === "split_hall") {
+        layoutName = "Split-Hall Catacomb";
+        fillRect(1, 1, size - 2, size - 2, 0);
+        fillRect(1, 1, 3, 3, -1);
+        fillRect(size - 4, 1, size - 2, 3, -1);
+        fillRect(1, size - 4, 3, size - 2, -1);
+        fillRect(size - 4, size - 4, size - 2, size - 2, -1);
+        // Divider spine with 3 wide arched passages
+        fillRect(4, cy, size - 5, cy, 1);
+        fillRect(cx - 1, cy, cx + 1, cy, 0);
+        fillRect(4, cy, 5, cy, 0);
+        fillRect(size - 6, cy, size - 5, cy, 0);
+        grid[cy - 4][cx - 4] = 2;
+        grid[cy - 4][cx + 4] = 2;
+        grid[cy + 4][cx - 4] = 2;
+        grid[cy + 4][cx + 4] = 2;
+      } else {
+        layoutName = "Grand Boss Amphitheater";
+        for (let y = 1; y <= size - 2; y++) {
+          for (let x = 1; x <= size - 2; x++) {
+            const dx = Math.abs(x - cx);
+            const dy = Math.abs(y - cy);
+            if (dx + dy <= size - 6) grid[y][x] = 0;
+          }
+        }
+        grid[cy - 4][cx - 5] = 2;
+        grid[cy - 4][cx + 5] = 2;
+        grid[cy + 4][cx - 5] = 2;
+        grid[cy + 4][cx + 5] = 2;
       }
 
-      // Guarantee spawn pad (south) and portal pad (north) are always clear walkable floor
-      fillRect(cx - 1, size - 3, cx + 1, size - 2, 0);
-      fillRect(cx - 1, 1, cx + 1, 2, 0);
+      // Guarantee south spawn pad & north portal pad are open floor
+      fillRect(cx - 2, size - 4, cx + 2, size - 2, 0);
+      fillRect(cx - 2, 1, cx + 2, 3, 0);
 
-      // Add crisp back framing walls along the very northern/western border of walkable floor
+      // Frame the northern & western outer boundaries with solid walls
       for (let x = 1; x < size - 1; x++) {
         if (grid[1][x] === 0 && grid[0][x] === -1) grid[0][x] = 1;
       }
@@ -1217,8 +1264,8 @@
         if (grid[y][1] === 0 && grid[y][0] === -1) grid[y][0] = 1;
       }
 
-      const spawn = { x: cx + 0.5, y: size - 2.3 };
-      const portalPos = { x: cx + 0.5, y: 1.85 };
+      const spawn = { x: cx + 0.5, y: size - 2.5 };
+      const portalPos = { x: cx + 0.5, y: 2.0 };
       return { size, grid, layoutName, spawn, portalPos };
     }
 
@@ -1260,59 +1307,74 @@
 
       this.player.x = spawn.x;
       this.player.y = spawn.y;
+      this.player.z = 0;
+      this.player.castAnim = null;
       this.cam.x = this.player.x;
       this.cam.y = this.player.y;
 
       const reachable = this.getReachableFloorTiles(size, grid, spawn.x, spawn.y);
 
-      const pickReachable = (minDistPlayer = 2.6, maxY = size - 2, avoidList = []) => {
+      const pickReachable = (minDistPlayer = 3.0, maxY = size - 2, avoidList = []) => {
         const candidates = reachable.filter(
           (t) =>
             t.y <= maxY &&
             dist(t.x, t.y, spawn.x, spawn.y) >= minDistPlayer &&
-            avoidList.every((a) => dist(t.x, t.y, a.x, a.y) >= 1.8)
+            avoidList.every((a) => dist(t.x, t.y, a.x, a.y) >= 2.6)
         );
         if (candidates.length > 0) return pick(candidates);
         return reachable.length > 0 ? pick(reachable) : { x: spawn.x, y: spawn.y - 2 };
       };
 
+      const hType = dungeon.hazard.type;
       const vents = [];
-      if (dungeon.hazard.type === "oxygen") {
-        const count = isBossRoom ? 4 : 3;
+      if (hType === "oxygen") {
+        const count = isBossRoom ? 5 : 4;
         for (let i = 0; i < count; i++) {
-          const pos = pickReachable(2.2, size - 2.5, vents);
-          vents.push({ x: pos.x, y: pos.y, radius: 1.9 });
+          const pos = pickReachable(2.8, size - 3, vents);
+          vents.push({ x: pos.x, y: pos.y, radius: 2.2 });
         }
       }
 
       const braziers = [];
-      if (dungeon.hazard.type === "frost") {
+      if (hType === "frost") {
+        const count = isBossRoom ? 5 : 4;
+        for (let i = 0; i < count; i++) {
+          const pos = pickReachable(2.8, size - 3, braziers);
+          braziers.push({ x: pos.x, y: pos.y, radius: 2.3 });
+        }
+      }
+
+      const conduits = [];
+      if (hType === "storm") {
+        const count = isBossRoom ? 5 : 4;
+        for (let i = 0; i < count; i++) {
+          const pos = pickReachable(2.8, size - 3, conduits);
+          conduits.push({ x: pos.x, y: pos.y, radius: 2.2 });
+        }
+      }
+
+      const umbralWards = [];
+      if (hType === "solar") {
         const count = isBossRoom ? 4 : 3;
         for (let i = 0; i < count; i++) {
-          const pos = pickReachable(2.2, size - 2.5, braziers);
-          braziers.push({ x: pos.x, y: pos.y, radius: 2.05 });
+          const pos = pickReachable(3.0, size - 3, umbralWards);
+          umbralWards.push({ x: pos.x, y: pos.y, radius: 2.35 });
         }
       }
 
       const lightOrbs = [];
-      if (dungeon.hazard.type === "shadow") {
-        for (let i = 0; i < 2; i++) {
-          const pos = pickReachable(2.8, size - 3, lightOrbs);
-          lightOrbs.push({ x: pos.x, y: pos.y, life: 16 });
+      if (hType === "shadow") {
+        for (let i = 0; i < 3; i++) {
+          const pos = pickReachable(3.2, size - 3.5, lightOrbs);
+          lightOrbs.push({ x: pos.x, y: pos.y, life: 18 });
         }
       }
 
-      // Smashable Rift Urns (break for gold or healing orbs!)
       const urns = [];
-      const urnCount = isBossRoom ? 4 : randInt(3, 5);
+      const urnCount = isBossRoom ? 6 : randInt(5, 8);
       for (let i = 0; i < urnCount; i++) {
-        const pos = pickReachable(2.2, size - 2, [...vents, ...braziers, ...urns]);
-        urns.push({
-          x: pos.x,
-          y: pos.y,
-          hp: 1,
-          kind: i === 0 ? "heal" : "gold"
-        });
+        const pos = pickReachable(2.6, size - 2.5, [...vents, ...braziers, ...conduits, ...umbralWards, ...urns]);
+        urns.push({ x: pos.x, y: pos.y, hp: 1, kind: i < 2 ? "heal" : "gold" });
       }
 
       this.world = {
@@ -1326,6 +1388,8 @@
         enemies: [],
         vents,
         braziers,
+        conduits,
+        umbralWards,
         lightOrbs,
         poisonPools: [],
         chests: [],
@@ -1334,10 +1398,11 @@
         isBossRoom
       };
 
-      // Reset hazard between rooms & apply Runic Ward room shield boon
-      const hType = dungeon.hazard.type;
       if (hType === "oxygen") this.run.hazardState.value = 100;
-      if (hType === "heat" || hType === "poison" || hType === "frost" || hType === "shadow") {
+      else if (hType === "solar") {
+        this.run.hazardState.value = 0;
+        this.run.hazardState.phaseTimer = dungeon.hazard.cycleSeconds || 14;
+      } else if (hType !== "gravity") {
         this.run.hazardState.value = 0;
       }
 
@@ -1355,14 +1420,14 @@
         this.spawnBossEncounter();
       } else {
         document.getElementById("boss-hud").classList.add("hidden");
-        const count = 4 + roomIndex * 2 + (diff.id === "abyssal" ? 2 : diff.id === "nightmare" ? 1 : 0);
-        const eliteChance = diff.id === "abyssal" ? 0.28 : diff.id === "nightmare" ? 0.18 : 0.10;
+        const count = 6 + roomIndex * 2 + (diff.id === "abyssal" ? 3 : diff.id === "nightmare" ? 1 : 0);
+        const eliteChance = diff.id === "abyssal" ? 0.35 : diff.id === "nightmare" ? 0.24 : 0.16;
         let spawnedElite = false;
 
         for (let i = 0; i < count; i++) {
           const tplId = pick(dungeon.enemies);
-          const pos = pickReachable(3.8, size - 4.2, []);
-          const makeElite = !spawnedElite && i === count - 1 && Math.random() < eliteChance + roomIndex * 0.08;
+          const pos = pickReachable(4.8, size - 5.2, []);
+          const makeElite = !spawnedElite && i >= count - 2 && Math.random() < eliteChance + roomIndex * 0.08;
           if (makeElite) spawnedElite = true;
           this.world.enemies.push(this.createEnemy(tplId, pos.x, pos.y, roomIndex, makeElite));
         }
@@ -1431,12 +1496,11 @@
       for (let i = 0; i < count; i++) {
         const hpScale = isTwin ? 0.65 : 1.0;
         const maxHp = Math.round(bossTpl.hp * diff.hpMult * hpScale);
-        // Pick guaranteed walkable northern arena spot
-        const northSpots = this.world.reachable.filter((t) => t.y <= 5.5 && t.y >= 2.5);
+        const northSpots = this.world.reachable.filter((t) => t.y <= 7.5 && t.y >= 3.0);
         const spot =
           northSpots.length > 0
             ? northSpots[Math.floor(((i + 1) / (count + 1)) * northSpots.length)]
-            : { x: this.world.size * 0.5, y: 4.5 };
+            : { x: this.world.size * 0.5, y: 6.0 };
 
         this.world.enemies.push({
           id: uid(),
@@ -1499,7 +1563,7 @@
 
     // === END OF PART 1/3 — REPLY "2/3" FOR PART 2/3 ===
     /* ======================================================================
-       CRASH-PROOF MAIN LOOP & IDLE ECONOMY
+       CRASH-PROOF MAIN LOOP (Active Gameplay Only — Zero Passive Income)
        ====================================================================== */
     loop(now) {
       requestAnimationFrame((t) => this.loop(t));
@@ -1508,8 +1572,6 @@
         const dt = Math.min(0.05, Math.max(0.001, (now - this.lastFrame) / 1000));
         this.lastFrame = now;
         this.elapsed += dt;
-
-        this.updateIdleEconomy(dt);
 
         if (!this.activeModal) {
           this.updateWorld(dt);
@@ -1531,26 +1593,6 @@
         }
       } catch (err) {
         console.error("Riftfall frame error recovered:", err);
-      }
-    }
-
-    updateIdleEconomy(dt) {
-      const rates = this.getPassiveRates();
-      if (rates.goldPerSec > 0) {
-        this.idleGoldFrac += rates.goldPerSec * dt;
-        const wholeG = Math.floor(this.idleGoldFrac);
-        if (wholeG > 0) {
-          this.save.gold += wholeG;
-          this.idleGoldFrac -= wholeG;
-        }
-      }
-      if (rates.shardsPerSec > 0) {
-        this.idleShardFrac += rates.shardsPerSec * dt;
-        const wholeS = Math.floor(this.idleShardFrac);
-        if (wholeS > 0) {
-          this.save.shards += wholeS;
-          this.idleShardFrac -= wholeS;
-        }
       }
     }
 
@@ -1576,6 +1618,23 @@
       this.player.phantomCritTimer = Math.max(0, this.player.phantomCritTimer - dt);
       this.player.hurtFlash = Math.max(0, this.player.hurtFlash - dt);
       this.player.swingAnim = Math.max(0, this.player.swingAnim - dt);
+
+      // Update Hero Ability Cast Pose Animation (Leap Slam / Spin / Channel Raise)
+      if (this.player.castAnim) {
+        this.player.castAnim.elapsed += dt;
+        const t = clamp(this.player.castAnim.elapsed / this.player.castAnim.duration, 0, 1);
+        if (this.player.castAnim.type === "slam") {
+          this.player.z = Math.sin(t * Math.PI) * 0.95;
+        } else {
+          this.player.z = 0;
+        }
+        if (this.player.castAnim.elapsed >= this.player.castAnim.duration) {
+          this.player.castAnim = null;
+          this.player.z = 0;
+        }
+      } else {
+        this.player.z = 0;
+      }
 
       if (this.player.comboTimer > 0) {
         this.player.comboTimer -= dt;
@@ -1643,7 +1702,6 @@
 
       this.moveEntityWithCollision(this.player, this.player.vx * dt, this.player.vy * dt, 0.34);
 
-      // Dashing through smashable Rift Urns shatters them immediately!
       if (this.mode === "dungeon" && this.player.dashTimer > 0 && this.world.urns) {
         for (let i = this.world.urns.length - 1; i >= 0; i--) {
           const u = this.world.urns[i];
@@ -1706,15 +1764,29 @@
     }
 
     /* ======================================================================
-       COMBAT: AUTO-ATTACK, COMBO, URNS, CHAIN LIGHTNING & Q / E SKILLS
+       COMBAT: WEAPON WAVES, HERO CAST POSES, URNS, BOUNTIES & Q / E SKILLS
        ====================================================================== */
+    triggerHeroCastAnim(type, duration = 0.36) {
+      this.player.castAnim = { type: type || "raise", elapsed: 0, duration };
+    }
+
     purgeHazard(amount) {
       if (!this.run) return;
-      const hType = this.run.dungeon.hazard.type;
+      const h = this.run.dungeon.hazard;
+      const hType = h.type;
       if (hType === "oxygen") {
         this.run.hazardState.value = Math.min(100, this.run.hazardState.value + amount);
-      } else if (hType === "heat" || hType === "poison" || hType === "frost" || hType === "shadow") {
+      } else if (
+        hType === "heat" ||
+        hType === "poison" ||
+        hType === "frost" ||
+        hType === "shadow" ||
+        hType === "storm"
+      ) {
         this.run.hazardState.value = Math.max(0, this.run.hazardState.value - amount);
+      } else if (hType === "solar") {
+        const cycle = h.cycleSeconds || 14;
+        this.run.hazardState.phaseTimer = Math.min(cycle, this.run.hazardState.phaseTimer + (amount / 100) * 6.0);
       }
     }
 
@@ -1730,6 +1802,7 @@
       if (!u) return;
       this.world.urns.splice(urnIdx, 1);
       this.sfx.urnBreak();
+      this.incrementBounty("urns", 1);
 
       if (u.kind === "heal") {
         const heal = Math.round(this.player.maxHp * 0.18);
@@ -1738,7 +1811,7 @@
         this.spawnFloatingText(u.x, u.y, 1.1, `+${heal} HP`, "#4ade80", true);
       } else {
         const bn = this.getRunBoonTotals();
-        const gold = Math.round(this.run.dungeon.baseGold * 0.16 * (this.run.rewardMult + bn.lootMultBonus));
+        const gold = Math.round(this.run.dungeon.baseGold * 0.18 * (this.run.rewardMult + bn.lootMultBonus));
         this.save.gold += gold;
         this.run.goldEarned += gold;
         this.spawnBurst(u.x, u.y, "#ffd447", 12, 2.6);
@@ -1763,9 +1836,15 @@
         this.spawnFloatingText(this.player.x, this.player.y, 1.2, "PHANTOM CRIT!", "#f59e0b");
       }
 
-      if (this.mode === "dungeon" && this.run && this.run.dungeon.hazard.type === "heat") {
-        this.purgeHazard(this.run.dungeon.hazard.dashCoolBurst);
-        this.spawnFloatingText(this.player.x, this.player.y, 1.1, "VENTED!", "#7dd3fc");
+      if (this.mode === "dungeon" && this.run) {
+        const h = this.run.dungeon.hazard;
+        if (h.type === "heat") {
+          this.purgeHazard(h.dashCoolBurst);
+          this.spawnFloatingText(this.player.x, this.player.y, 1.1, "VENTED!", "#7dd3fc");
+        } else if (h.type === "storm") {
+          this.purgeHazard(h.dashDischarge);
+          this.spawnFloatingText(this.player.x, this.player.y, 1.1, "GROUNDED!", "#fde047");
+        }
       }
     }
 
@@ -1805,12 +1884,11 @@
       const wep = GearSystem.getTemplate(wepItem.templateId);
       const target = this.findNearestEnemy(this.player.x, this.player.y, wep.range);
       if (!target) {
-        // Also auto-smash urns if standing right next to one and no enemies are in range
         if (this.world.urns && this.world.urns.length > 0) {
           for (let i = this.world.urns.length - 1; i >= 0; i--) {
-            if (dist(this.player.x, this.player.y, this.world.urns[i].x, this.world.urns[i].y) <= Math.min(wep.range, 2.2)) {
+            if (dist(this.player.x, this.player.y, this.world.urns[i].x, this.world.urns[i].y) <= Math.min(wep.range, 2.3)) {
               this.player.attackTimer = 0.35;
-              this.player.swingAnim = 0.15;
+              this.player.swingAnim = 0.16;
               this.smashUrn(i);
               break;
             }
@@ -1825,7 +1903,7 @@
       const angle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
       this.player.facing.x = Math.cos(angle);
       this.player.facing.y = Math.sin(angle);
-      this.player.swingAnim = 0.18;
+      this.player.swingAnim = 0.2;
 
       const cls = this.getActiveClass();
       const guaranteedCrit = this.consumePhantomCrit();
@@ -1838,9 +1916,9 @@
       } else if (cls.id === "paladin" && this.player.attackCounter % 3 === 0) {
         const sh = Math.round(stats.hp * 0.12);
         this.grantShield(sh, 4.5);
-        this.spawnSkillAnim("solar_flare", this.player.x, this.player.y, angle, 2.3, "#fde047", 0.32);
+        this.spawnSkillAnim("solar_flare", this.player.x, this.player.y, angle, 2.4, "#fde047", 0.32);
         for (const e of [...this.world.enemies]) {
-          if (dist(this.player.x, this.player.y, e.x, e.y) <= 2.3 + e.radius) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 2.4 + e.radius) {
             this.damageEnemy(e, stats.spell * 0.9 * stats.dmgOutMult, false, stats, 0.35);
           }
         }
@@ -1849,21 +1927,23 @@
           friendly: true,
           x: this.player.x,
           y: this.player.y,
-          vx: Math.cos(angle) * 12.0,
-          vy: Math.sin(angle) * 12.0,
+          vx: Math.cos(angle) * 12.5,
+          vy: Math.sin(angle) * 12.5,
           radius: 0.34,
           damage: stats.atk * 1.15 * stats.dmgOutMult,
           pierce: 4,
           hitIds: new Set(),
+          projStyle: "bolt",
           color: "#34d399",
           trailColor: "#a7f3d0",
-          life: 0.75
+          life: 0.8
         });
       }
 
       if (wep.attackType.startsWith("melee")) {
         this.sfx.swing();
-        const arcSpan = wep.attackType === "melee_heavy" ? 1.85 : 1.4;
+        const isHeavy = wep.attackType === "melee_heavy" || wep.attackType === "melee_wave";
+        const arcSpan = isHeavy ? 1.9 : 1.45;
         this.slashArcs.push({
           x: this.player.x,
           y: this.player.y,
@@ -1871,11 +1951,12 @@
           radius: wep.range,
           span: arcSpan,
           color: wep.trailColor,
-          life: 0.18,
-          maxLife: 0.18
+          weaponColor: wep.weaponColor,
+          heavy: isHeavy,
+          life: 0.2,
+          maxLife: 0.2
         });
 
-        // Smash nearby urns in melee arc
         for (let i = (this.world.urns || []).length - 1; i >= 0; i--) {
           if (dist(this.player.x, this.player.y, this.world.urns[i].x, this.world.urns[i].y) <= wep.range + 0.2) {
             this.smashUrn(i);
@@ -1884,36 +1965,61 @@
 
         for (const e of [...this.world.enemies]) {
           const d = dist(this.player.x, this.player.y, e.x, e.y) - e.radius;
-          if (d <= wep.range + 0.18) {
+          if (d <= wep.range + 0.2) {
             const ea = Math.atan2(e.y - this.player.y, e.x - this.player.x);
             let diffA = Math.abs(ea - angle);
             if (diffA > Math.PI) diffA = Math.PI * 2 - diffA;
-            if (diffA <= arcSpan * 0.65 || d < 0.9) {
-              const rawDmg = (stats.atk * 1.05 + stats.spell * 0.25) * stats.dmgOutMult;
-              this.damageEnemy(e, rawDmg, guaranteedCrit, stats, wep.attackType === "melee_heavy" ? 0.38 : 0.2);
+            if (diffA <= arcSpan * 0.65 || d < 0.95) {
+              const rawDmg = (stats.atk * 1.05 + stats.spell * 0.28) * stats.dmgOutMult;
+              this.damageEnemy(e, rawDmg, guaranteedCrit, stats, isHeavy ? 0.38 : 0.2);
             }
           }
+        }
+
+        // Endgame Melee-Wave Weapons (Volt Twinblades & Dawnstar Greatsword) launch energy waves!
+        if (wep.attackType === "melee_wave") {
+          const waveSpeed = wep.projSpeed || 12.5;
+          const waveDmg = (stats.atk * 0.68 + stats.spell * 0.55) * stats.dmgOutMult;
+          this.projectiles.push({
+            friendly: true,
+            x: this.player.x + Math.cos(angle) * 0.5,
+            y: this.player.y + Math.sin(angle) * 0.5,
+            vx: Math.cos(angle) * waveSpeed,
+            vy: Math.sin(angle) * waveSpeed,
+            radius: wep.projStyle === "crescent" ? 0.52 : 0.36,
+            damage: waveDmg,
+            guaranteedCrit,
+            pierce: 4,
+            hitIds: new Set(),
+            projStyle: wep.projStyle || "crescent",
+            angle,
+            color: wep.weaponColor,
+            trailColor: wep.trailColor,
+            life: 0.62
+          });
         }
       } else {
         this.sfx.rangedCast();
         const isMagic = wep.attackType === "ranged_orb" || wep.attackType === "ranged_nova";
         const baseDmg = isMagic
-          ? (stats.spell * 1.0 + stats.atk * 0.35) * stats.dmgOutMult
+          ? (stats.spell * 1.02 + stats.atk * 0.35) * stats.dmgOutMult
           : (stats.atk * 1.02 + stats.spell * 0.25) * stats.dmgOutMult;
         this.projectiles.push({
           friendly: true,
           x: this.player.x,
           y: this.player.y,
-          vx: Math.cos(angle) * (wep.projSpeed || 9.5),
-          vy: Math.sin(angle) * (wep.projSpeed || 9.5),
-          radius: wep.attackType === "ranged_nova" ? 0.34 : 0.26,
+          vx: Math.cos(angle) * (wep.projSpeed || 10.0),
+          vy: Math.sin(angle) * (wep.projSpeed || 10.0),
+          radius: wep.attackType === "ranged_nova" ? 0.36 : 0.28,
           damage: baseDmg,
           guaranteedCrit,
           pierce: wep.attackType === "ranged_nova" ? 2 : 0,
           hitIds: new Set(),
+          projStyle: wep.projStyle || "orb",
+          angle,
           color: wep.weaponColor,
           trailColor: wep.trailColor,
-          life: (wep.range + 1.8) / (wep.projSpeed || 9.5)
+          life: (wep.range + 2.0) / (wep.projSpeed || 10.0)
         });
       }
     }
@@ -1943,8 +2049,9 @@
       if (!sk) return;
 
       this.player.qCd = sk.cooldown * (1 - stats.cdr);
+      this.triggerHeroCastAnim(sk.heroAnim || "spin", 0.38);
       this.sfx.skillQ();
-      this.addScreenShake(0.2, 7);
+      this.addScreenShake(0.22, 8);
 
       if (cls.id === "arcanist") {
         this.player.eCd = Math.max(0, this.player.eCd - 2.0);
@@ -1952,19 +2059,18 @@
         this.player.qCd *= 0.75;
         this.player.eCd *= 0.75;
         for (const e of this.world.enemies) {
-          if (dist(this.player.x, this.player.y, e.x, e.y) <= 4.5) e.slowTimer = 3.0;
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 5.5) e.slowTimer = 3.0;
         }
       }
 
       const phantomCrit = this.consumePhantomCrit();
       const baseAngle = Math.atan2(this.player.facing.y, this.player.facing.x);
       const calcSkillDmg = () => (stats.atk * (sk.atkMult || 0) + stats.spell * (sk.spellMult || 0)) * stats.dmgOutMult;
-
       const animKind = sk.animType || "whirl_slash";
 
       if (sk.type === "aoe_melee" || sk.type === "shockwave" || sk.type === "drain_nova") {
-        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.55);
-        this.spawnBurst(this.player.x, this.player.y, sk.color, 26, 4.2);
+        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.62);
+        this.spawnBurst(this.player.x, this.player.y, sk.color, 30, 4.5);
 
         for (let i = (this.world.urns || []).length - 1; i >= 0; i--) {
           if (dist(this.player.x, this.player.y, this.world.urns[i].x, this.world.urns[i].y) <= sk.radius) {
@@ -1986,28 +2092,30 @@
           this.spawnFloatingText(this.player.x, this.player.y, 1.3, `+${h}`, "#4ade80");
         }
       } else if (sk.type === "proj_fan") {
-        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, 2.8, sk.color, 0.45);
-        const count = sk.count || 6;
+        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, 3.0, sk.color, 0.5);
+        const count = sk.count || 8;
         for (let i = 0; i < count; i++) {
           const a = baseAngle + (i / count) * Math.PI * 2;
           this.projectiles.push({
             friendly: true,
             x: this.player.x,
             y: this.player.y,
-            vx: Math.cos(a) * 10.5,
-            vy: Math.sin(a) * 10.5,
-            radius: 0.36,
+            vx: Math.cos(a) * 11.2,
+            vy: Math.sin(a) * 11.2,
+            radius: 0.38,
             damage: calcSkillDmg(),
             guaranteedCrit: !!sk.guaranteedCrit || phantomCrit,
             pierce: 3,
             hitIds: new Set(),
+            projStyle: "chakram",
+            angle: a,
             color: sk.color,
             trailColor: "#fef08a",
-            life: 0.72
+            life: 0.78
           });
         }
       } else if (sk.type === "meteor_cluster") {
-        const count = sk.count || 4;
+        const count = sk.count || 5;
         const targets = [...this.world.enemies];
         const meteorTargets = [];
         for (let i = 0; i < count; i++) {
@@ -2017,28 +2125,56 @@
             tx = pickE.x + randRange(-0.5, 0.5);
             ty = pickE.y + randRange(-0.5, 0.5);
           } else {
-            tx = this.player.x + randRange(-3, 3);
-            ty = this.player.y + randRange(-3, 3);
+            tx = this.player.x + randRange(-3.5, 3.5);
+            ty = this.player.y + randRange(-3.5, 3.5);
           }
           meteorTargets.push({ x: tx, y: ty });
-          this.spawnBurst(tx, ty, sk.color, 20, 3.8);
+          this.spawnBurst(tx, ty, sk.color, 22, 4.0);
           for (const e of [...this.world.enemies]) {
             if (dist(tx, ty, e.x, e.y) <= sk.radius + e.radius) {
               this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats, 0.4);
             }
           }
         }
-        this.spawnSkillAnim("starfall_beams", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.65, meteorTargets);
+        this.spawnSkillAnim("starfall_beams", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.7, meteorTargets);
+      } else if (sk.type === "chain_barrage") {
+        // Thunderstep Barrage: 6 rapid guaranteed-crit lightning strikes jumping across foes
+        this.sfx.lightning();
+        const inRange = this.world.enemies
+          .filter((e) => dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius)
+          .sort((a, b) => dist(this.player.x, this.player.y, a.x, a.y) - dist(this.player.x, this.player.y, b.x, b.y));
+        const strikeTargets = [];
+        const strikes = sk.count || 6;
+        let prevX = this.player.x;
+        let prevY = this.player.y;
+
+        for (let i = 0; i < strikes && inRange.length > 0; i++) {
+          const tgt = inRange[i % inRange.length];
+          if (!tgt || tgt.hp <= 0) continue;
+          strikeTargets.push({ x: tgt.x, y: tgt.y });
+          this.lightningArcs.push({
+            x1: prevX,
+            y1: prevY,
+            x2: tgt.x,
+            y2: tgt.y,
+            life: 0.34,
+            maxLife: 0.34
+          });
+          prevX = tgt.x;
+          prevY = tgt.y;
+          this.damageEnemy(tgt, calcSkillDmg() * 0.58, true, stats, 0.25, true);
+        }
+        this.spawnSkillAnim("thunder_web", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.62, strikeTargets);
       }
 
       if (cls.id === "pyromancer") {
-        const target = this.findNearestEnemy(this.player.x, this.player.y, 7.0);
+        const target = this.findNearestEnemy(this.player.x, this.player.y, 8.0);
         const mx = target ? target.x : this.player.x + Math.cos(baseAngle) * 2.5;
         const my = target ? target.y : this.player.y + Math.sin(baseAngle) * 2.5;
-        this.spawnSkillAnim("starfall_beams", mx, my, 0, 2.2, "#f97316", 0.55, [{ x: mx, y: my }]);
+        this.spawnSkillAnim("starfall_beams", mx, my, 0, 2.3, "#f97316", 0.58, [{ x: mx, y: my }]);
         this.spawnBurst(mx, my, "#f97316", 18, 3.6);
         for (const e of [...this.world.enemies]) {
-          if (dist(mx, my, e.x, e.y) <= 2.2 + e.radius) {
+          if (dist(mx, my, e.x, e.y) <= 2.3 + e.radius) {
             this.damageEnemy(e, stats.spell * 1.6 * stats.dmgOutMult, false, stats, 0.35);
           }
         }
@@ -2056,25 +2192,29 @@
       if (!sk) return;
 
       this.player.eCd = sk.cooldown * (1 - stats.cdr);
-      this.sfx.skillE();
-      this.spawnBurst(this.player.x, this.player.y, sk.color, 22, 3.4);
+      this.triggerHeroCastAnim(sk.heroAnim || "raise", 0.42);
+      if (sk.type === "time_freeze") this.sfx.timeFreeze();
+      else if (sk.type === "haste_storm") this.sfx.lightning();
+      else this.sfx.skillE();
+
+      this.spawnBurst(this.player.x, this.player.y, sk.color, 26, 3.8);
 
       if (cls.id === "chronomancer") {
         this.player.qCd *= 0.75;
         this.player.eCd *= 0.75;
         for (const e of this.world.enemies) {
-          if (dist(this.player.x, this.player.y, e.x, e.y) <= 4.5) e.slowTimer = 3.0;
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 5.5) e.slowTimer = 3.0;
         }
       }
 
       const phantomCrit = this.consumePhantomCrit();
       const animKind = sk.animType || "aegis_dome";
-      this.spawnSkillAnim(animKind, this.player.x, this.player.y, 0, sk.radius || 2.5, sk.color, 0.65);
+      this.spawnSkillAnim(animKind, this.player.x, this.player.y, 0, sk.radius || 2.8, sk.color, 0.78);
 
       if (sk.shieldPctHp) {
         const geoBonus = cls.id === "geomancer" ? 1.25 : 1.0;
         const amt = Math.round(stats.hp * sk.shieldPctHp * geoBonus);
-        this.grantShield(amt, sk.duration || 5.0);
+        this.grantShield(amt, sk.duration || 5.5);
         this.spawnFloatingText(this.player.x, this.player.y, 1.35, `SHIELD +${amt}`, "#38bdf8", true);
       }
 
@@ -2082,10 +2222,41 @@
         this.purgeHazard(sk.hazardRestore);
       }
 
-      if (sk.type === "haste_buff") {
+      if (sk.type === "haste_buff" || sk.type === "haste_storm") {
         this.player.hasteTimer = sk.duration;
         this.player.hasteData = sk;
-        this.spawnFloatingText(this.player.x, this.player.y, 1.4, "OVERCLOCK!", "#fb923c", true);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.45, sk.type === "haste_storm" ? "STORM ORBIT!" : "OVERCLOCK!", sk.color, true);
+      }
+
+      if (sk.type === "haste_storm") {
+        const dmg = stats.spell * sk.spellMult * stats.dmgOutMult;
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
+            this.lightningArcs.push({
+              x1: this.player.x,
+              y1: this.player.y,
+              x2: e.x,
+              y2: e.y,
+              life: 0.3,
+              maxLife: 0.3
+            });
+            this.damageEnemy(e, dmg, phantomCrit, stats, 0.4);
+          }
+        }
+      }
+
+      if (sk.type === "time_freeze") {
+        const h = Math.round(stats.hp * sk.healPctHp);
+        this.healPlayer(h);
+        this.purgeHazard(80);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.5, "TIME FROZEN!", "#fde047", true);
+        const dmg = stats.spell * sk.spellMult * stats.dmgOutMult;
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
+            e.stunTimer = Math.max(e.stunTimer, sk.stunDuration || 2.4);
+            this.damageEnemy(e, dmg, phantomCrit, stats, 0.2);
+          }
+        }
       }
 
       if (sk.type === "heal_pulse") {
@@ -2124,7 +2295,7 @@
 
       for (let j = 0; j < jumps; j++) {
         let next = null;
-        let bestD = 4.2;
+        let bestD = 4.6;
         for (const cand of this.world.enemies) {
           if (visited.has(cand.id) || cand.hp <= 0) continue;
           const d = dist(cur.x, cur.y, cand.x, cand.y);
@@ -2140,8 +2311,8 @@
           y1: cur.y,
           x2: next.x,
           y2: next.y,
-          life: 0.24,
-          maxLife: 0.24
+          life: 0.26,
+          maxLife: 0.26
         });
         this.sfx.lightning();
         this.damageEnemy(next, dmg, false, stats, 0.15, true);
@@ -2167,13 +2338,11 @@
       enemy.hurtFlash = 0.12;
       if (this.run) this.run.damageDealt += finalDmg;
 
-      // Combo momentum build
       if (!fromChain) {
         this.player.combo = Math.min(99, this.player.combo + 1);
         this.player.comboTimer = 4.2;
       }
 
-      // Knockback non-bosses slightly for punchy combat feel
       if (!enemy.isBoss && knockback > 0) {
         const kbAng = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
         const kbScale = enemy.isElite ? knockback * 0.55 : knockback;
@@ -2213,6 +2382,11 @@
 
       const cls = this.getActiveClass();
       const stats = this.getHeroStats();
+
+      // Track Active Combat Bounties
+      this.incrementBounty("kills", 1);
+      if (enemy.isElite) this.incrementBounty("eliteKills", 1);
+      if (enemy.isBoss) this.incrementBounty("bossKills", 1);
 
       if (cls.id === "warden") {
         this.healPlayer(stats.hp * 0.05);
@@ -2268,12 +2442,11 @@
           this.dropLootItem(enemy.x, enemy.y, true);
         }
       } else if (enemy.isElite) {
-        // Elites always drop a bonus gear item + shards!
-        const eShards = Math.max(2, Math.round(4 * currencyMult));
+        const eShards = Math.max(2, Math.round(5 * currencyMult));
         this.save.shards += eShards;
         this.run.shardsEarned += eShards;
-        this.dropLootItem(enemy.x, enemy.y, false, 0.22);
-      } else if (Math.random() < 0.13 + totalLuck * 0.04) {
+        this.dropLootItem(enemy.x, enemy.y, false, 0.24);
+      } else if (Math.random() < 0.14 + totalLuck * 0.04) {
         this.dropLootItem(enemy.x, enemy.y, false);
       }
 
@@ -2283,19 +2456,20 @@
     }
 
     onRoomCleared() {
+      this.incrementBounty("roomsCleared", 1);
+
       if (this.world.isBossRoom) {
         this.completeDungeonVictory();
       } else {
-        const pPos = this.world.portalPos || { x: Math.floor(this.world.size / 2) + 0.5, y: 1.85 };
-        this.world.portal = { x: pPos.x, y: pPos.y, radius: 1.25 };
+        const pPos = this.world.portalPos || { x: Math.floor(this.world.size / 2) + 0.5, y: 2.0 };
+        this.world.portal = { x: pPos.x, y: pPos.y, radius: 1.35 };
 
-        // Place chest on a guaranteed reachable floor tile near center
         const cx = this.world.size * 0.5;
         let chestSpot = this.world.reachable[0] || { x: this.player.x, y: this.player.y };
         let bestCenterDist = Infinity;
         for (const t of this.world.reachable) {
           const cd = dist(t.x, t.y, cx, cx);
-          if (cd < bestCenterDist && dist(t.x, t.y, pPos.x, pPos.y) > 1.8) {
+          if (cd < bestCenterDist && dist(t.x, t.y, pPos.x, pPos.y) > 2.2) {
             bestCenterDist = cd;
             chestSpot = t;
           }
@@ -2303,7 +2477,6 @@
         this.world.chests.push({ x: chestSpot.x, y: chestSpot.y, opened: false });
 
         this.sfx.portal();
-        // Present 3-card Rift Boon choice after clearing a room!
         if (this.run.boonPickedForRoom !== this.run.roomIndex) {
           this.run.boonPickedForRoom = this.run.roomIndex;
           this.openBoonModal();
@@ -2439,7 +2612,6 @@
         this.player.hurtFlash = 0.18;
         this.hazardDamageFlash = 0.22;
         if (!isHazard) {
-          // Taking direct combat damage breaks half of combo momentum
           this.player.combo = Math.floor(this.player.combo * 0.5);
           this.sfx.playerHurt();
           this.addScreenShake(0.16, 7);
@@ -2457,7 +2629,7 @@
     }
 
     /* ======================================================================
-       ALL 6 ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
+       ALL 8 ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
        ====================================================================== */
     updateDungeonHazard(dt, stats) {
       const h = this.run.dungeon.hazard;
@@ -2469,11 +2641,8 @@
 
       if (h.type === "oxygen") {
         const inVent = this.world.vents.some((v) => dist(this.player.x, this.player.y, v.x, v.y) <= v.radius);
-        if (inVent) {
-          hs.value = Math.min(100, hs.value + h.restorePerSec * dt);
-        } else {
-          hs.value = Math.max(0, hs.value - h.drainPerSec * hMult * dt);
-        }
+        if (inVent) hs.value = Math.min(100, hs.value + h.restorePerSec * dt);
+        else hs.value = Math.max(0, hs.value - h.drainPerSec * hMult * dt);
         inDanger = hs.value <= 20;
         if (hs.value <= 0) {
           hs.dpsTick += dt;
@@ -2484,11 +2653,8 @@
         }
       } else if (h.type === "heat") {
         const moving = Math.hypot(this.player.vx, this.player.vy) > 0.4;
-        if (moving) {
-          hs.value = Math.max(0, hs.value - h.moveCoolPerSec * dt);
-        } else {
-          hs.value = Math.min(100, hs.value + h.idleHeatPerSec * hMult * dt);
-        }
+        if (moving) hs.value = Math.max(0, hs.value - h.moveCoolPerSec * dt);
+        else hs.value = Math.min(100, hs.value + h.idleHeatPerSec * hMult * dt);
         inDanger = hs.value >= 75;
         if (hs.value >= 100) {
           hs.dpsTick += dt;
@@ -2501,7 +2667,7 @@
         hs.poolSpawnTimer -= dt;
         if (hs.poolSpawnTimer <= 0 && this.world.enemies.length > 0) {
           hs.poolSpawnTimer = h.poolSpawnInterval / Math.sqrt(this.run.diff.hazardMult);
-          const pos = this.findOpenSpot(2.0);
+          const pos = this.findOpenSpot(2.2);
           this.world.poisonPools.push({
             x: pos.x,
             y: pos.y,
@@ -2518,18 +2684,14 @@
           if (dist(this.player.x, this.player.y, p.x, p.y) <= p.radius) standingInPool = true;
           if (p.life <= 0) this.world.poisonPools.splice(i, 1);
         }
-        if (standingInPool) {
-          hs.value = Math.min(100, hs.value + h.toxinGainInPool * hMult * dt);
-        } else {
-          hs.value = Math.max(0, hs.value - h.toxinDecayPerSec * dt);
-        }
+        if (standingInPool) hs.value = Math.min(100, hs.value + h.toxinGainInPool * hMult * dt);
+        else hs.value = Math.max(0, hs.value - h.toxinDecayPerSec * dt);
         inDanger = standingInPool || hs.value >= 65;
         if (hs.value >= 50) {
           hs.dpsTick += dt;
           if (hs.dpsTick >= 0.75) {
             hs.dpsTick = 0;
-            const scale = hs.value / 100;
-            this.damagePlayer(this.player.maxHp * h.poisonDpsPct * scale, true);
+            this.damagePlayer(this.player.maxHp * h.poisonDpsPct * (hs.value / 100), true);
           }
         }
       } else if (h.type === "gravity") {
@@ -2551,11 +2713,8 @@
         inDanger = hs.phase === "heavy";
       } else if (h.type === "frost") {
         const nearBrazier = this.world.braziers.some((b) => dist(this.player.x, this.player.y, b.x, b.y) <= b.radius);
-        if (nearBrazier) {
-          hs.value = Math.max(0, hs.value - h.thawPerSec * dt);
-        } else {
-          hs.value = Math.min(100, hs.value + h.chillPerSec * hMult * dt);
-        }
+        if (nearBrazier) hs.value = Math.max(0, hs.value - h.thawPerSec * dt);
+        else hs.value = Math.min(100, hs.value + h.chillPerSec * hMult * dt);
         inDanger = hs.value >= 70;
         if (hs.value >= 85) {
           hs.dpsTick += dt;
@@ -2567,15 +2726,15 @@
       } else if (h.type === "shadow") {
         hs.value = Math.min(100, hs.value + h.corruptPerSec * hMult * dt);
         hs.orbSpawnTimer -= dt;
-        if (hs.orbSpawnTimer <= 0 && this.world.lightOrbs.length < 3) {
-          hs.orbSpawnTimer = 5.5;
-          const pos = this.findOpenSpot(2.5);
-          this.world.lightOrbs.push({ x: pos.x, y: pos.y, life: 15 });
+        if (hs.orbSpawnTimer <= 0 && this.world.lightOrbs.length < 4) {
+          hs.orbSpawnTimer = 5.0;
+          const pos = this.findOpenSpot(2.8);
+          this.world.lightOrbs.push({ x: pos.x, y: pos.y, life: 16 });
         }
         for (let i = this.world.lightOrbs.length - 1; i >= 0; i--) {
           const orb = this.world.lightOrbs[i];
           orb.life -= dt;
-          if (dist(this.player.x, this.player.y, orb.x, orb.y) <= 0.95) {
+          if (dist(this.player.x, this.player.y, orb.x, orb.y) <= 1.0) {
             hs.value = Math.max(0, hs.value - h.orbPurgeAmount);
             this.sfx.flask();
             this.spawnBurst(orb.x, orb.y, "#fde047", 14, 3.0);
@@ -2591,6 +2750,46 @@
           if (hs.dpsTick >= 0.7) {
             hs.dpsTick = 0;
             this.damagePlayer(this.player.maxHp * h.corruptDpsPct, true);
+          }
+        }
+      } else if (h.type === "storm") {
+        // Stormspire Citadel: Static Overload builds unless standing near Copper Conduits
+        const nearConduit = (this.world.conduits || []).some(
+          (c) => dist(this.player.x, this.player.y, c.x, c.y) <= c.radius
+        );
+        if (nearConduit) {
+          hs.value = Math.max(0, hs.value - h.dischargePerSec * dt);
+        } else if (this.world.enemies.length > 0) {
+          hs.value = Math.min(100, hs.value + h.chargePerSec * hMult * dt);
+        }
+        inDanger = hs.value >= 75;
+        if (hs.value >= 100) {
+          hs.value = 18;
+          this.sfx.lightning();
+          this.addScreenShake(0.24, 9);
+          this.spawnSkillAnim("lightning_surge", this.player.x, this.player.y, 0, 1.8, "#38bdf8", 0.45);
+          this.damagePlayer(this.player.maxHp * h.strikeDmgPct, true);
+        }
+      } else if (h.type === "solar") {
+        // Celestial Crucible: Solar Flare charges up every 14s — shelter inside purple Umbral Wards!
+        if (this.world.enemies.length > 0) {
+          hs.phaseTimer -= dt * Math.sqrt(this.run.diff.hazardMult);
+        }
+        const cycle = h.cycleSeconds || 14;
+        hs.value = clamp((1 - hs.phaseTimer / cycle) * 100, 0, 100);
+        const inShelter = (this.world.umbralWards || []).some(
+          (w) => dist(this.player.x, this.player.y, w.x, w.y) <= w.radius
+        );
+        inDanger = hs.value >= 75 && !inShelter;
+        if (hs.phaseTimer <= 0) {
+          hs.phaseTimer = cycle;
+          this.sfx.solarFlare();
+          this.addScreenShake(0.32, 10);
+          this.spawnSkillAnim("solar_flare", this.player.x, this.player.y, 0, 5.5, "#fde047", 0.55);
+          if (inShelter) {
+            this.spawnFloatingText(this.player.x, this.player.y, 1.6, "SHELTERED!", "#c084fc", true);
+          } else {
+            this.damagePlayer(this.player.maxHp * h.flareDmgPct, true);
           }
         }
       }
@@ -2612,13 +2811,13 @@
           this.run.meteorTimer = 4.5;
           const baseDmg = Math.round(35 * this.run.diff.dmgMult * (1 + Math.max(0, this.getDungeonOrder()) * 0.6));
           for (let i = 0; i < 2; i++) {
-            const tx = clamp(this.player.x + randRange(-2.6, 2.6), 1.5, this.world.size - 1.5);
-            const ty = clamp(this.player.y + randRange(-2.6, 2.6), 1.5, this.world.size - 1.5);
+            const tx = clamp(this.player.x + randRange(-2.8, 2.8), 1.5, this.world.size - 1.5);
+            const ty = clamp(this.player.y + randRange(-2.8, 2.8), 1.5, this.world.size - 1.5);
             this.telegraphs.push({
               type: "circle",
               x: tx,
               y: ty,
-              radius: 1.65,
+              radius: 1.7,
               elapsed: 0,
               duration: 1.15,
               damage: baseDmg,
@@ -2634,7 +2833,7 @@
     }
 
     /* ======================================================================
-       ENEMY & BOSS AI (With Anti-Stack Separation & Bruiser Slams)
+       ENEMY & BOSS AI (With Separation & Bruiser Slams)
        ====================================================================== */
     updateEnemies(dt) {
       const enemies = this.world.enemies;
@@ -2660,7 +2859,6 @@
           continue;
         }
 
-        // Soft enemy-to-enemy separation so mobs fan out instead of stacking into 1 pixel
         let sepX = 0;
         let sepY = 0;
         for (let j = 0; j < enemies.length; j++) {
@@ -2669,7 +2867,7 @@
           const sdx = e.x - o.x;
           const sdy = e.y - o.y;
           const sd = Math.hypot(sdx, sdy);
-          const minDist = e.radius + o.radius + 0.12;
+          const minDist = e.radius + o.radius + 0.14;
           if (sd > 0.001 && sd < minDist) {
             const push = (minDist - sd) / minDist;
             sepX += (sdx / sd) * push * 2.4;
@@ -2686,7 +2884,7 @@
           if (d > e.range * 0.85) {
             mx += (dx / d) * e.speed * slowMult;
             my += (dy / d) * e.speed * slowMult;
-          } else if (d < 2.6) {
+          } else if (d < 2.8) {
             mx -= (dx / d) * e.speed * 0.7 * slowMult;
             my -= (dy / d) * e.speed * 0.7 * slowMult;
           }
@@ -2699,13 +2897,14 @@
               friendly: false,
               x: e.x,
               y: e.y,
-              vx: Math.cos(ang) * (tpl.projSpeed || 6.4),
-              vy: Math.sin(ang) * (tpl.projSpeed || 6.4),
-              radius: 0.25,
+              vx: Math.cos(ang) * (tpl.projSpeed || 6.6),
+              vy: Math.sin(ang) * (tpl.projSpeed || 6.6),
+              radius: 0.26,
               damage: e.atk,
+              projStyle: "orb",
               color: tpl.projColor || "#f43f5e",
               trailColor: "#fca5a5",
-              life: 1.9
+              life: 2.1
             });
           }
         } else {
@@ -2717,8 +2916,7 @@
           }
           this.moveEntityWithCollision(e, mx * dt, my * dt, e.radius);
 
-          // Bruisers & Elites occasionally telegraph a dodgeable heavy slam!
-          if ((tpl.ai === "bruiser" || e.isElite) && d <= 2.3) {
+          if ((tpl.ai === "bruiser" || e.isElite) && d <= 2.4) {
             e.slamCd = (e.slamCd || 3.5) - dt * slowMult;
             if (e.slamCd <= 0) {
               e.slamCd = 4.2;
@@ -2727,7 +2925,7 @@
                 type: "circle",
                 x: this.player.x,
                 y: this.player.y,
-                radius: 1.55,
+                radius: 1.6,
                 elapsed: 0,
                 duration: 0.95,
                 damage: Math.round(e.atk * 1.35),
@@ -2756,7 +2954,7 @@
         return;
       }
 
-      if (d > 2.2) {
+      if (d > 2.4) {
         this.moveEntityWithCollision(boss, (dx / d) * boss.speed * slowMult * dt, (dy / d) * boss.speed * slowMult * dt, boss.radius);
       }
 
@@ -2810,8 +3008,8 @@
           damage: dmg,
           color: "#ef4444",
           onDetonate: () => {
-            boss.chargeVel = { x: Math.cos(ang) * 14, y: Math.sin(ang) * 14 };
-            boss.chargeTimer = 0.42;
+            boss.chargeVel = { x: Math.cos(ang) * 15, y: Math.sin(ang) * 15 };
+            boss.chargeTimer = 0.45;
           }
         });
       } else if (pat.type === "cross_beam") {
@@ -2846,12 +3044,12 @@
           });
         }
       } else if (pat.type === "radial_volley") {
-        const count = pat.count || 10;
+        const count = pat.count || 12;
         this.telegraphs.push({
           type: "circle",
           x: boss.x,
           y: boss.y,
-          radius: 1.8,
+          radius: 1.9,
           elapsed: 0,
           duration: teleDur,
           damage: Math.round(dmg * 0.7),
@@ -2863,13 +3061,14 @@
                 friendly: false,
                 x: boss.x,
                 y: boss.y,
-                vx: Math.cos(a) * 6.5,
-                vy: Math.sin(a) * 6.5,
+                vx: Math.cos(a) * 6.8,
+                vy: Math.sin(a) * 6.8,
                 radius: 0.28,
                 damage: dmg,
+                projStyle: "star",
                 color: boss.trim,
                 trailColor: "#f0abfc",
-                life: 2.2
+                life: 2.6
               });
             }
           }
@@ -2923,7 +3122,6 @@
 
         const tx = Math.floor(p.x);
         const ty = Math.floor(p.y);
-        // Projectiles fly cleanly over abyssal chasm tiles (-1), stopping only on walls (1) and pillars (2)
         const hitWall =
           tx < 0 || ty < 0 || tx >= sz || ty >= sz || this.world.grid[ty][tx] === 1 || this.world.grid[ty][tx] === 2;
 
@@ -2934,9 +3132,8 @@
         }
 
         if (p.friendly) {
-          // Friendly projectiles smash urns
           for (let u = (this.world.urns || []).length - 1; u >= 0; u--) {
-            if (dist(p.x, p.y, this.world.urns[u].x, this.world.urns[u].y) <= p.radius + 0.4) {
+            if (dist(p.x, p.y, this.world.urns[u].x, this.world.urns[u].y) <= p.radius + 0.42) {
               this.smashUrn(u);
             }
           }
@@ -2974,7 +3171,6 @@
           d.z += d.vz * dt;
           const nx = d.x + d.vx * dt;
           const ny = d.y + d.vy * dt;
-          // Never bounce loot into walls or chasms
           if (this.isWalkableTile(nx, d.y)) d.x = nx;
           if (this.isWalkableTile(d.x, ny)) d.y = ny;
           if (d.z <= 0) {
@@ -2985,12 +3181,12 @@
           }
         } else {
           const pd = dist(this.player.x, this.player.y, d.x, d.y);
-          if (pd < 3.2) {
+          if (pd < 3.4) {
             const ang = Math.atan2(this.player.y - d.y, this.player.x - d.x);
-            d.x += Math.cos(ang) * 8.0 * dt;
-            d.y += Math.sin(ang) * 8.0 * dt;
+            d.x += Math.cos(ang) * 8.4 * dt;
+            d.y += Math.sin(ang) * 8.4 * dt;
           }
-          if (pd < 0.75) {
+          if (pd < 0.78) {
             this.collectLootDrop(d);
             this.lootDrops.splice(i, 1);
           }
@@ -2999,7 +3195,7 @@
 
       const bn = this.getRunBoonTotals();
       for (const ch of this.world.chests) {
-        if (!ch.opened && dist(this.player.x, this.player.y, ch.x, ch.y) < 1.2) {
+        if (!ch.opened && dist(this.player.x, this.player.y, ch.x, ch.y) < 1.25) {
           ch.opened = true;
           const bonusGold = Math.round(this.run.dungeon.baseGold * 0.45 * (this.run.rewardMult + bn.lootMultBonus));
           this.save.gold += bonusGold;
@@ -3043,13 +3239,9 @@
 
       if (!this.save.cleared[dungeon.id]) this.save.cleared[dungeon.id] = {};
       if (!this.save.cleared[dungeon.id][diff.id]) {
-        const wasNeverCleared = !this.isDungeonCleared(dungeon.id);
         this.save.cleared[dungeon.id][diff.id] = true;
         this.save.renown += diff.renownFirstClear;
         this.run.renownEarned = diff.renownFirstClear;
-        if (wasNeverCleared) {
-          this.toast(`Mercenary Guild unlocked auto-farming for ${dungeon.name}!`, "success");
-        }
       }
 
       this.sfx.victory();
@@ -3208,7 +3400,9 @@
 
     // === END OF PART 2/3 — REPLY "3" FOR PART 3/3 ===
     /* ======================================================================
-       2.5D ISOMETRIC RENDERING ENGINE (Non-Square Cliffs, Urns, Boons & VFX)
+       2.5D ISOMETRIC RENDERING ENGINE
+       Custom Animated Weapons, Multi-Stage Ability Animations, 8 Bosses,
+       24 Enemy Types, Grand Non-Square Cliffs & Active Guild Bounties UI.
        ====================================================================== */
     resizeCanvas() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -3217,13 +3411,13 @@
       this.canvas.width = Math.floor(w * dpr);
       this.canvas.height = Math.floor(h * dpr);
       this.dpr = dpr;
-      this.worldZoom = 1.4;
+      this.worldZoom = 1.32;
     }
 
     render() {
       const ctx = this.ctx;
       const dpr = this.dpr || 1;
-      const zoom = this.worldZoom || 1.4;
+      const zoom = this.worldZoom || 1.32;
       const w = this.canvas.clientWidth / zoom;
       const h = this.canvas.clientHeight / zoom;
       const pal = this.world.palette;
@@ -3251,11 +3445,10 @@
       const sz = this.world.size;
       const grid = this.world.grid;
 
-      // 1A. Recessed Abyssal Chasm Floor (visible in internal pits & under bridges)
+      // 1A. Recessed Abyssal Chasm Floor
       for (let y = 1; y < sz - 1; y++) {
         for (let x = 1; x < sz - 1; x++) {
           if (grid[y][x] !== -1) continue;
-          // Only render recessed chasm liquid/void if adjacent to a real platform tile
           const nearFloor =
             grid[y - 1]?.[x] >= 0 ||
             grid[y + 1]?.[x] >= 0 ||
@@ -3349,45 +3542,28 @@
       }
 
       for (const st of this.world.stations) {
-        renderables.push({
-          depth: st.x + st.y,
-          draw: () => this.drawStation(ctx, st, toS)
-        });
+        renderables.push({ depth: st.x + st.y, draw: () => this.drawStation(ctx, st, toS) });
       }
-
       for (const b of this.world.braziers || []) {
-        renderables.push({
-          depth: b.x + b.y,
-          draw: () => this.drawBrazier(ctx, b, toS)
-        });
+        renderables.push({ depth: b.x + b.y, draw: () => this.drawBrazier(ctx, b, toS) });
       }
-
+      for (const c of this.world.conduits || []) {
+        renderables.push({ depth: c.x + c.y, draw: () => this.drawConduit(ctx, c, toS) });
+      }
+      for (const uw of this.world.umbralWards || []) {
+        renderables.push({ depth: uw.x + uw.y, draw: () => this.drawUmbralWard(ctx, uw, toS) });
+      }
       for (const orb of this.world.lightOrbs || []) {
-        renderables.push({
-          depth: orb.x + orb.y,
-          draw: () => this.drawLightOrb(ctx, orb, toS)
-        });
+        renderables.push({ depth: orb.x + orb.y, draw: () => this.drawLightOrb(ctx, orb, toS) });
       }
-
       for (const u of this.world.urns || []) {
-        renderables.push({
-          depth: u.x + u.y,
-          draw: () => this.drawUrn(ctx, u, toS)
-        });
+        renderables.push({ depth: u.x + u.y, draw: () => this.drawUrn(ctx, u, toS) });
       }
-
       for (const ch of this.world.chests) {
-        renderables.push({
-          depth: ch.x + ch.y,
-          draw: () => this.drawChest(ctx, ch, toS)
-        });
+        renderables.push({ depth: ch.x + ch.y, draw: () => this.drawChest(ctx, ch, toS) });
       }
-
       for (const drop of this.lootDrops) {
-        renderables.push({
-          depth: drop.x + drop.y,
-          draw: () => this.drawLootDrop(ctx, drop, toS)
-        });
+        renderables.push({ depth: drop.x + drop.y, draw: () => this.drawLootDrop(ctx, drop, toS) });
       }
 
       for (const img of this.player.afterimages) {
@@ -3403,47 +3579,37 @@
         });
       }
 
-      renderables.push({
-        depth: this.player.x + this.player.y,
-        draw: () => this.drawHero(ctx, toS)
-      });
+      renderables.push({ depth: this.player.x + this.player.y, draw: () => this.drawHero(ctx, toS) });
 
       for (const e of this.world.enemies) {
-        renderables.push({
-          depth: e.x + e.y,
-          draw: () => this.drawEnemy(ctx, e, toS)
-        });
+        renderables.push({ depth: e.x + e.y, draw: () => this.drawEnemy(ctx, e, toS) });
       }
-
       for (const pr of this.projectiles) {
-        renderables.push({
-          depth: pr.x + pr.y + 0.1,
-          draw: () => this.drawProjectile(ctx, pr, toS)
-        });
+        renderables.push({ depth: pr.x + pr.y + 0.1, draw: () => this.drawProjectile(ctx, pr, toS) });
       }
 
       renderables.sort((a, b) => a.depth - b.depth);
       for (const r of renderables) r.draw();
 
-      // 4. Choreographed 2.5D Ability Animations & Chain Lightning Arcs
+      // 4. Choreographed Multi-Stage 2.5D Ability Animations & Lightning Arcs
       this.renderSkillAnimations(ctx, toS);
 
       for (const arc of this.lightningArcs) {
         const p1 = toS(arc.x1, arc.y1, 0.55);
         const p2 = toS(arc.x2, arc.y2, 0.55);
-        const midX = (p1.x + p2.x) * 0.5 + randRange(-8, 8);
-        const midY = (p1.y + p2.y) * 0.5 + randRange(-8, 8);
+        const midX = (p1.x + p2.x) * 0.5 + randRange(-9, 9);
+        const midY = (p1.y + p2.y) * 0.5 + randRange(-9, 9);
         ctx.save();
         ctx.globalAlpha = clamp(arc.life / arc.maxLife, 0, 1);
         ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.5;
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(midX, midY);
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.4;
         ctx.stroke();
         ctx.restore();
       }
@@ -3492,6 +3658,18 @@
         drawIsoGroundEllipse(ctx, p.x, p.y, b.radius * pulse, "rgba(249, 115, 22, 0.16)", "rgba(251, 146, 60, 0.75)", 1);
       }
 
+      for (const c of this.world.conduits || []) {
+        const p = toS(c.x, c.y, 0);
+        const pulse = 0.92 + Math.sin(this.elapsed * 6) * 0.08;
+        drawIsoGroundEllipse(ctx, p.x, p.y, c.radius * pulse, "rgba(56, 189, 248, 0.14)", "rgba(253, 224, 71, 0.75)", 1.5);
+      }
+
+      for (const uw of this.world.umbralWards || []) {
+        const p = toS(uw.x, uw.y, 0);
+        const pulse = 0.95 + Math.sin(this.elapsed * 4) * 0.05;
+        drawIsoGroundEllipse(ctx, p.x, p.y, uw.radius * pulse, "rgba(147, 51, 234, 0.24)", "#e879f9", 2);
+      }
+
       for (const pool of this.world.poisonPools) {
         const p = toS(pool.x, pool.y, 0);
         const alpha = clamp(pool.life / 2, 0, 1);
@@ -3509,7 +3687,7 @@
       if (this.world.portal) {
         const p = toS(this.world.portal.x, this.world.portal.y, 0);
         const pulse = 1 + Math.sin(this.elapsed * 5) * 0.12;
-        drawIsoGroundEllipse(ctx, p.x, p.y, 1.25 * pulse, "rgba(56, 189, 248, 0.28)", "#7dd3fc", 2);
+        drawIsoGroundEllipse(ctx, p.x, p.y, 1.3 * pulse, "rgba(56, 189, 248, 0.28)", "#7dd3fc", 2);
         ctx.save();
         ctx.strokeStyle = "#e0f2fe";
         ctx.lineWidth = 2;
@@ -3520,7 +3698,7 @@
         ctx.fill();
 
         const dpr = this.dpr || 1;
-        const zoom = this.worldZoom || 1.4;
+        const zoom = this.worldZoom || 1.32;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.font = "700 12px 'Trebuchet MS', sans-serif";
         ctx.textAlign = "center";
@@ -3573,17 +3751,29 @@
         }
       }
 
+      // Upgraded Layered Weapon Slash Arcs
       for (const arc of this.slashArcs) {
-        const p = toS(arc.x, arc.y, 0.25);
+        const p = toS(arc.x, arc.y, 0.32);
         const alpha = clamp(arc.life / arc.maxLife, 0, 1);
+        const prog = 1 - alpha;
         ctx.save();
-        ctx.globalAlpha = alpha * 0.85;
-        const tip = toS(arc.x + Math.cos(arc.angle), arc.y + Math.sin(arc.angle), 0.25);
+        ctx.globalAlpha = alpha * 0.92;
+        const tip = toS(arc.x + Math.cos(arc.angle), arc.y + Math.sin(arc.angle), 0.32);
         const screenAng = Math.atan2(tip.y - p.y, tip.x - p.x);
-        ctx.strokeStyle = arc.color;
-        ctx.lineWidth = 4;
+        const sweepStart = screenAng - arc.span * 0.48;
+        const sweepEnd = sweepStart + arc.span * 0.96 * clamp(0.35 + prog * 0.85, 0, 1);
+        const rad = arc.radius * 18;
+
+        ctx.strokeStyle = arc.weaponColor || arc.color;
+        ctx.lineWidth = arc.heavy ? 8 : 5;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, arc.radius * 18, screenAng - arc.span * 0.45, screenAng + arc.span * 0.45);
+        ctx.arc(p.x, p.y, rad, sweepStart, sweepEnd);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = arc.heavy ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rad + 2, sweepStart + 0.12, sweepEnd);
         ctx.stroke();
         ctx.restore();
       }
@@ -3612,7 +3802,7 @@
         } else if (anim.animType === "seismic_pillars") {
           const waveR = anim.radius * (0.3 + t * 0.75);
           drawIsoGroundEllipse(ctx, center.x, center.y, waveR, "rgba(56, 189, 248, 0.16)", "#7dd3fc", 2.5);
-          const pillarH = Math.sin(t * Math.PI) * 26;
+          const pillarH = Math.sin(t * Math.PI) * 28;
           for (let i = 0; i < 8; i++) {
             const a = (i / 8) * Math.PI * 2;
             const sp = toS(anim.x + Math.cos(a) * (anim.radius * 0.75), anim.y + Math.sin(a) * (anim.radius * 0.75), 0);
@@ -3620,9 +3810,9 @@
           }
         } else if (anim.animType === "flame_nova") {
           const r = anim.radius * (0.25 + t * 0.95);
-          drawIsoGroundEllipse(ctx, center.x, center.y - 4, r, "rgba(249, 115, 22, 0.2)", "#fde047", 3);
-          for (let i = 0; i < 6; i++) {
-            const a = anim.angle + (i / 6) * Math.PI * 2 + t * 2.5;
+          drawIsoGroundEllipse(ctx, center.x, center.y - 4, r, "rgba(249, 115, 22, 0.22)", "#fde047", 3);
+          for (let i = 0; i < 8; i++) {
+            const a = anim.angle + (i / 8) * Math.PI * 2 + t * 3;
             const fp = toS(anim.x + Math.cos(a) * r, anim.y + Math.sin(a) * r, 0.35);
             ctx.fillStyle = "#f97316";
             ctx.fillRect(fp.x - 4, fp.y - 4, 8, 8);
@@ -3644,15 +3834,15 @@
           for (const tgt of list) {
             const tp = toS(tgt.x, tgt.y, 0);
             drawIsoGroundEllipse(ctx, tp.x, tp.y, anim.radius * (0.35 + t * 0.7), "rgba(232, 121, 249, 0.22)", "#f0abfc", 2);
-            const beamW = Math.max(2, Math.round(invT * 14));
+            const beamW = Math.max(2, Math.round(invT * 15));
             ctx.fillStyle = anim.color;
-            ctx.fillRect(tp.x - Math.floor(beamW * 0.5), tp.y - 130, beamW, 130);
+            ctx.fillRect(tp.x - Math.floor(beamW * 0.5), tp.y - 135, beamW, 135);
             ctx.fillStyle = "#ffffff";
-            ctx.fillRect(tp.x - Math.max(1, Math.floor(beamW * 0.25)), tp.y - 130, Math.max(2, Math.floor(beamW * 0.5)), 130);
+            ctx.fillRect(tp.x - Math.max(1, Math.floor(beamW * 0.25)), tp.y - 135, Math.max(2, Math.floor(beamW * 0.5)), 135);
           }
         } else if (anim.animType === "ice_spikes") {
           drawIsoGroundEllipse(ctx, center.x, center.y, anim.radius * (0.3 + t * 0.75), "rgba(125, 211, 252, 0.24)", "#e0f2fe", 2);
-          const spikeH = Math.sin(t * Math.PI) * 28;
+          const spikeH = Math.sin(t * Math.PI) * 30;
           for (let ring = 0; ring < 2; ring++) {
             const cnt = ring === 0 ? 6 : 10;
             const rad = anim.radius * (ring === 0 ? 0.42 : 0.82);
@@ -3666,13 +3856,100 @@
           const r = anim.radius * (0.5 + t * 0.55);
           drawIsoGroundEllipse(ctx, center.x, center.y - 4, r, "rgba(244, 63, 94, 0.18)", "#f43f5e", 2.5);
           for (let s = 0; s < 2; s++) {
-            const baseA = t * Math.PI * 4 + s * Math.PI;
+            const baseA = t * Math.PI * 4.5 + s * Math.PI;
             ctx.strokeStyle = s === 0 ? "#f43f5e" : "#e879f9";
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 6;
             ctx.beginPath();
-            ctx.arc(center.x, center.y - 8, r * 20, baseA - 0.9, baseA + 0.9);
+            ctx.arc(center.x, center.y - 8, r * 20, baseA - 1.0, baseA + 1.0);
             ctx.stroke();
           }
+        } else if (anim.animType === "thunder_web") {
+          // Stormspire Q: Sky thunderbolts crashing onto every chained target + static pulse
+          drawIsoGroundEllipse(ctx, center.x, center.y, anim.radius * (0.25 + t * 0.75), "rgba(56, 189, 248, 0.14)", "#fde047", 2);
+          const list = anim.targets && anim.targets.length > 0 ? anim.targets : [{ x: anim.x, y: anim.y }];
+          for (const tgt of list) {
+            const tp = toS(tgt.x, tgt.y, 0);
+            drawIsoGroundEllipse(ctx, tp.x, tp.y, 1.1 * invT + 0.3, "rgba(56, 189, 248, 0.25)", "#38bdf8", 1.5);
+            ctx.strokeStyle = "#fde047";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(tp.x, tp.y);
+            ctx.lineTo(tp.x - 8, tp.y - 32);
+            ctx.lineTo(tp.x + 8, tp.y - 64);
+            ctx.lineTo(tp.x - 4, tp.y - 105);
+            ctx.stroke();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
+        } else if (anim.animType === "sky_greatsword") {
+          // Celestial Crucible Q: Colossal golden greatsword plunging from the heavens + shockwave!
+          const impactT = clamp(t / 0.35, 0, 1);
+          const swordDropY = lerp(-125, -8, impactT * impactT);
+          const shockR = anim.radius * clamp((t - 0.2) / 0.8, 0.1, 1);
+          drawIsoGroundEllipse(ctx, center.x, center.y, shockR, "rgba(253, 224, 71, 0.26)", "#ffffff", 3);
+          drawIsoGroundEllipse(ctx, center.x, center.y, shockR * 0.65, null, "#f59e0b", 2);
+
+          // Giant Blade + Crossguard + Pommel plunging straight into the arena floor
+          const sx = center.x;
+          const sy = Math.round(center.y + swordDropY);
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(sx - 6, sy - 68, 12, 68);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(sx - 2, sy - 66, 4, 64);
+          // Pointed tip
+          ctx.beginPath();
+          ctx.moveTo(sx - 6, sy);
+          ctx.lineTo(sx + 6, sy);
+          ctx.lineTo(sx, sy + 12);
+          ctx.closePath();
+          ctx.fillStyle = "#fef08a";
+          ctx.fill();
+          // Golden winged crossguard & hilt
+          ctx.fillStyle = "#d97706";
+          ctx.fillRect(sx - 18, sy - 74, 36, 7);
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(sx - 15, sy - 72, 30, 3);
+          ctx.fillStyle = "#92400e";
+          ctx.fillRect(sx - 3, sy - 90, 6, 16);
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(sx - 5, sy - 95, 10, 6);
+        } else if (anim.animType === "storm_orbit") {
+          // Stormspire E: Twin orbiting thunder rings + crackling arcs around hero
+          const r = anim.radius * (0.25 + t * 0.75);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 6, r, "rgba(56, 189, 248, 0.2)", "#38bdf8", 3);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 14, r * 0.6, null, "#fde047", 2);
+          for (let i = 0; i < 6; i++) {
+            const a = t * 7 + (i / 6) * Math.PI * 2;
+            const ox = center.x + Math.cos(a) * 28;
+            const oy = center.y - 14 + Math.sin(a) * 14;
+            ctx.fillStyle = i % 2 === 0 ? "#fde047" : "#38bdf8";
+            ctx.fillRect(Math.round(ox) - 3, Math.round(oy) - 3, 6, 6);
+          }
+        } else if (anim.animType === "chrono_clock") {
+          // Celestial Crucible E: Giant golden temporal clockface expanding over the floor!
+          const r = anim.radius * (0.25 + Math.sin(t * Math.PI * 0.5) * 0.75);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(253, 224, 71, 0.16)", "#fde047", 3);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r * 0.78, null, "#ffffff", 1.5);
+          // 12 Roman tick marks around clock rim
+          for (let h = 0; h < 12; h++) {
+            const a = (h / 12) * Math.PI * 2;
+            const tx = center.x + Math.cos(a) * r * ISO.TILE_W * 0.45;
+            const ty = center.y + Math.sin(a) * r * ISO.TILE_H * 0.45;
+            ctx.fillStyle = "#fef08a";
+            ctx.fillRect(Math.round(tx) - 2, Math.round(ty) - 2, 4, 4);
+          }
+          // Spinning clock hands
+          const handA1 = t * Math.PI * 4;
+          const handA2 = -t * Math.PI * 1.5;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(center.x, center.y);
+          ctx.lineTo(center.x + Math.cos(handA1) * r * 18, center.y + Math.sin(handA1) * r * 9);
+          ctx.moveTo(center.x, center.y);
+          ctx.lineTo(center.x + Math.cos(handA2) * r * 12, center.y + Math.sin(handA2) * r * 6);
+          ctx.stroke();
         } else if (anim.animType === "aegis_dome" || anim.animType === "crystal_cage") {
           const r = 1.35 + Math.sin(t * Math.PI) * 0.35;
           drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(56, 189, 248, 0.24)", "#bae6fd", 2.5);
@@ -3729,6 +4006,24 @@
 
         ctx.restore();
       }
+    }
+
+    drawConduit(ctx, c, toS) {
+      const p = toS(c.x, c.y, 0);
+      drawIsoBlock(ctx, p.x, p.y, 14, 7, 24, "#fde047", "#b45309", "#78350f", "#07090f");
+      const spark = Math.round(Math.sin(this.elapsed * 18 + c.x) * 3);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillRect(p.x - 3, p.y - 30 + spark, 6, 4);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(p.x - 1, p.y - 29 + spark, 2, 2);
+    }
+
+    drawUmbralWard(ctx, uw, toS) {
+      const p = toS(uw.x, uw.y, 0);
+      drawIsoBlock(ctx, p.x, p.y, 16, 8, 22, "#e879f9", "#581c87", "#2e1065", "#07090f");
+      const floatY = Math.round(Math.sin(this.elapsed * 4 + uw.y) * 2);
+      ctx.fillStyle = "#f5d0fe";
+      ctx.fillRect(p.x - 3, p.y - 30 + floatY, 6, 6);
     }
 
     drawUrn(ctx, u, toS) {
@@ -3791,7 +4086,7 @@
 
       ctx.save();
       const dpr = this.dpr || 1;
-      const zoom = this.worldZoom || 1.4;
+      const zoom = this.worldZoom || 1.32;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.font = "700 12px 'Trebuchet MS', sans-serif";
       ctx.textAlign = "center";
@@ -3848,22 +4143,190 @@
       ctx.restore();
     }
 
+    /* ----------------------------------------------------------------------
+       CUSTOM ANIMATED 2.5D WEAPON MODELS (9 Distinct Silhouettes)
+       ---------------------------------------------------------------------- */
+    drawEquippedWeapon(ctx, p, f, bob, wepTpl) {
+      const style = wepTpl.weaponStyle || "sword";
+      const cast = this.player.castAnim;
+      let spinAngle = 0;
+      let raiseY = 0;
+
+      if (cast) {
+        const ct = clamp(cast.elapsed / cast.duration, 0, 1);
+        if (cast.type === "spin") spinAngle = ct * Math.PI * 4;
+        else if (cast.type === "raise") raiseY = -Math.sin(ct * Math.PI) * 9;
+        else if (cast.type === "slam") spinAngle = Math.sin(ct * Math.PI) * 1.4;
+      }
+
+      const swingAng = this.player.swingAnim > 0 ? Math.sin(this.player.swingAnim * 30) * 1.25 : 0;
+      const baseAng = Math.atan2(f.y, f.x) + swingAng + spinAngle;
+      const handX = Math.round(p.x + f.x * 7 - f.y * 4);
+      const handY = Math.round(p.y - 12 - bob + f.y * 3 + raiseY);
+
+      ctx.save();
+
+      if (style === "grimoire") {
+        // Floating glowing arcane tome orbiting beside hero with orbiting runes
+        const hover = Math.sin(this.elapsed * 6) * 3;
+        const bx = Math.round(p.x + f.x * 11 + 4);
+        const by = Math.round(p.y - 19 - bob + hover + raiseY);
+        ctx.fillStyle = "#3b0764";
+        ctx.fillRect(bx - 6, by - 5, 12, 9);
+        ctx.fillStyle = "#f5d0fe";
+        ctx.fillRect(bx - 4, by - 4, 3, 7);
+        ctx.fillRect(bx + 1, by - 4, 3, 7);
+        ctx.strokeStyle = wepTpl.weaponColor;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx - 6, by - 5, 12, 9);
+        const ra = this.elapsed * 5;
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(bx + Math.round(Math.cos(ra) * 9) - 1, by + Math.round(Math.sin(ra) * 5) - 1, 2, 2);
+        ctx.restore();
+        return;
+      }
+
+      if (style === "chakram") {
+        // Twin spinning fiery razor rings
+        const ringSpin = this.elapsed * 14;
+        for (const side of [-1, 1]) {
+          const rx = Math.round(p.x + side * 12 + f.x * 3);
+          const ry = Math.round(p.y - 13 - bob + raiseY);
+          ctx.strokeStyle = "#07090f";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = wepTpl.weaponColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(rx + Math.round(Math.cos(ringSpin * side) * 6) - 1, ry + Math.round(Math.sin(ringSpin * side) * 6) - 1, 3, 3);
+        }
+        ctx.restore();
+        return;
+      }
+
+      if (style === "twinblades") {
+        // Crackling dual Storm-Blades in both hands
+        for (const side of [-1, 1]) {
+          const hx = Math.round(p.x + side * 8 + f.x * 4);
+          const hy = Math.round(p.y - 12 - bob + raiseY);
+          const ang = baseAng + side * 0.45;
+          const tx = Math.round(hx + Math.cos(ang) * 14);
+          const ty = Math.round(hy + Math.sin(ang) * 10 - 3);
+          ctx.strokeStyle = "#07090f";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          ctx.strokeStyle = side > 0 ? "#38bdf8" : "#fde047";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        ctx.restore();
+        return;
+      }
+
+      const len = style === "greatsword" ? 21 : style === "halberd" || style === "scythe" || style === "staff" ? 19 : 15;
+      const tipX = Math.round(handX + Math.cos(baseAng) * len);
+      const tipY = Math.round(handY + Math.sin(baseAng) * (len * 0.72) - 5);
+
+      // Shaft / Blade spine
+      ctx.strokeStyle = "#07090f";
+      ctx.lineWidth = style === "greatsword" ? 7 : 5;
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = style === "staff" ? "#78350f" : wepTpl.weaponColor;
+      ctx.lineWidth = style === "greatsword" ? 4.5 : 2.6;
+      ctx.stroke();
+
+      // Custom Weapon Heads
+      if (style === "hammer") {
+        ctx.fillStyle = "#07090f";
+        ctx.fillRect(tipX - 6, tipY - 5, 12, 10);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.fillRect(tipX - 5, tipY - 4, 10, 8);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(tipX - 3, tipY - 2, 6, 4);
+      } else if (style === "staff") {
+        const pulse = 3 + Math.sin(this.elapsed * 8);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, pulse + 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (style === "halberd") {
+        // Wide frozen crescent axe blade
+        ctx.fillStyle = "#e0f2fe";
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY - 5);
+        ctx.lineTo(tipX + 9, tipY);
+        ctx.lineTo(tipX + 4, tipY + 7);
+        ctx.lineTo(tipX - 3, tipY + 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#0284c7";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else if (style === "scythe") {
+        // Curved crimson-violet reaper crescent
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY + 4, 9, baseAng - 1.4, baseAng + 0.7);
+        ctx.stroke();
+        ctx.strokeStyle = wepTpl.weaponColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      } else if (style === "greatsword") {
+        // Glowing white-gold solar edge + broad crossguard
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(handX - 5, handY - 2, 10, 4);
+      } else {
+        // Classic sword crossguard + tip gleam
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(handX - 3, handY - 2, 6, 3);
+        ctx.fillStyle = wepTpl.trailColor;
+        ctx.fillRect(tipX - 2, tipY - 2, 4, 4);
+      }
+
+      ctx.restore();
+    }
+
     drawHero(ctx, toS) {
       const armorTpl = GearSystem.getTemplate(this.save.equipped.armor.templateId);
       const wepTpl = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
       const cls = this.getActiveClass();
       const vis = armorTpl.visuals || { body: "#334155", cloak: "#2563eb", trim: "#e2e8f0", aura: null };
 
-      const p = toS(this.player.x, this.player.y, 0);
+      const ground = toS(this.player.x, this.player.y, 0);
+      const p = toS(this.player.x, this.player.y, this.player.z || 0);
       const moving = Math.hypot(this.player.vx, this.player.vy) > 0.2;
       const bob = moving ? Math.round(Math.abs(Math.sin(this.elapsed * 14)) * 3) : Math.round(Math.sin(this.elapsed * 3));
 
       const f = ISO.worldDirToScreen(this.player.facing.x, this.player.facing.y);
       const facingAway = f.y < -0.35;
 
-      drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
+      // Ground shadow stays anchored on the floor during leap-slams!
+      drawIsoGroundEllipse(ctx, ground.x, ground.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
       if (vis.aura) {
-        drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, vis.aura, vis.trim, 1);
+        drawIsoGroundEllipse(ctx, ground.x, ground.y, 0.72, vis.aura, vis.trim, 1);
       }
 
       if (cls.tier === "advanced") {
@@ -3941,29 +4404,7 @@
         ctx.fillRect(p.x - 1, headY - 11, 2, 5);
       }
 
-      const swingAng = this.player.swingAnim > 0 ? Math.sin(this.player.swingAnim * 30) * 1.1 : 0;
-      const baseAng = Math.atan2(f.y, f.x) + swingAng;
-      const handX = Math.round(p.x + f.x * 6 - f.y * 4);
-      const handY = Math.round(p.y - 12 - bob + f.y * 3);
-      const tipX = Math.round(handX + Math.cos(baseAng) * 13);
-      const tipY = Math.round(handY + Math.sin(baseAng) * 10 - 4);
-
-      ctx.strokeStyle = "#07090f";
-      ctx.lineWidth = wepTpl.attackType === "melee_heavy" ? 5 : 4;
-      ctx.beginPath();
-      ctx.moveTo(handX, handY);
-      ctx.lineTo(tipX, tipY);
-      ctx.stroke();
-
-      ctx.strokeStyle = wepTpl.weaponColor;
-      ctx.lineWidth = wepTpl.attackType === "melee_heavy" ? 3 : 2;
-      ctx.beginPath();
-      ctx.moveTo(handX, handY);
-      ctx.lineTo(tipX, tipY);
-      ctx.stroke();
-
-      ctx.fillStyle = wepTpl.trailColor;
-      ctx.fillRect(tipX - 2, tipY - 2, 4, 4);
+      this.drawEquippedWeapon(ctx, p, f, bob, wepTpl);
     }
 
     drawEnemy(ctx, e, toS) {
@@ -3974,7 +4415,6 @@
 
       drawIsoGroundEllipse(ctx, p.x, p.y + 1, e.radius * 1.2, "rgba(0, 0, 0, 0.58)");
 
-      // Glowing golden halo for Elite monsters
       if (e.isElite) {
         const pulse = 1 + Math.sin(this.elapsed * 6) * 0.08;
         drawIsoGroundEllipse(ctx, p.x, p.y, e.radius * 1.45 * pulse, "rgba(255, 212, 71, 0.16)", "#ffd447", 1.5);
@@ -3986,7 +4426,6 @@
         this.drawMobSprite(ctx, e, p, f, hurt, stunned);
       }
 
-      // Elite golden crown spark
       if (e.isElite) {
         const topY = p.y - Math.round(e.height * 22) - 18;
         ctx.fillStyle = "#ffd447";
@@ -4088,7 +4527,21 @@
         return;
       }
 
-      if (id === "void_wraith" || id === "abyssal_stalker" || ai === "chaser") {
+      if (id === "seraph_lancer") {
+        const hover = 5 + Math.round(Math.sin(this.elapsed * 6 + e.x) * 2);
+        const flap = Math.round(Math.sin(this.elapsed * 9) * 3);
+        drawIsoBlock(ctx, p.x - 13, p.y - 10 - hover + flap, 9, 4, 12, "#ffffff", "#fde047", "#b45309", "#07090f");
+        drawIsoBlock(ctx, p.x + 13, p.y - 10 - hover + flap, 9, 4, 12, "#ffffff", "#fde047", "#b45309", "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - hover, 16, 8, 16, "#fef08a", cMain, cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 14 - hover, 2, 2);
+          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 14 - hover, 2, 2);
+        }
+        return;
+      }
+
+      if (id === "void_wraith" || id === "abyssal_stalker" || id === "volt_imp" || ai === "chaser") {
         const hover = 5 + Math.round(Math.sin(this.elapsed * 5 + e.x) * 2);
         ctx.fillStyle = cMain;
         ctx.fillRect(p.x - 7, p.y - hover - 2, 3, 5);
@@ -4097,7 +4550,7 @@
         drawIsoBlock(ctx, p.x, p.y - hover, 18, 9, 13, cMain, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 13 - hover, 13, 7, 8, cTrim, cMain, cDark, "#07090f");
         if (f.y > -0.45) {
-          ctx.fillStyle = id === "abyssal_stalker" ? "#f43f5e" : "#f0abfc";
+          ctx.fillStyle = id === "volt_imp" ? "#fde047" : id === "abyssal_stalker" ? "#f43f5e" : "#f0abfc";
           ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 18 - hover, 2, 2);
           ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 18 - hover, 2, 2);
         }
@@ -4106,7 +4559,7 @@
 
       if (ai === "bruiser") {
         const isSlag = id === "slag_brutes";
-        const isSentinel = id === "astral_sentinel" || id === "dread_knight";
+        const isSentinel = id === "astral_sentinel" || id === "dread_knight" || id === "radiant_warden";
 
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 9, p.y - 6 + Math.round(stride * 2), 5, 7);
@@ -4117,7 +4570,7 @@
         const swing = Math.round(stride * 3);
         if (isSentinel) {
           drawIsoBlock(ctx, p.x - 16, p.y - 8 - bob, 8, 5, 16, cTrim, cMain, "#0f172a", "#07090f");
-          ctx.fillStyle = id === "dread_knight" ? "#f43f5e" : "#e879f9";
+          ctx.fillStyle = id === "dread_knight" ? "#f43f5e" : id === "radiant_warden" ? "#fde047" : "#e879f9";
           ctx.fillRect(p.x + 14, p.y - 24 - bob + swing, 3, 18);
         } else {
           drawIsoBlock(ctx, p.x - 16, p.y - 6 - bob + swing, 10, 5, 10, cTrim, cMain, cDark, "#07090f");
@@ -4125,8 +4578,8 @@
         }
 
         drawIsoBlock(ctx, p.x, p.y - 22 - bob, 16, 8, 8, cTrim, cMain, cDark, "#07090f");
-        if (isSlag) {
-          ctx.fillStyle = "#475569";
+        if (isSlag || id === "thunder_colossus") {
+          ctx.fillStyle = id === "thunder_colossus" ? "#38bdf8" : "#475569";
           ctx.fillRect(p.x - 11, p.y - 29 - bob, 4, 7);
           ctx.fillRect(p.x + 7, p.y - 29 - bob, 4, 7);
         }
@@ -4268,6 +4721,49 @@
         return;
       }
 
+      if (id === "raijin_tempest") {
+        // Boss 7: Raijin — Thunder Drum Halo + Floating Storm Cloud + Dual Arc Pylons
+        const hover = 9 + Math.round(Math.sin(this.elapsed * 5) * 3);
+        const drumCenterY = p.y - hover - 28;
+        for (let k = 0; k < 6; k++) {
+          const a = this.elapsed * 2.5 + (k * Math.PI) / 3;
+          const dx = p.x + Math.round(Math.cos(a) * 28);
+          const dy = drumCenterY + Math.round(Math.sin(a) * 14);
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(dx - 4, dy - 4, 8, 8);
+          ctx.fillStyle = "#0c4a6e";
+          ctx.fillRect(dx - 2, dy - 2, 4, 4);
+        }
+        drawIsoBlock(ctx, p.x, p.y - hover, 38, 19, 26, "#38bdf8", cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - hover - 26, 22, 11, 12, "#fde047", "#0284c7", cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(p.x - 6 + eyeShiftX, p.y - hover - 32, 4, 3);
+          ctx.fillRect(p.x + 2 + eyeShiftX, p.y - hover - 32, 4, 3);
+        }
+        return;
+      }
+
+      if (id === "solarius_architect") {
+        // Boss 8: Solarius — Six-Winged Golden Sun-Seraph + Rotating Radiant Halo
+        const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
+        drawIsoGroundEllipse(ctx, p.x, p.y - hover - 30, 1.9, "rgba(253, 224, 71, 0.16)", "#fde047", 2.5);
+        const flap = Math.round(Math.sin(this.elapsed * 6) * 5);
+        for (let tier = 0; tier < 2; tier++) {
+          const wy = p.y - hover - 12 - tier * 12 + flap * (tier === 0 ? 1 : -1);
+          drawIsoBlock(ctx, p.x - 32 - tier * 6, wy, 18, 9, 16, "#ffffff", "#fde047", "#b45309", "#07090f");
+          drawIsoBlock(ctx, p.x + 32 + tier * 6, wy, 18, 9, 16, "#ffffff", "#fde047", "#b45309", "#07090f");
+        }
+        drawIsoBlock(ctx, p.x, p.y - hover, 40, 20, 30, "#fef08a", cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - hover - 30, 24, 12, 12, "#ffffff", "#f59e0b", cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - hover - 36, 14, 3);
+        }
+        return;
+      }
+
+      // Boss 4: Chronos Archon
       const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
       drawIsoGroundEllipse(ctx, p.x, p.y - hover - 22, 1.55, null, "#e879f9", 2);
       const wingFlap = Math.round(Math.sin(this.elapsed * 5) * 4);
@@ -4284,12 +4780,59 @@
 
     drawProjectile(ctx, pr, toS) {
       const p = toS(pr.x, pr.y, 0.45);
-      const rOuter = Math.max(3, Math.round(pr.radius * 14));
-      const rInner = Math.max(1, Math.round(pr.radius * 6));
-      ctx.fillStyle = pr.color;
-      ctx.fillRect(p.x - rOuter, p.y - rOuter, rOuter * 2, rOuter * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(p.x - rInner, p.y - rInner, rInner * 2, rInner * 2);
+      const style = pr.projStyle || "orb";
+      ctx.save();
+
+      if (style === "chakram") {
+        const spin = this.elapsed * 18;
+        ctx.strokeStyle = pr.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(p.x + Math.round(Math.cos(spin) * 7) - 1, p.y + Math.round(Math.sin(spin) * 7) - 1, 3, 3);
+      } else if (style === "crescent") {
+        // Sweeping golden solar crescent energy wave
+        const f = ISO.worldDirToScreen(pr.vx, pr.vy);
+        const sAng = Math.atan2(f.y, f.x);
+        ctx.strokeStyle = pr.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 12, sAng - 1.15, sAng + 1.15);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if (style === "bolt") {
+        // Crackling directed lightning bolt
+        const f = ISO.worldDirToScreen(pr.vx, pr.vy);
+        ctx.strokeStyle = pr.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(p.x - f.x * 9, p.y - f.y * 9);
+        ctx.lineTo(p.x + f.x * 9, p.y + f.y * 9);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else if (style === "star") {
+        // 4-point glowing cosmic star
+        ctx.fillStyle = pr.color;
+        ctx.fillRect(p.x - 6, p.y - 2, 12, 4);
+        ctx.fillRect(p.x - 2, p.y - 6, 4, 12);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      } else {
+        const rOuter = Math.max(3, Math.round(pr.radius * 14));
+        const rInner = Math.max(1, Math.round(pr.radius * 6));
+        ctx.fillStyle = pr.color;
+        ctx.fillRect(p.x - rOuter, p.y - rOuter, rOuter * 2, rOuter * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(p.x - rInner, p.y - rInner, rInner * 2, rInner * 2);
+      }
+
+      ctx.restore();
     }
 
     renderMinimap() {
@@ -4299,17 +4842,16 @@
       mctx.clearRect(0, 0, mw, mh);
 
       const sz = this.world.size;
-      const scale = Math.min((mw - 12) / sz, (mh - 12) / sz);
+      const scale = Math.min((mw - 10) / sz, (mh - 10) / sz);
       const ox = (mw - sz * scale) * 0.5;
       const oy = (mh - sz * scale) * 0.5;
 
-      // Render non-square room silhouette accurately (skipping -1 chasm tiles)
       for (let y = 0; y < sz; y++) {
         for (let x = 0; x < sz; x++) {
           const cell = this.world.grid[y][x];
           if (cell === -1) continue;
           mctx.fillStyle = cell === 0 ? "#243554" : cell === 2 ? "#64748b" : "#111829";
-          mctx.fillRect(ox + x * scale, oy + y * scale, scale - 0.5, scale - 0.5);
+          mctx.fillRect(ox + x * scale, oy + y * scale, scale - 0.3, scale - 0.3);
         }
       }
 
@@ -4317,35 +4859,37 @@
         mctx.fillStyle = "#38bdf8";
         mctx.fillRect(ox + v.x * scale - 2, oy + v.y * scale - 2, 4, 4);
       }
-
       for (const b of this.world.braziers || []) {
         mctx.fillStyle = "#f97316";
         mctx.fillRect(ox + b.x * scale - 2, oy + b.y * scale - 2, 4, 4);
       }
-
+      for (const c of this.world.conduits || []) {
+        mctx.fillStyle = "#38bdf8";
+        mctx.fillRect(ox + c.x * scale - 2, oy + c.y * scale - 2, 4, 4);
+      }
+      for (const uw of this.world.umbralWards || []) {
+        mctx.fillStyle = "#e879f9";
+        mctx.fillRect(ox + uw.x * scale - 2, oy + uw.y * scale - 2, 4, 4);
+      }
       for (const orb of this.world.lightOrbs || []) {
         mctx.fillStyle = "#fde047";
         mctx.fillRect(ox + orb.x * scale - 2, oy + orb.y * scale - 2, 4, 4);
       }
-
       for (const u of this.world.urns || []) {
         mctx.fillStyle = u.kind === "heal" ? "#4ade80" : "#d97706";
         mctx.fillRect(ox + u.x * scale - 1.5, oy + u.y * scale - 1.5, 3, 3);
       }
-
       for (const st of this.world.stations) {
         mctx.fillStyle = st.color;
         mctx.fillRect(ox + st.x * scale - 2.5, oy + st.y * scale - 2.5, 5, 5);
       }
-
       if (this.world.portal) {
         mctx.fillStyle = "#7dd3fc";
         mctx.fillRect(ox + this.world.portal.x * scale - 3, oy + this.world.portal.y * scale - 3, 6, 6);
       }
-
       for (const e of this.world.enemies) {
         mctx.fillStyle = e.isBoss ? "#f59e0b" : e.isElite ? "#fde047" : "#ef4444";
-        const s = e.isBoss ? 6 : e.isElite ? 5 : 4;
+        const s = e.isBoss ? 5.5 : e.isElite ? 4.5 : 3.5;
         mctx.fillRect(ox + e.x * scale - s * 0.5, oy + e.y * scale - s * 0.5, s, s);
       }
 
@@ -4377,11 +4921,7 @@
     }
 
     hasGuildAction() {
-      for (const m of DATA.MERCENARIES) {
-        if (this.isDungeonCleared(m.dungeonId) && !(this.save.mercenaries[m.id] > 0) && this.save.renown >= m.hireCostRenown) {
-          return true;
-        }
-      }
+      if (this.hasClaimableBounty()) return true;
       for (const b of DATA.BLESSINGS) {
         const rank = this.save.blessings[b.id] || 0;
         if (rank < b.maxRank && this.save.renown >= b.baseCost + rank * b.costStep) {
@@ -4416,11 +4956,12 @@
         document.getElementById("badge-guild")?.classList.toggle("hidden", !guildAct);
         document.getElementById("badge-forge")?.classList.toggle("hidden", !forgeAct);
 
-        if (upgGear) objEl.textContent = "Stronger gear found! Open Armory [2] and click Equip Best.";
+        if (this.hasClaimableBounty()) objEl.textContent = "Bounty ready! Claim rewards in Guild Hall [4].";
+        else if (upgGear) objEl.textContent = "Stronger gear found! Open Armory [2] and click Equip Best.";
         else if (canEvo) objEl.textContent = "Class Ascension ready! Open Class Shrine [5] to evolve.";
-        else if (guildAct) objEl.textContent = "Spend Renown at the Mercenary Guild [4] for passive income.";
-        else if (forgeAct) objEl.textContent = "Upgrade your equipped gear at the Blacksmith [3] or enter Rift Gate [1].";
-        else objEl.textContent = "Enter the Rift Gate [1] to challenge a dungeon!";
+        else if (guildAct) objEl.textContent = "Spend Renown on permanent blessings in Guild Hall [4].";
+        else if (forgeAct) objEl.textContent = "Temper gear at Blacksmith [3] or enter Rift Gate [1].";
+        else objEl.textContent = "Enter the Rift Gate [1] to challenge 8 dungeon realms!";
       } else if (this.mode === "dungeon" && this.run) {
         const left = this.world.enemies.length;
         if (left > 0) {
@@ -4469,22 +5010,6 @@
       document.getElementById("hud-shards").textContent = fmtNum(this.save.shards);
       document.getElementById("hud-renown").textContent = fmtNum(this.save.renown);
 
-      const rates = this.getPassiveRates();
-      const gRate = document.getElementById("hud-gold-rate");
-      const sRate = document.getElementById("hud-shards-rate");
-      if (rates.goldPerSec > 0) {
-        gRate.textContent = `+${rates.goldPerSec.toFixed(1)}/s`;
-        gRate.classList.remove("hidden");
-      } else {
-        gRate.classList.add("hidden");
-      }
-      if (rates.shardsPerSec > 0) {
-        sRate.textContent = `+${rates.shardsPerSec.toFixed(2)}/s`;
-        sRate.classList.remove("hidden");
-      } else {
-        sRate.classList.add("hidden");
-      }
-
       const xpNeed = this.getXpNeeded(this.save.level);
       document.getElementById("player-level").textContent = this.save.level;
       document.getElementById("player-power-score").textContent = `PWR ${fmtNum(this.getHeroPowerScore())}`;
@@ -4518,7 +5043,6 @@
       this.syncCooldownSlot("skill-e", this.player.eCd, eSk.cooldown * (1 - stats.cdr));
       this.syncCooldownSlot("skill-dash", this.player.dashCd, C.DASH_COOLDOWN * (1 - stats.cdr * 0.5));
 
-      // Combo Momentum Counter
       const comboHud = document.getElementById("combo-hud");
       if (this.mode === "dungeon" && this.player.combo >= 2) {
         comboHud.classList.remove("hidden");
@@ -4536,6 +5060,8 @@
         const statusEl = document.getElementById("hazard-status-text");
         if (hType === "gravity") {
           statusEl.textContent = `${hs.phase === "low" ? "LOW-G" : "HEAVY-G"} ${Math.ceil(hs.phaseTimer)}s`;
+        } else if (hType === "solar") {
+          statusEl.textContent = `FLARE IN ${Math.ceil(hs.phaseTimer)}s`;
         } else {
           statusEl.textContent = `${Math.round(hs.value)}%`;
         }
@@ -4901,10 +5427,7 @@
       this.syncAllHUD();
       this.renderArmoryModal();
       this.saveGame(false);
-      this.toast(
-        `Equipped ${changedCount} upgrade${changedCount > 1 ? "s" : ""}! (+${fmtNum(delta)} PWR)`,
-        "success"
-      );
+      this.toast(`Equipped ${changedCount} upgrade${changedCount > 1 ? "s" : ""}! (+${fmtNum(delta)} PWR)`, "success");
     }
 
     sellInventoryItem(uidVal) {
@@ -5029,7 +5552,8 @@
         row.querySelector("button").onclick = () => {
           if (this.save.shards < tplDef.craftCost || this.save.inventory.length >= C.INVENTORY_CAPACITY) return;
           this.save.shards -= tplDef.craftCost;
-          const rar = GearSystem.rollRarity(0.35, "common");
+          const luck = 0.35 + this.getBlessingBonus("rarityLuck");
+          const rar = GearSystem.rollRarity(luck, "common");
           const crafted = GearSystem.createItem(tplDef.id, rar, 0);
           this.save.inventory.push(crafted);
           this.sfx.loot(rar);
@@ -5042,75 +5566,60 @@
       }
     }
 
-    /* --- 4. MERCENARY GUILD MODAL --- */
+    /* --- 4. GUILD HALL MODAL (ACTIVE BOUNTIES & PERMANENT BLESSINGS) --- */
     renderGuildModal() {
-      const rates = this.getPassiveRates();
-      document.getElementById("guild-passive-gold").textContent = `${rates.goldPerSec.toFixed(1)} / sec`;
-      document.getElementById("guild-passive-shards").textContent = `${rates.shardsPerSec.toFixed(2)} / sec`;
+      document.getElementById("guild-bosses-cleared").textContent = `${this.getTotalClearsCount()} / ${DATA.DUNGEONS.length * 3}`;
+      document.getElementById("guild-bounties-done").textContent = fmtNum(this.save.bountiesClaimed || 0);
       document.getElementById("guild-renown-val").textContent = fmtNum(this.save.renown);
 
-      const mList = document.getElementById("mercenary-list");
-      mList.innerHTML = "";
-      const currencyMult = 1 + this.getBlessingBonus("currencyPct");
+      const btyList = document.getElementById("bounty-list");
+      btyList.innerHTML = "";
 
-      for (const m of DATA.MERCENARIES) {
-        const unlocked = this.isDungeonCleared(m.dungeonId);
-        const lvl = this.save.mercenaries[m.id] || 0;
-        const dung = DATA.DUNGEONS.find((d) => d.id === m.dungeonId);
+      for (const tpl of DATA.BOUNTY_TEMPLATES) {
+        const st = this.save.bounties[tpl.id] || { progress: 0, tier: 1 };
+        const target = this.getBountyTarget(tpl, st.tier);
+        const rew = this.getBountyRewards(tpl, st.tier);
+        const ready = st.progress >= target;
+        const pct = clamp((st.progress / target) * 100, 0, 100);
+
         const card = document.createElement("div");
-        card.className = "merc-card" + (!unlocked ? " locked" : lvl > 0 ? " active-dispatch" : "");
+        card.className = "merc-card" + (ready ? " bounty-ready" : "");
+        card.innerHTML = `
+          <div class="merc-info" style="flex:1">
+            <h4>${tpl.icon} ${tpl.name} <span class="gold-text">Tier ${st.tier}</span></h4>
+            <div class="merc-meta">${tpl.desc}</div>
+            <div class="bounty-progress-wrap">
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span class="muted-text">Progress</span>
+                <span style="font-weight:900;color:${ready ? "#ffd447" : "#e2e8f0"}">${st.progress} / ${target}</span>
+              </div>
+              <div class="bounty-progress-bar">
+                <div class="bounty-progress-fill" style="width:${pct}%;background:${ready ? "#ffd447" : "#38bdf8"}"></div>
+              </div>
+            </div>
+            <div class="merc-yield">Reward: +${fmtNum(rew.gold)}g &bull; +${fmtNum(rew.shards)} Shards &bull; +${rew.renown} Renown</div>
+          </div>
+          <button class="btn ${ready ? "btn-primary" : "btn-secondary"} btn-sm" ${ready ? "" : "disabled"}>
+            ${ready ? "Claim" : "In Progress"}
+          </button>
+        `;
 
-        if (!unlocked) {
-          card.innerHTML = `
-            <div class="merc-info">
-              <h4>${m.icon} ${m.name}</h4>
-              <div class="merc-meta">Defeat the boss of <strong>${dung.name}</strong> to unlock this squad.</div>
-            </div>
-            <button class="btn btn-secondary btn-sm" disabled>Locked</button>
-          `;
-        } else if (lvl === 0) {
-          const canHire = this.save.renown >= m.hireCostRenown;
-          card.innerHTML = `
-            <div class="merc-info">
-              <h4>${m.icon} ${m.name}</h4>
-              <div class="merc-meta">${m.role}</div>
-              <div class="merc-yield">Yields +${(m.goldPerSecBase * currencyMult).toFixed(1)} Gold/s &amp; +${(m.shardsPerSecBase * currencyMult).toFixed(2)} Shards/s</div>
-            </div>
-            <button class="btn btn-primary btn-sm" ${canHire ? "" : "disabled"}>Hire (${m.hireCostRenown} Renown)</button>
-          `;
-          card.querySelector("button").onclick = () => {
-            if (this.save.renown < m.hireCostRenown) return;
-            this.save.renown -= m.hireCostRenown;
-            this.save.mercenaries[m.id] = 1;
-            this.sfx.upgrade();
-            this.toast(`${m.name} dispatched to ${dung.name}!`, "success");
-            this.syncLiveHUD();
-            this.renderGuildModal();
-            this.saveGame(false);
-          };
-        } else {
-          const mult = Math.pow(1.28, lvl - 1) * lvl;
-          const upCost = Math.round(m.upgradeGoldBase * Math.pow(m.upgradeGoldGrowth, lvl - 1));
-          const canUp = this.save.gold >= upCost;
-          card.innerHTML = `
-            <div class="merc-info">
-              <h4>${m.icon} ${m.name} <span class="gold-text">Lv.${lvl}</span></h4>
-              <div class="merc-meta">${m.role} (Active)</div>
-              <div class="merc-yield">+${(m.goldPerSecBase * mult * currencyMult).toFixed(1)} Gold/s &bull; +${(m.shardsPerSecBase * mult * currencyMult).toFixed(2)} Shards/s</div>
-            </div>
-            <button class="btn btn-secondary btn-sm" ${canUp ? "" : "disabled"}>Train (${fmtNum(upCost)}g)</button>
-          `;
-          card.querySelector("button").onclick = () => {
-            if (this.save.gold < upCost) return;
-            this.save.gold -= upCost;
-            this.save.mercenaries[m.id] = lvl + 1;
-            this.sfx.upgrade();
-            this.syncLiveHUD();
-            this.renderGuildModal();
-            this.saveGame(false);
-          };
-        }
-        mList.appendChild(card);
+        card.querySelector("button").onclick = () => {
+          if (!ready) return;
+          this.save.gold += rew.gold;
+          this.save.shards += rew.shards;
+          this.save.renown += rew.renown;
+          this.save.bountiesClaimed = (this.save.bountiesClaimed || 0) + 1;
+          st.progress = 0;
+          st.tier += 1;
+          this.sfx.upgrade();
+          this.toast(`Bounty Claimed! +${fmtNum(rew.gold)}g, +${fmtNum(rew.shards)} Shards, +${rew.renown} Renown`, "success");
+          this.syncLiveHUD();
+          this.renderGuildModal();
+          this.saveGame(false);
+        };
+
+        btyList.appendChild(card);
       }
 
       const bList = document.getElementById("blessing-list");
@@ -5567,7 +6076,7 @@
       });
 
       document.getElementById("btn-reset-save")?.addEventListener("click", () => {
-        if (!window.confirm("Erase all Riftfall progress, gear, classes, and mercenaries?")) return;
+        if (!window.confirm("Erase all Riftfall progress, gear, classes, and bounties?")) return;
         localStorage.removeItem(DATA.SAVE_KEY);
         this.save = this.createDefaultSave();
         this.closeAllModals();

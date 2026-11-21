@@ -972,3 +972,41 @@ kbd {
   .skill-slot { width: 62px; height: 62px; }
   .dungeon-grid { grid-template-columns: 1fr; }
 }
+/* ==========================================================================
+   STORM & SOLAR HAZARD THEMES + ACTIVE BOUNTY PROGRESS BARS
+   ========================================================================== */
+.hazard-overlay.hazard-storm {
+  opacity: 1;
+  box-shadow: inset 0 0 0 6px rgba(56, 189, 248, 0.6), inset 0 0 110px rgba(37, 99, 235, 0.55);
+}
+.hazard-overlay.hazard-solar {
+  opacity: 1;
+  box-shadow: inset 0 0 0 8px rgba(253, 224, 71, 0.72), inset 0 0 120px rgba(245, 158, 11, 0.58);
+}
+
+.hazard-fill.theme-storm { background: linear-gradient(90deg, #0284c7, #38bdf8, #e0f2fe); }
+.hazard-fill.theme-solar { background: linear-gradient(90deg, #f59e0b, #fde047, #ffffff); }
+
+.bounty-progress-wrap {
+  margin-top: 6px;
+  width: 100%;
+  max-width: 240px;
+}
+
+.bounty-progress-bar {
+  height: 8px;
+  background: #06080f;
+  border: 1px solid #475569;
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.bounty-progress-fill {
+  height: 100%;
+  background: #38bdf8;
+}
+
+.merc-card.bounty-ready {
+  border-color: var(--gold);
+  background: #272112;
+}
