@@ -50,7 +50,7 @@
           <div class="xp-wrap">
             <div class="xp-header">
               <span id="player-class-badge" class="class-hud-tag">Vanguard</span>
-              <span id="player-power-score" class="power-score">PWR 100</span>
+              <span id="player-power-score" class="power-score">PWR 300</span>
             </div>
             <div class="bar-track bar-xp">
               <div id="xp-bar-fill" class="bar-fill xp-fill" style="width: 0%"></div>
@@ -73,21 +73,25 @@
           <span class="tab-icon">&#128737;</span>
           <span class="tab-label">Armory</span>
           <kbd>2</kbd>
+          <span id="badge-armory" class="tab-badge hidden">!</span>
         </button>
         <button id="btn-tab-forge" class="hud-tab" data-tab="forge" title="Blacksmith Forge [3]">
           <span class="tab-icon">&#9874;</span>
           <span class="tab-label">Blacksmith</span>
           <kbd>3</kbd>
+          <span id="badge-forge" class="tab-badge hidden">!</span>
         </button>
         <button id="btn-tab-guild" class="hud-tab" data-tab="guild" title="Mercenary Guild [4]">
           <span class="tab-icon">&#9813;</span>
           <span class="tab-label">Mercenaries</span>
           <kbd>4</kbd>
+          <span id="badge-guild" class="tab-badge hidden">!</span>
         </button>
         <button id="btn-tab-class" class="hud-tab" data-tab="class" title="Class & Advanced Evolution [5]">
           <span class="tab-icon">&#10022;</span>
           <span class="tab-label">Class</span>
           <kbd>5</kbd>
+          <span id="badge-class" class="tab-badge hidden">!</span>
         </button>
       </nav>
 
@@ -100,21 +104,21 @@
       <!-- Right: Currencies & Audio/Settings -->
       <div class="hud-group hud-right">
         <div class="currency-strip">
-          <div class="currency-pill currency-gold" title="Gold Coins">
+          <div class="currency-pill currency-gold" title="Gold Coins (Used at Blacksmith & Guild)">
             <span class="currency-dot gold-dot"></span>
             <div class="currency-vals">
               <span id="hud-gold" class="currency-amount">0</span>
               <span id="hud-gold-rate" class="currency-rate hidden">+0/s</span>
             </div>
           </div>
-          <div class="currency-pill currency-shards" title="Rift Shards">
+          <div class="currency-pill currency-shards" title="Rift Shards (Used to Reroll & Craft Gear)">
             <span class="currency-dot shard-dot"></span>
             <div class="currency-vals">
               <span id="hud-shards" class="currency-amount">0</span>
               <span id="hud-shards-rate" class="currency-rate hidden">+0/s</span>
             </div>
           </div>
-          <div class="currency-pill currency-renown" title="Guild Renown">
+          <div class="currency-pill currency-renown" title="Guild Renown (Earned from first-time Boss clears)">
             <span class="currency-dot renown-dot"></span>
             <div class="currency-vals">
               <span id="hud-renown" class="currency-amount">0</span>
@@ -134,6 +138,41 @@
     </header>
 
     <!-- =========================================================
+         LIVE OBJECTIVE TRACKER & ACTIVE RUN BOONS
+         ========================================================= -->
+    <div id="left-stack" class="left-hud-stack">
+      <div id="objective-pill" class="objective-pill">
+        <span class="objective-dot"></span>
+        <span id="objective-text">Enter the Rift Gate [1] to begin your expedition.</span>
+      </div>
+
+      <!-- Survival Hazard Meter (Active inside Dungeons) -->
+      <aside id="survival-hud" class="survival-hud hidden" aria-label="Environmental Hazard">
+        <div class="survival-header">
+          <span id="hazard-icon" class="hazard-icon">&#10022;</span>
+          <span id="hazard-name" class="hazard-name">Oxygen Level</span>
+          <span id="hazard-status-text" class="hazard-status">100%</span>
+        </div>
+        <div class="bar-track bar-hazard">
+          <div id="hazard-bar-fill" class="bar-fill hazard-fill" style="width: 100%"></div>
+        </div>
+        <div id="hazard-tip" class="hazard-tip">Stand near glowing crystal vents to restore oxygen.</div>
+      </aside>
+
+      <!-- Active Run Boons Strip -->
+      <div id="boons-hud" class="boons-hud hidden" aria-label="Active Run Boons"></div>
+    </div>
+
+    <!-- =========================================================
+         COMBO MOMENTUM COUNTER (Right Side during Combat)
+         ========================================================= -->
+    <div id="combo-hud" class="combo-hud hidden" aria-live="off">
+      <div class="combo-num"><span id="combo-count">0</span>x</div>
+      <div class="combo-label">COMBO</div>
+      <div id="combo-bonus" class="combo-bonus">+0% CRIT DMG</div>
+    </div>
+
+    <!-- =========================================================
          BOSS HEALTH BAR
          ========================================================= -->
     <section id="boss-hud" class="boss-hud hidden" aria-label="Boss Status">
@@ -149,21 +188,6 @@
         <span id="boss-hp-text" class="bar-text">10,000 / 10,000</span>
       </div>
     </section>
-
-    <!-- =========================================================
-         SURVIVAL HAZARD METER
-         ========================================================= -->
-    <aside id="survival-hud" class="survival-hud hidden" aria-label="Environmental Hazard">
-      <div class="survival-header">
-        <span id="hazard-icon" class="hazard-icon">&#10022;</span>
-        <span id="hazard-name" class="hazard-name">Oxygen Level</span>
-        <span id="hazard-status-text" class="hazard-status">100%</span>
-      </div>
-      <div class="bar-track bar-hazard">
-        <div id="hazard-bar-fill" class="bar-fill hazard-fill" style="width: 100%"></div>
-      </div>
-      <div id="hazard-tip" class="hazard-tip">Stand near glowing crystal vents to restore oxygen.</div>
-    </aside>
 
     <!-- =========================================================
          INTERACTIVE WORLD PROMPT
@@ -188,7 +212,7 @@
           </div>
         </div>
 
-        <button id="btn-flask" class="flask-btn" title="Drink Survival Flask [R] - Restores 45% HP and stabilizes hazard">
+        <button id="btn-flask" class="flask-btn" title="Drink Survival Flask [R] — Restores 45% HP and purges active dungeon hazard">
           <span class="flask-icon">&#9879;</span>
           <div class="flask-info">
             <span class="flask-label">Survival Flask</span>
@@ -222,7 +246,7 @@
           <span id="skill-e-cd-text" class="cooldown-text hidden"></span>
         </button>
 
-        <button id="skill-dash" class="skill-slot skill-dash" title="Dash / Dodge Roll [Spacebar] - Grants brief invulnerability">
+        <button id="skill-dash" class="skill-slot skill-dash" title="Dash / Dodge Roll [Spacebar] — Brief invulnerability + speed burst">
           <span class="skill-key">SPACE</span>
           <span class="skill-icon">&#10148;</span>
           <span class="skill-name">Dash</span>
@@ -232,7 +256,7 @@
       </div>
 
       <div class="minimap-panel">
-        <canvas id="minimap-canvas" width="150" height="96"></canvas>
+        <canvas id="minimap-canvas" width="154" height="98"></canvas>
         <div class="controls-hint">
           <span><kbd>WASD</kbd> Move</span>
           <span><kbd>SPACE</kbd> Dash</span>
@@ -251,7 +275,7 @@
         <header class="modal-header">
           <div>
             <h2 id="dungeon-modal-title">&#9876; The Rift Gate — Expedition Selector</h2>
-            <p class="modal-subtitle">Choose a realm, set difficulty, and activate Rift Mutators for amplified loot.</p>
+            <p class="modal-subtitle">Select a dungeon realm, check your readiness rating, and add Rift Key Mutators for bigger rewards.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -261,7 +285,10 @@
 
           <aside class="expedition-config">
             <div id="selected-dungeon-header" class="selected-dungeon-header">
-              <h3 id="cfg-dungeon-name">Sunken Quarry</h3>
+              <div class="cfg-title-row">
+                <h3 id="cfg-dungeon-name">Sunken Quarry</h3>
+                <span id="cfg-readiness-badge" class="readiness-pill ready">READY</span>
+              </div>
               <p id="cfg-dungeon-desc" class="muted-text"></p>
               <div id="cfg-hazard-box" class="info-callout"></div>
               <div id="cfg-loot-preview" class="loot-preview-tags"></div>
@@ -283,13 +310,13 @@
                   <span class="diff-meta">4.5x Loot</span>
                 </button>
               </div>
-              <div id="cfg-rec-power" class="rec-power-note">Recommended Power: 100</div>
+              <div id="cfg-rec-power" class="rec-power-note">Recommended Power: 280</div>
             </div>
 
             <div class="config-block">
               <div class="config-label-row">
-                <h4 class="config-label">Rift Key Mutators</h4>
-                <span id="total-reward-mult" class="reward-mult-pill">Rewards: 1.0x</span>
+                <h4 class="config-label">Rift Key Mutators (Optional)</h4>
+                <span id="total-reward-mult" class="reward-mult-pill">Rewards: 1.00x</span>
               </div>
               <div id="mutator-list" class="mutator-list"></div>
             </div>
@@ -306,7 +333,7 @@
         <header class="modal-header">
           <div>
             <h2 id="armory-modal-title">&#128737; Sanctuary Armory &amp; Gear</h2>
-            <p class="modal-subtitle">Equip Weapons, Armor Sets, and Relics to alter your hero's visuals, stats, and active skills.</p>
+            <p class="modal-subtitle">Hover items to compare stats side-by-side. Double-click or hit Equip Best to gear up fast.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -353,8 +380,8 @@
               <div class="inv-meta-actions">
                 <span id="inv-count" class="inv-count">0 / 48</span>
                 <select id="inv-sort" class="rpg-select" aria-label="Sort inventory">
-                  <option value="rarity">Sort: Rarity</option>
                   <option value="power">Sort: Power</option>
+                  <option value="rarity">Sort: Rarity</option>
                   <option value="level">Sort: Upgrade Lv</option>
                 </select>
               </div>
@@ -387,7 +414,7 @@
         <header class="modal-header">
           <div>
             <h2 id="forge-modal-title">&#9874; Obsidian Blacksmith &amp; Artificer</h2>
-            <p class="modal-subtitle">Temper equipped gear up to +50 with Gold, reforge bonus sub-stats, or craft missing set pieces with Rift Shards.</p>
+            <p class="modal-subtitle">Upgrade equipped gear up to +50 with Gold, reforge sub-stats, or craft targeted set pieces with Shards.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -439,7 +466,7 @@
             <div class="craft-section">
               <div class="craft-header">
                 <h3 class="section-title">Rift-Forged Set Crafting</h3>
-                <span class="muted-text">Craft targeted dungeon set pieces with Shards</span>
+                <span class="muted-text">Craft specific dungeon set pieces</span>
               </div>
               <div id="craft-gear-list" class="craft-list"></div>
             </div>
@@ -452,7 +479,7 @@
         <header class="modal-header">
           <div>
             <h2 id="guild-modal-title">&#9813; Mercenary Guild &amp; Passive Dispatch</h2>
-            <p class="modal-subtitle">Clear dungeon bosses to unlock automated mercenary squads and permanent Renown blessings.</p>
+            <p class="modal-subtitle">Clear a dungeon's Boss once to hire automated mercenary squads and earn passive Gold &amp; Shards.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -492,33 +519,43 @@
         <header class="modal-header">
           <div>
             <h2 id="class-modal-title">&#10022; Astral Class Shrine &amp; Ascension</h2>
-            <p class="modal-subtitle">Choose your combat discipline and evolve into an Advanced Class at Hero Level 10.</p>
+            <p class="modal-subtitle">Choose your combat discipline and evolve into an Advanced Class at Hero Level 6.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
 
         <div class="modal-body class-layout">
-          <!-- Active Class Banner -->
           <div id="current-class-banner" class="current-class-banner"></div>
 
-          <!-- Step 1: Base Class Selection -->
           <div>
-            <h3 class="section-title">1. Base Discipline (Switch Anytime)</h3>
+            <h3 class="section-title">1. Base Discipline (Switch Free Anytime)</h3>
             <div id="base-class-grid" class="base-class-grid"></div>
           </div>
 
-          <!-- Step 2: Advanced Class Evolution -->
           <div id="evolution-section" class="evolution-section">
             <div class="evolution-header">
-              <h3 class="section-title">2. Advanced Class Evolution (Unlocks at Lv. 10)</h3>
-              <span id="evolution-req-badge" class="reward-mult-pill">Requires Hero Lv. 10</span>
+              <h3 class="section-title">2. Advanced Class Evolution (Unlocks at Lv. 6)</h3>
+              <span id="evolution-req-badge" class="reward-mult-pill">Requires Hero Lv. 6</span>
             </div>
             <div id="evolution-grid" class="evolution-grid"></div>
           </div>
         </div>
       </section>
 
-      <!-- 6. RUN SUMMARY MODAL -->
+      <!-- 6. BETWEEN-ROOM RIFT BOON PICKER MODAL -->
+      <section id="modal-boon" class="rpg-modal modal-medium hidden" role="dialog" aria-labelledby="boon-modal-title">
+        <header class="modal-header summary-header">
+          <div>
+            <h2 id="boon-modal-title">&#10022; RIFT BLESSING — CHOOSE YOUR BOON</h2>
+            <p id="boon-subtitle" class="modal-subtitle">Select 1 temporary blessing to empower the rest of this dungeon run.</p>
+          </div>
+        </header>
+        <div class="modal-body">
+          <div id="boon-cards" class="boon-grid"></div>
+        </div>
+      </section>
+
+      <!-- 7. RUN SUMMARY MODAL -->
       <section id="modal-run-summary" class="rpg-modal modal-medium hidden" role="dialog" aria-labelledby="summary-title">
         <header class="modal-header summary-header">
           <div>
@@ -542,7 +579,7 @@
         </div>
       </section>
 
-      <!-- 7. SETTINGS & SAVE DATA MODAL -->
+      <!-- 8. SETTINGS & SAVE DATA MODAL -->
       <section id="modal-settings" class="rpg-modal modal-medium hidden" role="dialog" aria-labelledby="settings-modal-title">
         <header class="modal-header">
           <div>
@@ -592,7 +629,7 @@
               <div><kbd>Q</kbd> Cast Weapon Skill</div>
               <div><kbd>E</kbd> Cast Relic Skill</div>
               <div><kbd>R</kbd> Drink Survival Flask</div>
-              <div><kbd>F</kbd> Interact with Camp Station / Portal</div>
+              <div><kbd>F</kbd> Interact with Camp Station</div>
               <div><kbd>1 - 5</kbd> Open Sanctuary Panels</div>
               <div><kbd>M</kbd> Mute Audio</div>
             </div>
