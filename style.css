@@ -1010,3 +1010,62 @@ kbd {
   border-color: var(--gold);
   background: #272112;
 }
+/* ==========================================================================
+   CLASS TAG PILLS, CLASS FILTER BARS & AFFINITY CALLOUTS
+   ========================================================================== */
+.class-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  background: rgba(7, 10, 18, 0.82);
+  line-height: 1.2;
+}
+
+.class-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.class-filter-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.class-filter-btn:hover {
+  border-color: #cbd5e1;
+}
+.class-filter-btn.active {
+  border-color: var(--gold);
+  background: #2b210e;
+  color: var(--gold);
+}
+
+.tooltip-class-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.craft-list {
+  max-height: 275px;
+}

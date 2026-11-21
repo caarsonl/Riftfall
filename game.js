@@ -342,17 +342,28 @@
       return rarities[rarities.length - 1];
     },
 
-    computeItemStats(item, levelOverride = null) {
+    getClassMeta(classReq) {
+      return DATA.CLASS_META[classReq] || DATA.CLASS_META.all;
+    },
+
+    isClassMatch(item, activeBaseClassId) {
+      if (!item || !activeBaseClassId) return false;
+      const tpl = this.getTemplate(item.templateId);
+      return tpl.classReq && tpl.classReq !== "all" && tpl.classReq === activeBaseClassId;
+    },
+
+    computeItemStats(item, levelOverride = null, activeBaseClassId = null) {
       if (!item) return {};
       const tpl = this.getTemplate(item.templateId);
       const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       const lvl = levelOverride !== null ? levelOverride : item.level || 0;
-      const mult = rar.statMult * (1 + lvl * 0.085);
+      const affinityMult = this.isClassMatch(item, activeBaseClassId) ? 1 + C.CLASS_AFFINITY_BONUS : 1.0;
+      const mult = rar.statMult * (1 + lvl * 0.085) * affinityMult;
       const out = {};
 
       for (const [k, baseVal] of Object.entries(tpl.baseStats)) {
         if (k === "crit" || k === "lifesteal" || k === "cdr" || k === "hazardResist" || k === "speed") {
-          out[k] = Number((baseVal * (1 + (rar.order - 1) * 0.2 + lvl * 0.014)).toFixed(4));
+          out[k] = Number((baseVal * (1 + (rar.order - 1) * 0.2 + lvl * 0.014) * affinityMult).toFixed(4));
         } else {
           out[k] = Math.round(baseVal * mult);
         }
@@ -363,9 +374,8 @@
       }
       return out;
     },
-
-    computeItemPower(item) {
-      const s = this.computeItemStats(item);
+    computeItemPower(item, activeBaseClassId = null) {
+      const s = this.computeItemStats(item, null, activeBaseClassId);
       let p = 0;
       p += (s.hp || 0) * 0.25;
       p += (s.atk || 0) * 2.2;
@@ -378,7 +388,6 @@
       p += (s.speed || 0) * 45;
       return Math.round(p);
     },
-
     getSellValue(item) {
       const rar = DATA.RARITIES[item.rarity] || DATA.RARITIES.common;
       const tpl = this.getTemplate(item.templateId);
@@ -577,6 +586,8 @@
       this.activeModal = null;
       this.selectedInvUid = null;
       this.invFilter = "all";
+      this.invClassFilter = "all";
+      this.craftClassFilter = "all";
       this.invSort = "power";
       this.forgeSlot = "weapon";
 
@@ -880,10 +891,11 @@
         chainLightning: bn.chainLightning
       };
 
+      const baseClassId = this.getBaseClassId();
       for (const slot of ["weapon", "armor", "relic"]) {
         const item = this.save.equipped[slot];
         if (!item) continue;
-        const gs = GearSystem.computeItemStats(item);
+        const gs = GearSystem.computeItemStats(item, null, baseClassId);
         for (const [k, v] of Object.entries(gs)) {
           if (s[k] !== undefined) s[k] += v;
         }
@@ -2571,14 +2583,16 @@
       const item = drop.item;
       const tpl = GearSystem.getTemplate(item.templateId);
       const rar = DATA.RARITIES[item.rarity];
+      const clsMeta = GearSystem.getClassMeta(tpl.classReq);
+      const clsPrefix = tpl.classReq !== "all" ? ` • ${clsMeta.short}` : "";
       this.sfx.loot(item.rarity);
 
       if (this.save.inventory.length < C.INVENTORY_CAPACITY) {
         this.save.inventory.push(item);
         this.run.lootCollected.push(item);
-        this.spawnFloatingText(this.player.x, this.player.y, 1.5, `[${rar.name}] ${tpl.name}`, rar.color, item.rarity === "mythic");
+        this.spawnFloatingText(this.player.x, this.player.y, 1.5, `[${rar.name}${clsPrefix}] ${tpl.name}`, rar.color, item.rarity === "mythic");
         if (item.rarity === "epic" || item.rarity === "mythic") {
-          this.toast(`Found ${rar.name} ${tpl.name}!`, item.rarity === "mythic" ? "mythic" : "loot");
+          this.toast(`Found ${rar.name} ${tpl.name} (${clsMeta.short})!`, item.rarity === "mythic" ? "mythic" : "loot");
         }
       } else {
         const shards = GearSystem.getSalvageValue(item);
@@ -4901,15 +4915,15 @@
        SMART HUD, OBJECTIVE TRACKER & NOTIFICATION BADGES
        ====================================================================== */
     hasGearUpgradeInBag() {
+      const myBaseClass = this.getBaseClassId();
       for (const item of this.save.inventory) {
         const cur = this.save.equipped[item.slot];
-        if (!cur || GearSystem.computeItemPower(item) > GearSystem.computeItemPower(cur)) {
+        if (!cur || GearSystem.computeItemPower(item, myBaseClass) > GearSystem.computeItemPower(cur, myBaseClass)) {
           return true;
         }
       }
       return false;
     }
-
     canAffordEvolution() {
       if (this.save.level < C.EVOLUTION_LEVEL_REQ) return false;
       const cls = this.getActiveClass();
@@ -5147,15 +5161,19 @@
       const list = document.getElementById("dungeon-list");
       list.innerHTML = "";
       const selId = this.save.selectedDungeonId;
+      const myBaseClass = this.getBaseClassId();
 
       for (const d of DATA.DUNGEONS) {
         const card = document.createElement("div");
         card.className = "dungeon-card" + (d.id === selId ? " selected" : "");
         const clr = this.save.cleared[d.id] || {};
+        const cMeta = GearSystem.getClassMeta(d.dropClass);
+        const isMyClass = d.dropClass === myBaseClass;
+
         card.innerHTML = `
           <div class="dungeon-card-top">
             <span class="dungeon-theme-pill" style="background:${d.themeColor}22;color:${d.themeColor};border:1px solid ${d.themeColor}66">${d.themeLabel}</span>
-            <span class="muted-text">${d.rooms} Rooms</span>
+            <span class="class-pill" style="color:${cMeta.color}">${cMeta.icon} ${cMeta.short} Gear${isMyClass ? " ★" : ""}</span>
           </div>
           <h3>${d.name}</h3>
           <div class="dungeon-hazard-tag">${d.hazard.icon} ${d.hazard.shortDesc}</div>
@@ -5175,13 +5193,14 @@
 
       const d = DATA.DUNGEONS.find((x) => x.id === selId) || DATA.DUNGEONS[0];
       const diff = DATA.DIFFICULTIES[this.save.selectedDiff] || DATA.DIFFICULTIES.normal;
+      const dClassMeta = GearSystem.getClassMeta(d.dropClass);
 
       document.getElementById("cfg-dungeon-name").textContent = d.name;
       document.getElementById("cfg-dungeon-desc").textContent = d.desc;
       document.getElementById("cfg-hazard-box").innerHTML = `<strong>${d.hazard.icon} Survival Mechanic:</strong> ${d.hazard.shortDesc}`;
-      document.getElementById("cfg-loot-preview").innerHTML = d.lootSummary
-        .map((l) => `<span class="loot-tag">${l}</span>`)
-        .join("");
+      document.getElementById("cfg-loot-preview").innerHTML =
+        `<span class="class-pill" style="color:${dClassMeta.color}">${dClassMeta.icon} ${dClassMeta.label} Set</span>` +
+        d.lootSummary.map((l) => `<span class="loot-tag">${l}</span>`).join("");
 
       document.querySelectorAll(".diff-btn").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.diff === diff.id);
@@ -5234,18 +5253,22 @@
       document.getElementById("total-reward-mult").textContent = `Rewards: ${totalMult.toFixed(2)}x`;
     }
 
-    /* --- 2. ARMORY & INVENTORY MODAL --- */
+    /* --- 2. ARMORY & INVENTORY MODAL (Class Badges + Class Filters + Smart Equip Best) --- */
     renderArmoryModal() {
+      const myBaseClass = this.getBaseClassId();
+
       for (const slot of ["weapon", "armor", "relic"]) {
         const item = this.save.equipped[slot];
         const container = document.getElementById("slot-" + slot);
         const tpl = GearSystem.getTemplate(item.templateId);
+        const cMeta = GearSystem.getClassMeta(tpl.classReq);
         container.className = `gear-card slot-card rarity-${item.rarity}`;
         container.innerHTML = `
           ${item.level > 0 ? `<span class="gear-level-badge">+${item.level}</span>` : ""}
           <span class="gear-icon">${tpl.icon}</span>
           <span class="gear-name text-${item.rarity}">${tpl.name}</span>
-          <span class="gear-power-pill">PWR ${GearSystem.computeItemPower(item)}</span>
+          <span class="class-pill" style="color:${cMeta.color}">${cMeta.icon} ${cMeta.short}</span>
+          <span class="gear-power-pill">PWR ${GearSystem.computeItemPower(item, myBaseClass)}</span>
         `;
         container.onmouseenter = (ev) => this.showTooltip(item, ev, false);
         container.onmousemove = (ev) => this.moveTooltip(ev);
@@ -5281,20 +5304,31 @@
         .join("");
 
       document.getElementById("inv-count").textContent = `${this.save.inventory.length} / ${C.INVENTORY_CAPACITY}`;
-      let items = this.save.inventory.filter((it) => this.invFilter === "all" || it.slot === this.invFilter);
+      let items = this.save.inventory.filter((it) => {
+        if (this.invFilter !== "all" && it.slot !== this.invFilter) return false;
+        const tpl = GearSystem.getTemplate(it.templateId);
+        if (this.invClassFilter === "mine") {
+          return tpl.classReq === "all" || tpl.classReq === myBaseClass;
+        }
+        if (this.invClassFilter !== "all") {
+          return tpl.classReq === this.invClassFilter;
+        }
+        return true;
+      });
+
       items.sort((a, b) => {
         if (this.invSort === "rarity") {
           const diff = (DATA.RARITIES[b.rarity]?.order || 1) - (DATA.RARITIES[a.rarity]?.order || 1);
-          return diff !== 0 ? diff : GearSystem.computeItemPower(b) - GearSystem.computeItemPower(a);
+          return diff !== 0 ? diff : GearSystem.computeItemPower(b, myBaseClass) - GearSystem.computeItemPower(a, myBaseClass);
         }
         if (this.invSort === "level") return b.level - a.level;
-        return GearSystem.computeItemPower(b) - GearSystem.computeItemPower(a);
+        return GearSystem.computeItemPower(b, myBaseClass) - GearSystem.computeItemPower(a, myBaseClass);
       });
 
       const grid = document.getElementById("inventory-grid");
       grid.innerHTML = "";
       if (items.length === 0) {
-        grid.innerHTML = `<div class="muted-text" style="grid-column:1/-1;padding:18px;text-align:center">No gear in this category. Clear Rift dungeons to collect loot!</div>`;
+        grid.innerHTML = `<div class="muted-text" style="grid-column:1/-1;padding:18px;text-align:center">No gear matches the current Slot / Class filter.</div>`;
       } else {
         for (const item of items) {
           const card = this.buildGearCardEl(item, true);
@@ -5312,15 +5346,17 @@
       const bar = document.getElementById("selected-item-bar");
       const sel = this.save.inventory.find((x) => x.uid === this.selectedInvUid);
       if (!sel) {
-        bar.innerHTML = `<span class="muted-text">Green ▲ marks upgrades. Double-click any item to quick-equip.</span>`;
+        const myMeta = GearSystem.getClassMeta(myBaseClass);
+        bar.innerHTML = `<span class="muted-text">Wearing <strong style="color:${myMeta.color}">${myMeta.icon} ${myMeta.short}</strong> gear grants <strong>+15% Class Affinity Stats</strong>.</span>`;
       } else {
         const tpl = GearSystem.getTemplate(sel.templateId);
+        const cMeta = GearSystem.getClassMeta(tpl.classReq);
         const sellVal = GearSystem.getSellValue(sel);
         const salvVal = GearSystem.getSalvageValue(sel);
         bar.innerHTML = `
           <div>
             <strong class="text-${sel.rarity}">${tpl.name} ${sel.level > 0 ? "+" + sel.level : ""}</strong>
-            <span class="muted-text">(${(DATA.RARITIES[sel.rarity] || DATA.RARITIES.common).name} ${sel.slot})</span>
+            <span class="class-pill" style="color:${cMeta.color}">${cMeta.icon} ${cMeta.short}</span>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button id="act-equip" class="btn btn-primary btn-sm">Equip</button>
@@ -5341,9 +5377,11 @@
 
     buildGearCardEl(item, compareEquipped) {
       const tpl = GearSystem.getTemplate(item.templateId);
-      const pwr = GearSystem.computeItemPower(item);
+      const myBaseClass = this.getBaseClassId();
+      const cMeta = GearSystem.getClassMeta(tpl.classReq);
+      const pwr = GearSystem.computeItemPower(item, myBaseClass);
       const eq = compareEquipped ? this.save.equipped[item.slot] : null;
-      const isUpgrade = compareEquipped && (!eq || pwr > GearSystem.computeItemPower(eq));
+      const isUpgrade = compareEquipped && (!eq || pwr > GearSystem.computeItemPower(eq, myBaseClass));
 
       const card = document.createElement("div");
       card.className = `gear-card rarity-${item.rarity}`;
@@ -5352,6 +5390,7 @@
         ${item.level > 0 ? `<span class="gear-level-badge">+${item.level}</span>` : ""}
         <span class="gear-icon">${tpl.icon}</span>
         <span class="gear-name text-${item.rarity}">${tpl.name}</span>
+        <span class="class-pill" style="color:${cMeta.color}">${cMeta.icon} ${cMeta.short}</span>
         <span class="gear-power-pill">PWR ${pwr}</span>
         ${isUpgrade ? `<span class="gear-upgrade-arrow" title="Higher Power than equipped">▲</span>` : ""}
       `;
@@ -5359,6 +5398,66 @@
       card.onmousemove = (ev) => this.moveTooltip(ev);
       card.onmouseleave = () => this.hideTooltip();
       return card;
+    }
+
+    equipBestGear() {
+      const myBaseClass = this.getBaseClassId();
+      const oldPower = this.getHeroPowerScore();
+      let changedCount = 0;
+
+      const scoreForHero = (it) => {
+        if (!it) return -1;
+        const tpl = GearSystem.getTemplate(it.templateId);
+        const basePwr = GearSystem.computeItemPower(it, myBaseClass);
+        // Strongly prefer items made for your active class (or All Classes) over off-class items
+        const offClass = tpl.classReq && tpl.classReq !== "all" && tpl.classReq !== myBaseClass;
+        return offClass ? basePwr * 0.78 : basePwr;
+      };
+
+      for (const slot of ["weapon", "armor", "relic"]) {
+        const current = this.save.equipped[slot];
+        let bestItem = current;
+        let bestScore = scoreForHero(current);
+
+        for (const candidate of this.save.inventory) {
+          if (candidate.slot !== slot) continue;
+          const sc = scoreForHero(candidate);
+          if (sc > bestScore) {
+            bestScore = sc;
+            bestItem = candidate;
+          }
+        }
+
+        if (bestItem && bestItem !== current) {
+          const invIdx = this.save.inventory.indexOf(bestItem);
+          if (invIdx >= 0) {
+            this.save.inventory.splice(invIdx, 1);
+            if (current) this.save.inventory.push(current);
+            this.save.equipped[slot] = bestItem;
+            changedCount++;
+          }
+        }
+      }
+
+      if (changedCount === 0) {
+        this.sfx.uiClick();
+        const myMeta = GearSystem.getClassMeta(myBaseClass);
+        this.toast(`Already wearing your best ${myMeta.short} gear!`, "info");
+        return;
+      }
+
+      const stats = this.getHeroStats();
+      this.player.maxHp = stats.hp;
+      if (this.mode === "hub") this.player.hp = stats.hp;
+
+      const newPower = this.getHeroPowerScore();
+      const delta = newPower - oldPower;
+      this.selectedInvUid = null;
+      this.sfx.upgrade();
+      this.syncAllHUD();
+      this.renderArmoryModal();
+      this.saveGame(false);
+      this.toast(`Equipped ${changedCount} upgrade${changedCount > 1 ? "s" : ""}! (+${fmtNum(delta)} PWR)`, "success");
     }
 
     equipInventoryItem(uidVal) {
@@ -5379,55 +5478,6 @@
       this.syncAllHUD();
       this.renderArmoryModal();
       this.saveGame(false);
-    }
-
-    equipBestGear() {
-      const oldPower = this.getHeroPowerScore();
-      let changedCount = 0;
-
-      for (const slot of ["weapon", "armor", "relic"]) {
-        const current = this.save.equipped[slot];
-        let bestItem = current;
-        let bestPower = current ? GearSystem.computeItemPower(current) : -1;
-
-        for (const candidate of this.save.inventory) {
-          if (candidate.slot !== slot) continue;
-          const pwr = GearSystem.computeItemPower(candidate);
-          if (pwr > bestPower) {
-            bestPower = pwr;
-            bestItem = candidate;
-          }
-        }
-
-        if (bestItem && bestItem !== current) {
-          const invIdx = this.save.inventory.indexOf(bestItem);
-          if (invIdx >= 0) {
-            this.save.inventory.splice(invIdx, 1);
-            if (current) this.save.inventory.push(current);
-            this.save.equipped[slot] = bestItem;
-            changedCount++;
-          }
-        }
-      }
-
-      if (changedCount === 0) {
-        this.sfx.uiClick();
-        this.toast("Already wearing your highest-power gear!", "info");
-        return;
-      }
-
-      const stats = this.getHeroStats();
-      this.player.maxHp = stats.hp;
-      if (this.mode === "hub") this.player.hp = stats.hp;
-
-      const newPower = this.getHeroPowerScore();
-      const delta = newPower - oldPower;
-      this.selectedInvUid = null;
-      this.sfx.upgrade();
-      this.syncAllHUD();
-      this.renderArmoryModal();
-      this.saveGame(false);
-      this.toast(`Equipped ${changedCount} upgrade${changedCount > 1 ? "s" : ""}! (+${fmtNum(delta)} PWR)`, "success");
     }
 
     sellInventoryItem(uidVal) {
@@ -5487,14 +5537,17 @@
 
     /* --- 3. BLACKSMITH FORGE MODAL --- */
     renderForgeModal() {
+      const myBaseClass = this.getBaseClassId();
+
       document.querySelectorAll(".forge-slot-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.forgeSlot === this.forgeSlot);
       });
 
       const item = this.save.equipped[this.forgeSlot];
       const tpl = GearSystem.getTemplate(item.templateId);
-      const curStats = GearSystem.computeItemStats(item);
-      const nextStats = GearSystem.computeItemStats(item, Math.min(C.MAX_UPGRADE_LEVEL, item.level + 1));
+      const cMeta = GearSystem.getClassMeta(tpl.classReq);
+      const curStats = GearSystem.computeItemStats(item, null, myBaseClass);
+      const nextStats = GearSystem.computeItemStats(item, Math.min(C.MAX_UPGRADE_LEVEL, item.level + 1), myBaseClass);
 
       const card = document.getElementById("forge-selected-card");
       card.className = `forge-preview-card rarity-${item.rarity}`;
@@ -5502,9 +5555,12 @@
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div class="text-${item.rarity}" style="font-size:15px;font-weight:900">${tpl.icon} ${tpl.name} ${item.level > 0 ? "+" + item.level : ""}</div>
-            <div class="muted-text">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot}</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:6px">
+              <span class="class-pill" style="color:${cMeta.color}">${cMeta.icon} ${cMeta.short}</span>
+              <span class="muted-text">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot}</span>
+            </div>
           </div>
-          <div class="power-score">PWR ${GearSystem.computeItemPower(item)}</div>
+          <div class="power-score">PWR ${GearSystem.computeItemPower(item, myBaseClass)}</div>
         </div>
       `;
 
@@ -5539,12 +5595,19 @@
       craftList.innerHTML = "";
       for (const tplDef of Object.values(DATA.GEAR_TEMPLATES)) {
         if (!tplDef.craftCost) continue;
+        if (this.craftClassFilter === "mine" && tplDef.classReq !== myBaseClass) continue;
+        if (this.craftClassFilter !== "all" && this.craftClassFilter !== "mine" && tplDef.classReq !== this.craftClassFilter) continue;
+
+        const rowMeta = GearSystem.getClassMeta(tplDef.classReq);
         const row = document.createElement("div");
         row.className = "craft-row";
         const canAfford = this.save.shards >= tplDef.craftCost && this.save.inventory.length < C.INVENTORY_CAPACITY;
         row.innerHTML = `
           <div class="craft-row-info">
-            <h5>${tplDef.icon} ${tplDef.name} <span class="muted-text">(${tplDef.setTag})</span></h5>
+            <h5>
+              ${tplDef.icon} ${tplDef.name}
+              <span class="class-pill" style="color:${rowMeta.color}">${rowMeta.icon} ${rowMeta.short}</span>
+            </h5>
             <p>${tplDef.desc}</p>
           </div>
           <button class="btn btn-accent btn-sm" ${canAfford ? "" : "disabled"}>Craft (${tplDef.craftCost} Shards)</button>
@@ -5557,7 +5620,7 @@
           const crafted = GearSystem.createItem(tplDef.id, rar, 0);
           this.save.inventory.push(crafted);
           this.sfx.loot(rar);
-          this.toast(`Crafted ${DATA.RARITIES[rar].name} ${tplDef.name}!`, rar === "mythic" ? "mythic" : "loot");
+          this.toast(`Crafted ${DATA.RARITIES[rar].name} ${tplDef.name} (${rowMeta.short})!`, rar === "mythic" ? "mythic" : "loot");
           this.syncLiveHUD();
           this.renderForgeModal();
           this.saveGame(false);
@@ -5657,13 +5720,14 @@
       const activeCls = this.getActiveClass();
       const baseId = this.getBaseClassId();
       const baseCls = DATA.CLASSES[baseId];
+      const activeMeta = GearSystem.getClassMeta(baseId);
 
       const banner = document.getElementById("current-class-banner");
       banner.innerHTML = `
         <div>
           <div class="class-banner-title" style="color:${activeCls.color}">
             ${activeCls.icon} ${activeCls.name}
-            <span class="muted-text">(${activeCls.tier === "advanced" ? "Ascended Class" : "Base Discipline"})</span>
+            <span class="class-pill" style="color:${activeMeta.color};margin-left:6px">${activeMeta.icon} ${activeMeta.label} Gear (+15% Stats)</span>
           </div>
           <p class="muted-text" style="margin-top:3px">${activeCls.desc}</p>
         </div>
@@ -5678,6 +5742,7 @@
 
       for (const bc of baseList) {
         const isCurrentBase = bc.id === baseId;
+        const cMeta = GearSystem.getClassMeta(bc.id);
         const card = document.createElement("div");
         card.className = "class-card" + (isCurrentBase ? " active" : "");
 
@@ -5688,8 +5753,9 @@
         card.innerHTML = `
           <div class="class-card-head">
             <span class="class-card-name" style="color:${bc.color}">${bc.icon} ${bc.name}</span>
-            ${isCurrentBase ? `<span class="gold-text" style="font-size:10px;font-weight:900">ACTIVE</span>` : ""}
+            ${isCurrentBase ? `<span class="gold-text" style="font-size:10px;font-weight:900">ACTIVE</span>` : `<span class="muted-text">${bc.roleTitle}</span>`}
           </div>
+          <div class="class-pill" style="color:${cMeta.color};align-self:flex-start">${cMeta.icon} ${cMeta.short} Gear • ${bc.primaryStats}</div>
           <div class="muted-text">${bc.desc}</div>
           <div class="class-stat-tags">${bonusChips}</div>
           <div style="font-size:11px;color:#e0f2fe;margin-top:auto"><strong>${bc.passiveName}:</strong> ${bc.passiveDesc}</div>
@@ -5746,7 +5812,7 @@
           <div>
             <div class="class-card-head">
               <span class="class-card-name" style="color:${evo.color}">${evo.icon} ${evo.name}</span>
-              <span class="muted-text">${unlocked ? "Unlocked" : `Lv. ${C.EVOLUTION_LEVEL_REQ} Ascension`}</span>
+              <span class="muted-text">${evo.roleTitle}</span>
             </div>
             <p class="muted-text" style="margin:4px 0 8px">${evo.desc}</p>
             <div class="class-stat-tags" style="margin-bottom:8px">${bonusChips}</div>
@@ -5807,8 +5873,11 @@
 
     buildTooltipCardHTML(item, labelTag, compareAgainst) {
       const tpl = GearSystem.getTemplate(item.templateId);
-      const stats = GearSystem.computeItemStats(item);
-      const cmpStats = compareAgainst ? GearSystem.computeItemStats(compareAgainst) : null;
+      const myBaseClass = this.getBaseClassId();
+      const cMeta = GearSystem.getClassMeta(tpl.classReq);
+      const isMatch = GearSystem.isClassMatch(item, myBaseClass);
+      const stats = GearSystem.computeItemStats(item, null, myBaseClass);
+      const cmpStats = compareAgainst ? GearSystem.computeItemStats(compareAgainst, null, myBaseClass) : null;
       const allKeys = new Set([...Object.keys(stats), ...(cmpStats ? Object.keys(cmpStats) : [])]);
 
       let statsHTML = "";
@@ -5843,12 +5912,22 @@
         skillHTML = `<div class="tooltip-divider"></div><div class="tooltip-skill"><strong>${tpl.slot === "weapon" ? "[Q]" : "[E]"} ${sk.name}:</strong> ${sk.desc}</div>`;
       }
 
+      const affinityNote =
+        tpl.classReq === "all"
+          ? "Universal Gear"
+          : isMatch
+          ? "+15% Affinity Active"
+          : `+15% if ${cMeta.short}`;
+
       return `
         <div class="tooltip-card rarity-${item.rarity}">
           <div class="tooltip-tag">${labelTag}</div>
           <div class="tooltip-title text-${item.rarity}">${tpl.icon} ${tpl.name} ${item.level > 0 ? "+" + item.level : ""}</div>
-          <div class="tooltip-type">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot} &bull; PWR ${GearSystem.computeItemPower(item)}</div>
-          <div class="tooltip-divider"></div>
+          <div class="tooltip-type">${(DATA.RARITIES[item.rarity] || DATA.RARITIES.common).name} ${tpl.setTag} ${tpl.slot} &bull; PWR ${GearSystem.computeItemPower(item, myBaseClass)}</div>
+          <div class="tooltip-class-banner" style="color:${cMeta.color}">
+            <span>${cMeta.icon} ${cMeta.label}</span>
+            <span>${affinityNote}</span>
+          </div>
           ${statsHTML}
           ${subHTML ? `<div class="tooltip-divider"></div>${subHTML}` : ""}
           ${skillHTML}
@@ -5968,6 +6047,21 @@
           this.invFilter = btn.dataset.filter;
           document.querySelectorAll(".filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
           this.renderArmoryModal();
+        });
+      });
+      document.querySelectorAll("[data-class-filter]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this.invClassFilter = btn.dataset.classFilter;
+          document.querySelectorAll("[data-class-filter]").forEach((b) => b.classList.toggle("active", b === btn));
+          this.renderArmoryModal();
+        });
+      });
+
+      document.querySelectorAll("[data-craft-class]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this.craftClassFilter = btn.dataset.craftClass;
+          document.querySelectorAll("[data-craft-class]").forEach((b) => b.classList.toggle("active", b === btn));
+          this.renderForgeModal();
         });
       });
       document.getElementById("inv-sort")?.addEventListener("change", (e) => {
