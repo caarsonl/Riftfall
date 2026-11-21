@@ -1,7 +1,7 @@
 /* ==========================================================================
    RIFTFALL — CLASSIC RPG INTERFACE (style.css)
-   Smooth HiDPI typography, beveled dark-fantasy frames, clear visual cues,
-   notification badges, Rift Boon cards, and responsive layout.
+   14 Realm Hazard Themes, 5 Difficulty Tiers, Set Bonus UI, Class Filters,
+   Bounty Progress Bars, Beveled Dark-Fantasy Frames & Responsive Layout.
    ========================================================================== */
 
 :root {
@@ -106,7 +106,7 @@ kbd {
 }
 
 /* ==========================================================================
-   GAME VIEWPORT & HAZARD OVERLAY
+   GAME VIEWPORT & 14 HAZARD OVERLAYS
    ========================================================================== */
 #game-container {
   position: relative;
@@ -131,13 +131,21 @@ kbd {
   transition: opacity 0.2s ease;
   z-index: 4;
 }
-.hazard-overlay.hazard-oxygen { opacity: 1; box-shadow: inset 0 0 0 6px rgba(56, 189, 248, 0.45), inset 0 0 90px rgba(56, 189, 248, 0.45); }
-.hazard-overlay.hazard-heat { opacity: 1; box-shadow: inset 0 0 0 6px rgba(249, 115, 22, 0.55), inset 0 0 100px rgba(249, 115, 22, 0.55); }
-.hazard-overlay.hazard-poison { opacity: 1; box-shadow: inset 0 0 0 6px rgba(34, 197, 94, 0.48), inset 0 0 90px rgba(34, 197, 94, 0.48); }
-.hazard-overlay.hazard-gravity { opacity: 1; box-shadow: inset 0 0 0 6px rgba(192, 132, 252, 0.48), inset 0 0 90px rgba(192, 132, 252, 0.48); }
-.hazard-overlay.hazard-frost { opacity: 1; box-shadow: inset 0 0 0 6px rgba(125, 211, 252, 0.55), inset 0 0 105px rgba(56, 189, 248, 0.55); }
-.hazard-overlay.hazard-shadow { opacity: 1; box-shadow: inset 0 0 0 8px rgba(168, 85, 247, 0.58), inset 0 0 130px rgba(9, 5, 20, 0.85); }
-.hazard-overlay.hazard-damage { opacity: 1; box-shadow: inset 0 0 0 8px rgba(239, 68, 68, 0.78), inset 0 0 80px rgba(239, 68, 68, 0.65); }
+.hazard-overlay.hazard-oxygen   { opacity: 1; box-shadow: inset 0 0 0 6px rgba(56, 189, 248, 0.45), inset 0 0 90px rgba(56, 189, 248, 0.45); }
+.hazard-overlay.hazard-heat     { opacity: 1; box-shadow: inset 0 0 0 6px rgba(249, 115, 22, 0.55), inset 0 0 100px rgba(249, 115, 22, 0.55); }
+.hazard-overlay.hazard-poison   { opacity: 1; box-shadow: inset 0 0 0 6px rgba(34, 197, 94, 0.48), inset 0 0 90px rgba(34, 197, 94, 0.48); }
+.hazard-overlay.hazard-gravity  { opacity: 1; box-shadow: inset 0 0 0 6px rgba(192, 132, 252, 0.48), inset 0 0 90px rgba(192, 132, 252, 0.48); }
+.hazard-overlay.hazard-frost    { opacity: 1; box-shadow: inset 0 0 0 6px rgba(125, 211, 252, 0.55), inset 0 0 105px rgba(56, 189, 248, 0.55); }
+.hazard-overlay.hazard-shadow   { opacity: 1; box-shadow: inset 0 0 0 8px rgba(168, 85, 247, 0.58), inset 0 0 130px rgba(9, 5, 20, 0.85); }
+.hazard-overlay.hazard-storm    { opacity: 1; box-shadow: inset 0 0 0 6px rgba(56, 189, 248, 0.60), inset 0 0 110px rgba(37, 99, 235, 0.55); }
+.hazard-overlay.hazard-solar    { opacity: 1; box-shadow: inset 0 0 0 8px rgba(253, 224, 71, 0.72), inset 0 0 120px rgba(245, 158, 11, 0.58); }
+.hazard-overlay.hazard-blood    { opacity: 1; box-shadow: inset 0 0 0 7px rgba(220, 38, 38, 0.65), inset 0 0 115px rgba(127, 29, 29, 0.70); }
+.hazard-overlay.hazard-ash      { opacity: 1; box-shadow: inset 0 0 0 7px rgba(251, 146, 60, 0.55), inset 0 0 125px rgba(41, 37, 36, 0.82); }
+.hazard-overlay.hazard-pressure { opacity: 1; box-shadow: inset 0 0 0 8px rgba(14, 165, 233, 0.55), inset 0 0 135px rgba(8, 47, 73, 0.82); }
+.hazard-overlay.hazard-chrono   { opacity: 1; box-shadow: inset 0 0 0 7px rgba(250, 204, 21, 0.58), inset 0 0 115px rgba(14, 116, 144, 0.52); }
+.hazard-overlay.hazard-prism    { opacity: 1; box-shadow: inset 0 0 0 7px rgba(244, 114, 182, 0.60), inset 0 0 115px rgba(99, 102, 241, 0.55); }
+.hazard-overlay.hazard-voidcore { opacity: 1; box-shadow: inset 0 0 0 8px rgba(251, 113, 133, 0.68), inset 0 0 140px rgba(24, 8, 42, 0.88); }
+.hazard-overlay.hazard-damage   { opacity: 1; box-shadow: inset 0 0 0 8px rgba(239, 68, 68, 0.78), inset 0 0 80px rgba(239, 68, 68, 0.65); }
 
 /* ==========================================================================
    BOSS BANNER & TOASTS
@@ -228,7 +236,9 @@ kbd {
   color: #7dd3fc;
 }
 .difficulty-badge.diff-nightmare { border-color: #c084fc; background: #271342; color: #e9d5ff; }
-.difficulty-badge.diff-abyssal { border-color: #f43f5e; background: #3d0c19; color: #fda4af; }
+.difficulty-badge.diff-abyssal   { border-color: #f43f5e; background: #3d0c19; color: #fda4af; }
+.difficulty-badge.diff-torment   { border-color: #f97316; background: #3b1908; color: #fed7aa; }
+.difficulty-badge.diff-cataclysm { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: 0 0 6px rgba(244, 63, 94, 0.55); }
 
 .zone-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
 .mutator-badges { display: inline-flex; gap: 4px; }
@@ -494,12 +504,21 @@ kbd {
 .hp-fill { background: #dc2626; }
 .shield-fill { position: absolute; top: 0; left: 0; background: rgba(56, 189, 248, 0.8); border-right: 2px solid #e0f2fe; }
 .boss-fill { background: linear-gradient(90deg, #b91c1c, #ef4444, #f97316); }
+
 .hazard-fill { background: #0ea5e9; }
-.hazard-fill.theme-heat { background: #ea580c; }
-.hazard-fill.theme-poison { background: #16a34a; }
-.hazard-fill.theme-gravity { background: #9333ea; }
-.hazard-fill.theme-frost { background: #38bdf8; }
-.hazard-fill.theme-shadow { background: #7e22ce; }
+.hazard-fill.theme-heat     { background: #ea580c; }
+.hazard-fill.theme-poison   { background: #16a34a; }
+.hazard-fill.theme-gravity  { background: #9333ea; }
+.hazard-fill.theme-frost    { background: #38bdf8; }
+.hazard-fill.theme-shadow   { background: #7e22ce; }
+.hazard-fill.theme-storm    { background: linear-gradient(90deg, #0284c7, #38bdf8, #e0f2fe); }
+.hazard-fill.theme-solar    { background: linear-gradient(90deg, #f59e0b, #fde047, #ffffff); }
+.hazard-fill.theme-blood    { background: linear-gradient(90deg, #7f1d1d, #dc2626, #fb7185); }
+.hazard-fill.theme-ash      { background: linear-gradient(90deg, #57534e, #f97316, #fed7aa); }
+.hazard-fill.theme-pressure { background: linear-gradient(90deg, #0c4a6e, #0284c7, #67e8f9); }
+.hazard-fill.theme-chrono   { background: linear-gradient(90deg, #0e7490, #facc15, #fef9c3); }
+.hazard-fill.theme-prism    { background: linear-gradient(90deg, #6366f1, #ec4899, #fde047); }
+.hazard-fill.theme-voidcore { background: linear-gradient(90deg, #4c1d95, #f43f5e, #fef08a); }
 
 .bar-text {
   position: absolute;
@@ -700,7 +719,7 @@ kbd {
   max-height: 90vh;
   overflow: hidden;
 }
-.modal-wide { width: min(1090px, 95vw); }
+.modal-wide { width: min(1120px, 95vw); }
 .modal-medium { width: min(680px, 94vw); }
 
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 20px; border-bottom: 2px solid var(--border-subtle); background: #171e33; }
@@ -714,16 +733,16 @@ kbd {
 .section-title { font-family: var(--font-display); font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: #ffd447; text-shadow: 1px 1px 0 #000; margin-bottom: 10px; }
 
 /* ==========================================================================
-   1. DUNGEON GATE MODAL + READINESS PILLS
+   1. DUNGEON GATE MODAL (14 DUNGEONS & 5 DIFFICULTIES)
    ========================================================================== */
 .dungeon-layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
-.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; align-content: start; max-height: 65vh; overflow-y: auto; padding-right: 4px; }
+.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; max-height: 68vh; overflow-y: auto; padding-right: 6px; }
 
 .dungeon-card {
   background: var(--bg-surface);
   border: 2px solid var(--border-subtle);
   box-shadow: var(--pixel-frame);
-  padding: 12px;
+  padding: 11px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -731,15 +750,15 @@ kbd {
 }
 .dungeon-card:hover { border-color: #cbd5e1; background: var(--bg-surface-hover); }
 .dungeon-card.selected { border-color: var(--gold); background: #272216; box-shadow: inset 0 0 0 1px var(--gold), 4px 4px 0 #000; }
-.dungeon-card-top { display: flex; align-items: center; justify-content: space-between; }
+.dungeon-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .dungeon-theme-pill { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; }
-.dungeon-card h3 { font-family: var(--font-display); font-size: 15px; font-weight: 900; text-transform: uppercase; color: #fff; }
+.dungeon-card h3 { font-family: var(--font-display); font-size: 14px; font-weight: 900; text-transform: uppercase; color: #fff; }
 .dungeon-hazard-tag { font-size: 11px; color: #cbd5e1; background: #0b0e18; border: 1px solid #334155; padding: 5px 8px; }
-.dungeon-clear-badges { display: flex; gap: 5px; margin-top: auto; padding-top: 6px; }
-.clear-pip { font-size: 10px; text-transform: uppercase; padding: 2px 6px; background: #0b0f1a; color: var(--text-dim); border: 1px solid #334155; }
+.dungeon-clear-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 6px; }
+.clear-pip { font-size: 9px; text-transform: uppercase; padding: 2px 5px; background: #0b0f1a; color: var(--text-dim); border: 1px solid #334155; }
 .clear-pip.cleared { background: #0f2e1e; color: #4ade80; border-color: #22c55e; }
 
-.expedition-config { background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 14px; display: flex; flex-direction: column; gap: 13px; }
+.expedition-config { background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .cfg-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 .readiness-pill { font-size: 11px; font-weight: 900; padding: 2px 8px; border: 1px solid; text-transform: uppercase; }
 .readiness-pill.ready { background: #0d2b1d; border-color: #4ade80; color: #4ade80; }
@@ -755,16 +774,35 @@ kbd {
 .config-label-row .config-label { margin-bottom: 0; }
 .reward-mult-pill { font-size: 11px; font-weight: 900; padding: 2px 8px; background: #2e2009; color: var(--gold); border: 1px solid var(--gold); }
 
-.difficulty-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.diff-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; border: 2px solid var(--border-subtle); background: var(--bg-surface); box-shadow: 2px 2px 0 #000; cursor: pointer; }
-.diff-btn .diff-name { font-weight: 900; font-size: 12px; text-transform: uppercase; }
-.diff-btn .diff-meta { font-size: 10px; color: var(--text-muted); }
-.diff-btn.active[data-diff="normal"] { border-color: #38bdf8; background: #0e2942; }
-.diff-btn.active[data-diff="nightmare"] { border-color: #c084fc; background: #291545; }
-.diff-btn.active[data-diff="abyssal"] { border-color: #f43f5e; background: #3d0f1d; }
+/* 5-Tier Difficulty Selector Grid */
+.difficulty-selector {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.diff-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 4px;
+  border: 2px solid var(--border-subtle);
+  background: var(--bg-surface);
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+}
+.diff-btn:hover { border-color: #cbd5e1; }
+.diff-btn .diff-name { font-weight: 900; font-size: 10px; text-transform: uppercase; }
+.diff-btn .diff-meta { font-size: 9px; color: var(--text-muted); }
+.diff-btn.active[data-diff="normal"]    { border-color: #38bdf8; background: #0e2942; color: #e0f2fe; }
+.diff-btn.active[data-diff="nightmare"] { border-color: #c084fc; background: #291545; color: #f3e8ff; }
+.diff-btn.active[data-diff="abyssal"]   { border-color: #f43f5e; background: #3d0f1d; color: #ffe4e6; }
+.diff-btn.active[data-diff="torment"]   { border-color: #f97316; background: #3b1908; color: #ffedd5; }
+.diff-btn.active[data-diff="cataclysm"] { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: inset 0 0 0 1px #f43f5e, 2px 2px 0 #000; }
+
 .rec-power-note { margin-top: 7px; font-size: 12px; color: var(--text-muted); }
 
-.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 155px; overflow-y: auto; }
 .mutator-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px; border: 2px solid var(--border-subtle); background: var(--bg-surface); cursor: pointer; }
 .mutator-row.active { border-color: var(--gold); background: #2b210e; }
 .mutator-info { display: flex; flex-direction: column; }
@@ -773,10 +811,10 @@ kbd {
 .mutator-bonus { font-family: var(--font-mono); font-size: 11px; font-weight: 900; color: var(--gold); white-space: nowrap; }
 
 /* ==========================================================================
-   2. ARMORY & RARITY CARDS
+   2. ARMORY, SET BONUSES & RARITY CARDS
    ========================================================================== */
-.armory-layout { display: grid; grid-template-columns: 370px 1fr; gap: 16px; }
-.armory-character { display: flex; flex-direction: column; gap: 12px; }
+.armory-layout { display: grid; grid-template-columns: 375px 1fr; gap: 16px; }
+.armory-character { display: flex; flex-direction: column; gap: 11px; }
 .equipped-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .equip-slot-wrap { display: flex; flex-direction: column; gap: 4px; }
 .slot-caption { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); text-align: center; }
@@ -793,19 +831,19 @@ kbd {
   align-items: center;
   text-align: center;
   gap: 4px;
-  min-height: 96px;
+  min-height: 98px;
 }
 .gear-card:hover { filter: brightness(1.14); }
 .gear-card.selected-item { outline: 2px solid #ffffff; outline-offset: 1px; }
 
 .rarity-common { border-color: var(--rarity-common) !important; background: var(--rarity-common-bg); }
-.rarity-rare { border-color: var(--rarity-rare) !important; background: var(--rarity-rare-bg); }
-.rarity-epic { border-color: var(--rarity-epic) !important; background: var(--rarity-epic-bg); }
+.rarity-rare   { border-color: var(--rarity-rare) !important; background: var(--rarity-rare-bg); }
+.rarity-epic   { border-color: var(--rarity-epic) !important; background: var(--rarity-epic-bg); }
 .rarity-mythic { border-color: var(--rarity-mythic) !important; background: var(--rarity-mythic-bg); box-shadow: inset 0 0 0 1px #fde047, 3px 3px 0 #000; }
 
 .text-common { color: var(--rarity-common); text-shadow: 1px 1px 0 #000; }
-.text-rare { color: var(--rarity-rare); text-shadow: 1px 1px 0 #000; }
-.text-epic { color: var(--rarity-epic); text-shadow: 1px 1px 0 #000; }
+.text-rare   { color: var(--rarity-rare); text-shadow: 1px 1px 0 #000; }
+.text-epic   { color: var(--rarity-epic); text-shadow: 1px 1px 0 #000; }
 .text-mythic { color: #ffd447; text-shadow: 1px 1px 0 #78350f, 2px 2px 0 #000; }
 
 .gear-icon { font-size: 21px; line-height: 1.1; }
@@ -824,22 +862,42 @@ kbd {
 .gear-upgrade-arrow { position: absolute; bottom: 3px; right: 4px; font-size: 11px; font-weight: 900; color: #4ade80; text-shadow: 1px 1px 0 #000; }
 .gear-power-pill { font-family: var(--font-mono); font-size: 10px; color: #cbd5e1; margin-top: auto; }
 
-.skills-preview-box, .stats-sheet-box { background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 11px; }
-.skills-preview-list { display: flex; flex-direction: column; gap: 8px; }
+.skills-preview-box, .set-bonus-box, .stats-sheet-box {
+  background: #0c101d;
+  border: 2px solid var(--border-subtle);
+  box-shadow: var(--pixel-bevel);
+  padding: 10px 11px;
+}
+.skills-preview-list { display: flex; flex-direction: column; gap: 7px; }
 .skill-preview-item { display: flex; gap: 8px; font-size: 12px; line-height: 1.35; }
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+
+.active-sets-list { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+.set-bonus-entry {
+  padding: 6px 8px;
+  background: #12182b;
+  border: 1px solid #334155;
+}
+.set-bonus-entry-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; }
 .stat-row { display: flex; justify-content: space-between; font-size: 12px; padding-bottom: 4px; border-bottom: 1px dashed #334155; }
 .stat-row-label { color: var(--text-muted); }
 .stat-row-val { font-family: var(--font-mono); font-weight: 900; color: #f8fafc; }
 
-.armory-inventory { display: flex; flex-direction: column; background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 12px; min-height: 465px; }
-.inv-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.armory-inventory { display: flex; flex-direction: column; background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 12px; min-height: 495px; }
+.inv-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .filter-group { display: flex; gap: 4px; }
 .filter-btn { padding: 5px 9px; border: 2px solid var(--border-subtle); background: var(--bg-surface); font-size: 11px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
 .filter-btn.active { background: #102a45; border-color: var(--renown); color: #fff; }
 .inv-meta-actions { display: flex; align-items: center; gap: 8px; }
 .inv-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
-.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; flex: 1; align-content: start; overflow-y: auto; max-height: 330px; padding: 3px; }
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; flex: 1; align-content: start; overflow-y: auto; max-height: 350px; padding: 3px; }
 .inv-footer { margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px; }
 .selected-item-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 34px; }
 .bulk-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
@@ -863,12 +921,13 @@ kbd {
 
 .flask-shop-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; background: #0e261c; border: 2px solid #4ade80; box-shadow: 3px 3px 0 #000; }
 .owned-pill { display: inline-block; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; color: #86efac; }
-.craft-section { background: #0c101d; border: 2px solid var(--border-subtle); padding: 12px; flex: 1; }
-.craft-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.craft-list { display: flex; flex-direction: column; gap: 8px; max-height: 315px; overflow-y: auto; }
+.craft-section { background: #0c101d; border: 2px solid var(--border-subtle); padding: 12px; flex: 1; display: flex; flex-direction: column; }
+.craft-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.craft-header .section-title { margin-bottom: 0; }
+.craft-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
 .craft-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; background: var(--bg-surface); border: 2px solid var(--border-subtle); }
-.craft-row-info h5 { font-size: 12px; text-transform: uppercase; color: #f8fafc; }
-.craft-row-info p { font-size: 11px; color: var(--text-muted); }
+.craft-row-info h5 { font-size: 12px; text-transform: uppercase; color: #f8fafc; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.craft-row-info p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
 .guild-layout { display: flex; flex-direction: column; gap: 14px; }
 .guild-banner { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -879,10 +938,14 @@ kbd {
 .mercenary-list, .blessing-list { display: flex; flex-direction: column; gap: 9px; }
 .merc-card, .blessing-card { background: var(--bg-surface); border: 2px solid var(--border-subtle); box-shadow: 3px 3px 0 #000; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .merc-card.locked { opacity: 0.6; border-style: dashed; }
-.merc-card.active-dispatch { border-color: #4ade80; background: #10261d; }
+.merc-card.bounty-ready { border-color: var(--gold); background: #272112; }
 .merc-info h4, .blessing-info h4 { font-size: 13px; text-transform: uppercase; color: #f8fafc; }
 .merc-meta, .blessing-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .merc-yield { font-family: var(--font-mono); font-size: 11px; margin-top: 5px; color: #4ade80; }
+
+.bounty-progress-wrap { margin-top: 6px; width: 100%; max-width: 240px; }
+.bounty-progress-bar { height: 8px; background: #06080f; border: 1px solid #475569; overflow: hidden; margin-top: 3px; }
+.bounty-progress-fill { height: 100%; background: #38bdf8; }
 
 /* Class & Evolution Modal */
 .class-layout { display: flex; flex-direction: column; gap: 16px; }
@@ -904,12 +967,7 @@ kbd {
 .evo-card.evolved { border-color: #c084fc; background: #221538; }
 
 /* Between-Room Rift Boon Cards */
-.boon-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
+.boon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .boon-card {
   background: var(--bg-surface);
   border: 2px solid var(--border-cyan);
@@ -922,15 +980,12 @@ kbd {
   gap: 8px;
   cursor: pointer;
 }
-.boon-card:hover {
-  border-color: var(--gold);
-  background: #272216;
-  transform: translateY(-2px);
-}
+.boon-card:hover { border-color: var(--gold); background: #272216; transform: translateY(-2px); }
 .boon-card-icon { font-size: 28px; line-height: 1; }
 .boon-card-title { font-family: var(--font-display); font-size: 14px; font-weight: 900; color: #ffd447; text-transform: uppercase; }
 .boon-card-desc { font-size: 12px; color: #e2e8f0; line-height: 1.35; }
 
+/* Summary & Settings */
 .summary-header { justify-content: center; text-align: center; }
 .summary-body { display: flex; flex-direction: column; gap: 14px; }
 .summary-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -947,71 +1002,8 @@ kbd {
 .save-textarea { width: 100%; background: #06080f; border: 2px solid var(--border-subtle); padding: 8px; font-family: var(--font-mono); font-size: 11px; color: #cbd5e1; resize: vertical; }
 .controls-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: var(--text-muted); }
 
-/* Floating Tooltip */
-.item-tooltip { position: fixed; z-index: 100; pointer-events: none; display: flex; gap: 10px; max-width: 560px; }
-.tooltip-card { width: 268px; background: #0b0f1c; border: 3px solid var(--border-light); box-shadow: inset 0 0 0 1px #000, 6px 6px 0 #000; padding: 12px; }
-.tooltip-tag { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 3px; }
-.tooltip-title { font-family: var(--font-display); font-size: 14px; font-weight: 900; text-transform: uppercase; }
-.tooltip-type { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
-.tooltip-divider { height: 2px; background: #28334d; margin: 7px 0; }
-.tooltip-stat { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
-.tooltip-substat { font-size: 11px; color: #e9d5ff; margin-bottom: 2px; }
-.tooltip-skill { font-size: 11px; color: #fde68a; line-height: 1.35; }
-
-@media (max-width: 1024px) {
-  .dungeon-layout, .armory-layout, .forge-layout, .guild-columns { grid-template-columns: 1fr; }
-  .base-class-grid { grid-template-columns: 1fr 1fr; }
-  .evolution-grid, .boon-grid { grid-template-columns: 1fr; }
-  .tab-label, .camp-tabs kbd { display: none; }
-}
-
-@media (max-width: 768px) {
-  .hud-bar { flex-wrap: wrap; padding: 8px 10px; }
-  .player-badge, .minimap-panel { display: none; }
-  .vitals-panel { width: 210px; }
-  .skill-slot { width: 62px; height: 62px; }
-  .dungeon-grid { grid-template-columns: 1fr; }
-}
 /* ==========================================================================
-   STORM & SOLAR HAZARD THEMES + ACTIVE BOUNTY PROGRESS BARS
-   ========================================================================== */
-.hazard-overlay.hazard-storm {
-  opacity: 1;
-  box-shadow: inset 0 0 0 6px rgba(56, 189, 248, 0.6), inset 0 0 110px rgba(37, 99, 235, 0.55);
-}
-.hazard-overlay.hazard-solar {
-  opacity: 1;
-  box-shadow: inset 0 0 0 8px rgba(253, 224, 71, 0.72), inset 0 0 120px rgba(245, 158, 11, 0.58);
-}
-
-.hazard-fill.theme-storm { background: linear-gradient(90deg, #0284c7, #38bdf8, #e0f2fe); }
-.hazard-fill.theme-solar { background: linear-gradient(90deg, #f59e0b, #fde047, #ffffff); }
-
-.bounty-progress-wrap {
-  margin-top: 6px;
-  width: 100%;
-  max-width: 240px;
-}
-
-.bounty-progress-bar {
-  height: 8px;
-  background: #06080f;
-  border: 1px solid #475569;
-  overflow: hidden;
-  margin-top: 3px;
-}
-
-.bounty-progress-fill {
-  height: 100%;
-  background: #38bdf8;
-}
-
-.merc-card.bounty-ready {
-  border-color: var(--gold);
-  background: #272112;
-}
-/* ==========================================================================
-   CLASS TAG PILLS, CLASS FILTER BARS & AFFINITY CALLOUTS
+   CLASS TAG PILLS, FILTER BARS & FLOATING TOOLTIPS (WITH SET BONUSES)
    ========================================================================== */
 .class-pill {
   display: inline-flex;
@@ -1031,7 +1023,7 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 9px;
 }
 
 .class-filter-btn {
@@ -1043,15 +1035,14 @@ kbd {
   text-transform: uppercase;
   cursor: pointer;
 }
-.class-filter-btn:hover {
-  border-color: #cbd5e1;
-}
-.class-filter-btn.active {
-  border-color: var(--gold);
-  background: #2b210e;
-  color: var(--gold);
-}
+.class-filter-btn:hover { border-color: #cbd5e1; }
+.class-filter-btn.active { border-color: var(--gold); background: #2b210e; color: var(--gold); }
 
+.item-tooltip { position: fixed; z-index: 100; pointer-events: none; display: flex; gap: 10px; max-width: 560px; }
+.tooltip-card { width: 274px; background: #0b0f1c; border: 3px solid var(--border-light); box-shadow: inset 0 0 0 1px #000, 6px 6px 0 #000; padding: 12px; }
+.tooltip-tag { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 3px; }
+.tooltip-title { font-family: var(--font-display); font-size: 14px; font-weight: 900; text-transform: uppercase; }
+.tooltip-type { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
 .tooltip-class-banner {
   display: flex;
   align-items: center;
@@ -1065,7 +1056,29 @@ kbd {
   border: 1px solid currentColor;
   background: rgba(15, 23, 42, 0.9);
 }
+.tooltip-divider { height: 2px; background: #28334d; margin: 7px 0; }
+.tooltip-stat { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+.tooltip-substat { font-size: 11px; color: #e9d5ff; margin-bottom: 2px; }
+.tooltip-skill { font-size: 11px; color: #fde68a; line-height: 1.35; }
+.tooltip-set-title { font-size: 11px; font-weight: 900; text-transform: uppercase; margin-bottom: 3px; }
+.tooltip-set-line { font-size: 11px; color: var(--text-dim); line-height: 1.3; margin-bottom: 2px; }
+.tooltip-set-line.set-active { color: #4ade80; font-weight: 700; }
 
-.craft-list {
-  max-height: 275px;
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .dungeon-layout, .armory-layout, .forge-layout, .guild-columns { grid-template-columns: 1fr; }
+  .base-class-grid { grid-template-columns: 1fr 1fr; }
+  .evolution-grid, .boon-grid { grid-template-columns: 1fr; }
+  .tab-label, .camp-tabs kbd { display: none; }
+}
+
+@media (max-width: 768px) {
+  .hud-bar { flex-wrap: wrap; padding: 8px 10px; }
+  .player-badge, .minimap-panel { display: none; }
+  .vitals-panel { width: 210px; }
+  .skill-slot { width: 62px; height: 62px; }
+  .dungeon-grid { grid-template-columns: 1fr; }
+  .difficulty-selector { grid-template-columns: repeat(3, 1fr); }
 }

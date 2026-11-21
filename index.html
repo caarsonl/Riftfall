@@ -266,12 +266,12 @@
          ========================================================= -->
     <div id="modal-backdrop" class="modal-backdrop hidden">
 
-      <!-- 1. DUNGEON GATE MODAL -->
+      <!-- 1. DUNGEON GATE MODAL (14 REALMS & 5 DIFFICULTIES) -->
       <section id="modal-dungeon" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="dungeon-modal-title">
         <header class="modal-header">
           <div>
-            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — 8 Realm Expeditions</h2>
-            <p class="modal-subtitle">Explore massive multi-shape dungeon chambers, check your readiness rating, and toggle Rift Mutators.</p>
+            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — 14 Realm Expeditions</h2>
+            <p class="modal-subtitle">Conquer 14 themed dungeons across 5 difficulty tiers, collect 2pc/3pc Set Bonuses, and toggle Rift Mutators.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -305,6 +305,14 @@
                   <span class="diff-name">Abyssal</span>
                   <span class="diff-meta">4.5x Loot</span>
                 </button>
+                <button class="diff-btn" data-diff="torment">
+                  <span class="diff-name">Torment</span>
+                  <span class="diff-meta">7.0x Loot</span>
+                </button>
+                <button class="diff-btn" data-diff="cataclysm">
+                  <span class="diff-name">Cataclysm</span>
+                  <span class="diff-meta">10.5x Loot</span>
+                </button>
               </div>
               <div id="cfg-rec-power" class="rec-power-note">Recommended Power: 280</div>
             </div>
@@ -329,7 +337,7 @@
         <header class="modal-header">
           <div>
             <h2 id="armory-modal-title">&#128737; Sanctuary Armory &amp; Gear</h2>
-            <p class="modal-subtitle">Hover items to compare stats side-by-side. Double-click or hit Equip Best to gear up fast.</p>
+            <p class="modal-subtitle">Hover items to compare stats &amp; Set Bonuses side-by-side. Double-click or hit Equip Best to gear up fast.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -359,6 +367,13 @@
               <div id="equipped-skills-preview" class="skills-preview-list"></div>
             </div>
 
+            <div class="set-bonus-box">
+              <h3 class="section-title">Active Set Bonuses</h3>
+              <div id="active-sets-preview" class="active-sets-list">
+                <span class="muted-text">Equip 2 or 3 matching dungeon set pieces to unlock bonuses.</span>
+              </div>
+            </div>
+
             <div class="stats-sheet-box">
               <h3 class="section-title">Hero Attributes</h3>
               <div id="char-stats-grid" class="stats-grid"></div>
@@ -372,14 +387,6 @@
                 <button class="filter-btn" data-filter="weapon">Weapons</button>
                 <button class="filter-btn" data-filter="armor">Armor</button>
                 <button class="filter-btn" data-filter="relic">Relics</button>
-                <div class="class-filter-bar" id="inv-class-filters">
-                  <button class="class-filter-btn active" data-class-filter="all">All Classes</button>
-                  <button class="class-filter-btn" data-class-filter="mine">&#10022; My Class</button>
-                  <button class="class-filter-btn" data-class-filter="vanguard">&#9876; Warrior</button>
-                  <button class="class-filter-btn" data-class-filter="arcanist">&#10022; Mage</button>
-                  <button class="class-filter-btn" data-class-filter="shadowblade">&#128481; Rogue</button>
-                  <button class="class-filter-btn" data-class-filter="warden">&#127807; Mystic</button>
-                </div>
               </div>
               <div class="inv-meta-actions">
                 <span id="inv-count" class="inv-count">0 / 48</span>
@@ -389,6 +396,15 @@
                   <option value="level">Sort: Upgrade Lv</option>
                 </select>
               </div>
+            </div>
+
+            <div class="class-filter-bar" id="inv-class-filters">
+              <button class="class-filter-btn active" data-class-filter="all">All Classes</button>
+              <button class="class-filter-btn" data-class-filter="mine">&#10022; My Class</button>
+              <button class="class-filter-btn" data-class-filter="vanguard">&#9876; Warrior</button>
+              <button class="class-filter-btn" data-class-filter="arcanist">&#10022; Mage</button>
+              <button class="class-filter-btn" data-class-filter="shadowblade">&#128481; Rogue</button>
+              <button class="class-filter-btn" data-class-filter="warden">&#127807; Mystic</button>
             </div>
 
             <div id="inventory-grid" class="inventory-grid"></div>
@@ -471,14 +487,14 @@
               <div class="craft-header">
                 <h3 class="section-title">Rift-Forged Set Crafting</h3>
                 <span class="muted-text">Craft specific dungeon set pieces</span>
-                <div class="class-filter-bar" id="craft-class-filters">
-                  <button class="class-filter-btn active" data-craft-class="all">All</button>
-                  <button class="class-filter-btn" data-craft-class="mine">&#10022; My Class</button>
-                  <button class="class-filter-btn" data-craft-class="vanguard">&#9876; Warrior</button>
-                  <button class="class-filter-btn" data-craft-class="arcanist">&#10022; Mage</button>
-                  <button class="class-filter-btn" data-craft-class="shadowblade">&#128481; Rogue</button>
-                  <button class="class-filter-btn" data-craft-class="warden">&#127807; Mystic</button>
-                </div>
+              </div>
+              <div class="class-filter-bar" id="craft-class-filters">
+                <button class="class-filter-btn active" data-craft-class="all">All</button>
+                <button class="class-filter-btn" data-craft-class="mine">&#10022; My Class</button>
+                <button class="class-filter-btn" data-craft-class="vanguard">&#9876; Warrior</button>
+                <button class="class-filter-btn" data-craft-class="arcanist">&#10022; Mage</button>
+                <button class="class-filter-btn" data-craft-class="shadowblade">&#128481; Rogue</button>
+                <button class="class-filter-btn" data-craft-class="warden">&#127807; Mystic</button>
               </div>
               <div id="craft-gear-list" class="craft-list"></div>
             </div>
@@ -486,7 +502,7 @@
         </div>
       </section>
 
-      <!-- 4. GUILD HALL MODAL (ACTIVE BOUNTIES & PERMANENT BLESSINGS — ZERO PASSIVE INCOME) -->
+      <!-- 4. GUILD HALL MODAL (ACTIVE BOUNTIES & PERMANENT BLESSINGS) -->
       <section id="modal-guild" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="guild-modal-title">
         <header class="modal-header">
           <div>
@@ -500,7 +516,7 @@
           <div class="guild-banner">
             <div class="guild-metric">
               <span class="metric-label">Dungeon Clears</span>
-              <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 24</span>
+              <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 70</span>
             </div>
             <div class="guild-metric">
               <span class="metric-label">Bounties Claimed</span>
