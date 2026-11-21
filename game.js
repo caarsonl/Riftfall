@@ -1,8 +1,7 @@
 /* ==========================================================================
-   RIFTFALL — CORE ENGINE & RPG RUNTIME (game.js) — PART 1 OF 2
-   Pixel-Art 2.5D Isometric Engine, Distinct Enemy & Boss Sprites,
-   Directional Character Eyes, Survival Hazards, Loot Physics, Web Audio Synth,
-   Idle Mercenaries, Blacksmith Forging, and Crash-Proof Game Loop.
+   RIFTFALL — CORE ENGINE & RPG RUNTIME (game.js) — PART 1 OF 3
+   6 Dungeons, Base & Advanced Class Evolutions, Choreographed 2.5D Ability
+   Animations, Distinct Enemy/Boss Pixel Sprites, and Crash-Proof Loop.
    ========================================================================== */
 
 (() => {
@@ -32,7 +31,16 @@
   }
 
   function fmtStatVal(key, val) {
-    if (key === "crit" || key === "lifesteal" || key === "cdr" || key === "hazardResist") {
+    if (
+      key === "crit" ||
+      key === "lifesteal" ||
+      key === "cdr" ||
+      key === "hazardResist" ||
+      key === "hpPct" ||
+      key === "atkPct" ||
+      key === "spellPct" ||
+      key === "speedPct"
+    ) {
       return (val * 100).toFixed(1).replace(/\.0$/, "") + "%";
     }
     if (key === "speed") return val.toFixed(2);
@@ -48,7 +56,11 @@
     hazardResist: "Hazard Resist",
     lifesteal: "Lifesteal",
     cdr: "Cooldown Red.",
-    armor: "Armor"
+    armor: "Armor",
+    hpPct: "Max HP",
+    atkPct: "Attack Power",
+    spellPct: "Spell Power",
+    speedPct: "Move Speed"
   };
 
   /* ========================================================================
@@ -152,13 +164,18 @@
     }
 
     skillQ() {
-      this.tone(240, 620, 0.16, "sawtooth", 0.18);
+      this.tone(240, 620, 0.18, "sawtooth", 0.18);
       this.noise(0.18, 1200, 0.16, 0.03);
     }
 
     skillE() {
       this.tone(360, 740, 0.22, "sine", 0.18);
       this.tone(540, 960, 0.26, "triangle", 0.15, 0.06);
+    }
+
+    evolve() {
+      const chord = [440, 554, 659, 880, 1108];
+      chord.forEach((f, i) => this.tone(f, f * 1.03, 0.28, "triangle", 0.22, i * 0.07));
     }
 
     dash() {
@@ -364,10 +381,9 @@
   };
 
   /* ========================================================================
-     ISOMETRIC PIXEL PROJECTION & 2.5D RENDER HELPERS
+     ISOMETRIC PROJECTION & 2.5D RENDER HELPERS
      ======================================================================== */
   const ISO = {
-    PIXEL_SCALE: 2,
     TILE_W: 48,
     TILE_H: 24,
     Z_SCALE: 20,
@@ -418,7 +434,6 @@
     const hh = Math.round(tileH * 0.5);
     const h = Math.round(heightPx);
 
-    // Left face
     ctx.beginPath();
     ctx.moveTo(x - hw, y - h);
     ctx.lineTo(x, y + hh - h);
@@ -428,7 +443,6 @@
     ctx.fillStyle = colLeft;
     ctx.fill();
 
-    // Right face
     ctx.beginPath();
     ctx.moveTo(x + hw, y - h);
     ctx.lineTo(x, y + hh - h);
@@ -438,7 +452,6 @@
     ctx.fillStyle = colRight;
     ctx.fill();
 
-    // Top face
     ctx.beginPath();
     ctx.moveTo(x, y - hh - h);
     ctx.lineTo(x + hw, y - h);
@@ -492,7 +505,7 @@
      ======================================================================== */
   class RiftfallGame {
     constructor() {
-      document.title = DATA.GAME_TITLE + " — Pixel 2.5D Isometric Dungeon RPG";
+      document.title = DATA.GAME_TITLE + " — 2.5D Isometric Dungeon RPG";
 
       this.canvas = document.getElementById("game-canvas");
       this.ctx = this.canvas.getContext("2d");
@@ -516,10 +529,12 @@
       this.world = null;
       this.cam = { x: 7.5, y: 7.5, shakeTime: 0, shakeMag: 0 };
       this.elapsed = 0;
+      this.dpr = 1;
+      this.worldZoom = 1.4;
 
       this.player = {
         x: 7.5,
-        y: 8.5,
+        y: 7.5,
         z: 0,
         vx: 0,
         vy: 0,
@@ -529,12 +544,14 @@
         shield: 0,
         shieldTimer: 0,
         attackTimer: 0,
+        attackCounter: 0,
         qCd: 0,
         eCd: 0,
         dashCd: 0,
         dashTimer: 0,
         dashDir: { x: 0, y: 1 },
         iframeTimer: 0,
+        phantomCritTimer: 0,
         flaskCd: 0,
         hurtFlash: 0,
         swingAnim: 0,
@@ -550,6 +567,7 @@
       this.particles = [];
       this.floatingTexts = [];
       this.slashArcs = [];
+      this.skillAnims = [];
       this.lootDrops = [];
 
       this.lastFrame = performance.now();
@@ -575,13 +593,15 @@
        ====================================================================== */
     createDefaultSave() {
       return {
-        version: 1,
+        version: 2,
         level: 1,
         xp: 0,
         gold: 120,
         shards: 18,
         renown: 0,
         flasks: 3,
+        classId: "vanguard",
+        unlockedEvolutions: {},
         equipped: {
           weapon: GearSystem.createItem("iron_blade", "common", 0),
           armor: GearSystem.createItem("traveler_tunic", "common", 0),
@@ -623,9 +643,14 @@
         this.save = { ...def, ...parsed };
         this.save.settings = { ...def.settings, ...(parsed.settings || {}) };
 
-        // Sanitize critical fields so old/corrupted saves never freeze dungeons
         if (!Array.isArray(this.save.inventory)) this.save.inventory = [];
         if (!Array.isArray(this.save.selectedMutators)) this.save.selectedMutators = [];
+        if (!this.save.unlockedEvolutions || typeof this.save.unlockedEvolutions !== "object") {
+          this.save.unlockedEvolutions = {};
+        }
+        if (!DATA.CLASSES[this.save.classId]) {
+          this.save.classId = "vanguard";
+        }
         if (!DATA.DUNGEONS.some((d) => d.id === this.save.selectedDungeonId)) {
           this.save.selectedDungeonId = "sunken_quarry";
         }
@@ -669,8 +694,17 @@
     }
 
     /* ======================================================================
-       HERO STATS, BLESSINGS & PASSIVE MERCENARY INCOME
+       CLASS SYSTEM, HERO STATS, BLESSINGS & MERCENARIES
        ====================================================================== */
+    getActiveClass() {
+      return DATA.CLASSES[this.save.classId] || DATA.CLASSES.vanguard;
+    }
+
+    getBaseClassId() {
+      const cls = this.getActiveClass();
+      return cls.tier === "advanced" ? cls.baseId : cls.id;
+    }
+
     getBlessingBonus(statKey) {
       let total = 0;
       for (const b of DATA.BLESSINGS) {
@@ -686,18 +720,20 @@
     getHeroStats() {
       const base = C.BASE_PLAYER_STATS;
       const lvl = this.save.level - 1;
+      const cls = this.getActiveClass();
+      const cb = cls.bonuses || {};
 
       const s = {
         hp: base.hp + lvl * 28,
         atk: base.atk + lvl * 4,
         spell: base.spell + lvl * 4,
-        crit: base.crit,
-        critMult: base.critMult,
+        crit: base.crit + (cb.crit || 0),
+        critMult: base.critMult + (cls.id === "berserker" ? 0.35 : 0),
         speed: base.speed,
-        hazardResist: base.hazardResist,
-        lifesteal: base.lifesteal,
-        cdr: base.cdr,
-        armor: base.armor + lvl * 1.5,
+        hazardResist: base.hazardResist + (cb.hazardResist || 0),
+        lifesteal: base.lifesteal + (cb.lifesteal || 0),
+        cdr: base.cdr + (cb.cdr || 0),
+        armor: base.armor + lvl * 1.5 + (cb.armor || 0),
         atkSpeedMult: 1.0,
         dmgOutMult: 1.0
       };
@@ -711,13 +747,14 @@
         }
       }
 
-      s.hp = Math.round(s.hp * (1 + this.getBlessingBonus("hpPct")));
-      const powerMult = 1 + this.getBlessingBonus("powerPct");
-      s.atk = Math.round(s.atk * powerMult);
-      s.spell = Math.round(s.spell * powerMult);
+      // Apply Class + Blessing percentage multipliers
+      s.hp = Math.round(s.hp * (1 + this.getBlessingBonus("hpPct") + (cb.hpPct || 0)));
+      const blessingPower = this.getBlessingBonus("powerPct");
+      s.atk = Math.round(s.atk * (1 + blessingPower + (cb.atkPct || 0)));
+      s.spell = Math.round(s.spell * (1 + blessingPower + (cb.spellPct || 0)));
       s.hazardResist += this.getBlessingBonus("hazardResist");
       s.cdr += this.getBlessingBonus("cdr");
-      s.speed *= 1 + this.getBlessingBonus("speedPct");
+      s.speed *= 1 + this.getBlessingBonus("speedPct") + (cb.speedPct || 0);
 
       if (this.player.hasteTimer > 0 && this.player.hasteData) {
         s.speed *= 1 + (this.player.hasteData.speedBonus || 0);
@@ -741,13 +778,18 @@
             s.dmgOutMult *= 1 + h.heavyGDmgBonus;
           }
         }
+        if (this.run.dungeon.hazard.type === "frost") {
+          // Hypothermia slows movement speed up to 35% at 100% chill
+          const chillRatio = clamp(this.run.hazardState.value / 100, 0, 1);
+          s.speed *= 1 - chillRatio * 0.35;
+        }
       }
 
-      s.crit = clamp(s.crit, 0.05, 0.9);
-      s.cdr = clamp(s.cdr, 0, 0.55);
-      s.hazardResist = clamp(s.hazardResist, 0, 0.75);
+      s.crit = clamp(s.crit, 0.05, 0.92);
+      s.cdr = clamp(s.cdr, 0, 0.58);
+      s.hazardResist = clamp(s.hazardResist, 0, 0.78);
       s.lifesteal = clamp(s.lifesteal, 0, 0.45);
-      s.speed = clamp(s.speed, 2.5, 9.5);
+      s.speed = clamp(s.speed, 2.2, 10.0);
       return s;
     }
 
@@ -771,6 +813,7 @@
     grantXp(amount) {
       this.save.xp += Math.round(amount);
       let leveled = false;
+      const prevLv = this.save.level;
       while (this.save.xp >= this.getXpNeeded(this.save.level)) {
         this.save.xp -= this.getXpNeeded(this.save.level);
         this.save.level += 1;
@@ -784,6 +827,9 @@
         this.spawnFloatingText(this.player.x, this.player.y, 1.5, `LEVEL ${this.save.level}!`, "#fde047", true);
         this.spawnBurst(this.player.x, this.player.y, "#fde047", 24, 3.8);
         this.toast(`Level Up! Reached Hero Level ${this.save.level}.`, "success");
+        if (prevLv < C.EVOLUTION_LEVEL_REQ && this.save.level >= C.EVOLUTION_LEVEL_REQ) {
+          this.toast("Advanced Class Evolution unlocked at the Class Shrine [5]!", "mythic");
+        }
       }
     }
 
@@ -836,6 +882,8 @@
         stations: DATA.SANCTUARY.stations,
         enemies: [],
         vents: [],
+        braziers: [],
+        lightOrbs: [],
         poisonPools: [],
         chests: [],
         portal: null
@@ -861,7 +909,7 @@
       document.getElementById("difficulty-badge").classList.add("hidden");
       document.getElementById("hazard-overlay").className = "hazard-overlay";
       document.getElementById("location-badge").textContent = "Sanctuary Camp";
-      document.getElementById("room-indicator").textContent = "Walk to stations or press 1-4";
+      document.getElementById("room-indicator").textContent = "Walk to stations or press 1-5";
       document.getElementById("mutator-badges").innerHTML = "";
 
       this.syncAllHUD();
@@ -908,6 +956,7 @@
           phase: "low",
           phaseTimer: dungeon.hazard.cycleSeconds || 15,
           poolSpawnTimer: 2.5,
+          orbSpawnTimer: 3.5,
           dpsTick: 0
         }
       };
@@ -919,6 +968,8 @@
       this.player.qCd = 0;
       this.player.eCd = 0;
       this.player.dashCd = 0;
+      this.player.attackCounter = 0;
+      this.player.phantomCritTimer = 0;
 
       document.getElementById("camp-tabs").classList.add("hidden");
       document.getElementById("dungeon-actions").classList.remove("hidden");
@@ -974,6 +1025,7 @@
         }
       }
 
+      // Oxygen Vents (Sunken Quarry)
       const vents = [];
       if (dungeon.hazard.type === "oxygen") {
         const ventSpots = isBossRoom
@@ -995,6 +1047,37 @@
         }
       }
 
+      // Warming Fire Braziers (Frostbite Sanctum)
+      const braziers = [];
+      if (dungeon.hazard.type === "frost") {
+        const spots = isBossRoom
+          ? [
+              [3.5, 4.5],
+              [size - 3.5, 4.5],
+              [3.5, size - 4.5],
+              [size - 3.5, size - 4.5]
+            ]
+          : [
+              [3.5, 5.5],
+              [size - 3.5, 5.5],
+              [cx + 0.5, cx + 0.5]
+            ];
+        for (const [bx, by] of spots) {
+          if (grid[Math.floor(by)][Math.floor(bx)] === 0) {
+            braziers.push({ x: bx, y: by, radius: 2.0 });
+          }
+        }
+      }
+
+      // Radiant Light Orbs (Abyssal Throne)
+      const lightOrbs = [];
+      if (dungeon.hazard.type === "shadow") {
+        for (let i = 0; i < 2; i++) {
+          const pos = this.findOpenSpot(size, grid, 3, size - 4);
+          lightOrbs.push({ x: pos.x, y: pos.y, life: 16 });
+        }
+      }
+
       this.world = {
         size,
         grid,
@@ -1002,6 +1085,8 @@
         stations: [],
         enemies: [],
         vents,
+        braziers,
+        lightOrbs,
         poisonPools: [],
         chests: [],
         portal: null,
@@ -1013,9 +1098,11 @@
       this.cam.x = this.player.x;
       this.cam.y = this.player.y;
 
-      if (dungeon.hazard.type === "oxygen") this.run.hazardState.value = 100;
-      if (dungeon.hazard.type === "heat") this.run.hazardState.value = 0;
-      if (dungeon.hazard.type === "poison") this.run.hazardState.value = 0;
+      const hType = dungeon.hazard.type;
+      if (hType === "oxygen") this.run.hazardState.value = 100;
+      if (hType === "heat" || hType === "poison" || hType === "frost" || hType === "shadow") {
+        this.run.hazardState.value = 0;
+      }
 
       document.getElementById("room-indicator").textContent = isBossRoom
         ? `Room ${roomIndex + 1} / ${totalRooms} — BOSS CHAMBER`
@@ -1073,6 +1160,7 @@
         color: tpl.color,
         trim: tpl.trim,
         stunTimer: 0,
+        slowTimer: 0,
         hurtFlash: 0,
         facing: { x: 0, y: 1 }
       };
@@ -1110,6 +1198,7 @@
           color: bossTpl.color,
           trim: bossTpl.trim,
           stunTimer: 0,
+          slowTimer: 0,
           hurtFlash: 0,
           facing: { x: 0, y: 1 },
           patternIdx: i % bossTpl.patterns.length,
@@ -1144,14 +1233,15 @@
       this.particles = [];
       this.floatingTexts = [];
       this.slashArcs = [];
+      this.skillAnims = [];
       this.lootDrops = [];
     }
 
+    // === END OF PART 1/3 — REPLY "2/3" FOR PART 2/3 ===
     /* ======================================================================
-       CRASH-PROOF MAIN LOOP
+       CRASH-PROOF MAIN LOOP & IDLE ECONOMY
        ====================================================================== */
     loop(now) {
-      // Always schedule the next frame first so a transient error can never freeze the loop
       requestAnimationFrame((t) => this.loop(t));
 
       try {
@@ -1223,6 +1313,7 @@
       this.player.dashCd = Math.max(0, this.player.dashCd - dt);
       this.player.flaskCd = Math.max(0, this.player.flaskCd - dt);
       this.player.iframeTimer = Math.max(0, this.player.iframeTimer - dt);
+      this.player.phantomCritTimer = Math.max(0, this.player.phantomCritTimer - dt);
       this.player.hurtFlash = Math.max(0, this.player.hurtFlash - dt);
       this.player.swingAnim = Math.max(0, this.player.swingAnim - dt);
 
@@ -1336,21 +1427,46 @@
     }
 
     /* ======================================================================
-       COMBAT: AUTO-ATTACK, DASH, Q / E SKILLS & FLASK
+       COMBAT: AUTO-ATTACK, CLASS PASSIVES, DASH & CHOREOGRAPHED Q / E SKILLS
        ====================================================================== */
+    purgeHazard(amount) {
+      if (!this.run) return;
+      const hType = this.run.dungeon.hazard.type;
+      if (hType === "oxygen") {
+        this.run.hazardState.value = Math.min(100, this.run.hazardState.value + amount);
+      } else if (hType === "heat" || hType === "poison" || hType === "frost" || hType === "shadow") {
+        this.run.hazardState.value = Math.max(0, this.run.hazardState.value - amount);
+      }
+    }
+
+    grantShield(amount, duration = 5.0) {
+      const val = Math.round(amount);
+      if (val <= 0) return;
+      this.player.shield = Math.max(this.player.shield, val);
+      this.player.shieldTimer = Math.max(this.player.shieldTimer, duration);
+    }
+
     triggerDash() {
       if (this.activeModal || this.player.dashCd > 0) return;
       const stats = this.getHeroStats();
+      const cls = this.getActiveClass();
+
       this.player.dashCd = C.DASH_COOLDOWN * (1 - stats.cdr * 0.5);
       this.player.dashTimer = C.DASH_DURATION;
       this.player.iframeTimer = C.DASH_IFRAMES;
       this.player.dashDir = { x: this.player.facing.x, y: this.player.facing.y };
       this.sfx.dash();
-      this.spawnBurst(this.player.x, this.player.y, "#38bdf8", 10, 2.4);
+      this.spawnBurst(this.player.x, this.player.y, cls.color || "#38bdf8", 10, 2.4);
 
+      // Shadowblade / Phantom Assassin Passive: Phantom Step
+      if (cls.id === "shadowblade" || cls.id === "assassin") {
+        this.player.phantomCritTimer = 2.5;
+        this.spawnFloatingText(this.player.x, this.player.y, 1.2, "PHANTOM CRIT!", "#f59e0b");
+      }
+
+      // Cinder Foundry: Dashing vents overheat
       if (this.mode === "dungeon" && this.run && this.run.dungeon.hazard.type === "heat") {
-        const h = this.run.dungeon.hazard;
-        this.run.hazardState.value = Math.max(0, this.run.hazardState.value - h.dashCoolBurst);
+        this.purgeHazard(this.run.dungeon.hazard.dashCoolBurst);
         this.spawnFloatingText(this.player.x, this.player.y, 1.1, "VENTED!", "#7dd3fc");
       }
     }
@@ -1367,16 +1483,20 @@
       this.player.flaskCd = C.FLASK_COOLDOWN;
       const heal = Math.round(this.player.maxHp * C.FLASK_HEAL_PCT);
       this.healPlayer(heal);
-
-      const hType = this.run.dungeon.hazard.type;
-      if (hType === "oxygen") this.run.hazardState.value = 100;
-      if (hType === "heat") this.run.hazardState.value = 0;
-      if (hType === "poison") this.run.hazardState.value = 0;
+      this.purgeHazard(100);
 
       this.sfx.flask();
       this.spawnBurst(this.player.x, this.player.y, "#4ade80", 16, 2.8);
       this.spawnFloatingText(this.player.x, this.player.y, 1.4, `+${heal} HP`, "#4ade80", true);
       this.syncLiveHUD();
+    }
+
+    consumePhantomCrit() {
+      if (this.player.phantomCritTimer > 0) {
+        this.player.phantomCritTimer = 0;
+        return true;
+      }
+      return false;
     }
 
     updateAutoAttack(dt, stats) {
@@ -1389,10 +1509,47 @@
       if (!target) return;
 
       this.player.attackTimer = 1 / (wep.attackRate * stats.atkSpeedMult);
+      this.player.attackCounter += 1;
+
       const angle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
       this.player.facing.x = Math.cos(angle);
       this.player.facing.y = Math.sin(angle);
       this.player.swingAnim = 0.18;
+
+      const cls = this.getActiveClass();
+      const guaranteedCrit = this.consumePhantomCrit();
+
+      // Class Attack Cadence Passives
+      if (cls.id === "vanguard" && this.player.attackCounter % 4 === 0) {
+        const sh = Math.round(stats.hp * 0.08);
+        this.grantShield(sh, 4.0);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.3, `BULWARK +${sh}`, "#38bdf8");
+      } else if (cls.id === "paladin" && this.player.attackCounter % 3 === 0) {
+        const sh = Math.round(stats.hp * 0.12);
+        this.grantShield(sh, 4.5);
+        this.spawnSkillAnim("solar_flare", this.player.x, this.player.y, angle, 2.3, "#fde047", 0.32);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 2.3 + e.radius) {
+            this.damageEnemy(e, stats.spell * 0.9 * stats.dmgOutMult, false, stats);
+          }
+        }
+      } else if (cls.id === "ranger" && this.player.attackCounter % 3 === 0) {
+        // Tempest Ranger: Gale Volley piercing wind-bolt
+        this.projectiles.push({
+          friendly: true,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(angle) * 12.0,
+          vy: Math.sin(angle) * 12.0,
+          radius: 0.34,
+          damage: stats.atk * 1.15 * stats.dmgOutMult,
+          pierce: 4,
+          hitIds: new Set(),
+          color: "#34d399",
+          trailColor: "#a7f3d0",
+          life: 0.75
+        });
+      }
 
       if (wep.attackType.startsWith("melee")) {
         this.sfx.swing();
@@ -1416,7 +1573,7 @@
             if (diffA > Math.PI) diffA = Math.PI * 2 - diffA;
             if (diffA <= arcSpan * 0.65 || d < 0.9) {
               const rawDmg = (stats.atk * 1.05 + stats.spell * 0.2) * stats.dmgOutMult;
-              this.damageEnemy(e, rawDmg, false, stats);
+              this.damageEnemy(e, rawDmg, guaranteedCrit, stats);
             }
           }
         }
@@ -1434,6 +1591,7 @@
           vy: Math.sin(angle) * (wep.projSpeed || 9.5),
           radius: wep.attackType === "ranged_nova" ? 0.34 : 0.26,
           damage: baseDmg,
+          guaranteedCrit,
           pierce: wep.attackType === "ranged_nova" ? 2 : 0,
           hitIds: new Set(),
           color: wep.weaponColor,
@@ -1443,38 +1601,61 @@
       }
     }
 
+    spawnSkillAnim(animType, x, y, angle = 0, radius = 2.5, color = "#38bdf8", duration = 0.55, targets = []) {
+      this.skillAnims.push({
+        animType,
+        x,
+        y,
+        angle,
+        radius,
+        color,
+        targets,
+        elapsed: 0,
+        duration
+      });
+    }
+
     castSkillQ() {
       if (this.mode !== "dungeon" || this.activeModal || !this.run || this.run.finished) return;
       if (this.player.qCd > 0) return;
 
       const stats = this.getHeroStats();
+      const cls = this.getActiveClass();
       const wep = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
       const sk = DATA.SKILLS[wep.skillId];
       if (!sk) return;
 
       this.player.qCd = sk.cooldown * (1 - stats.cdr);
       this.sfx.skillQ();
-      this.addScreenShake(0.18, 6);
+      this.addScreenShake(0.2, 7);
 
+      // Class Passive Hooks on [Q]
+      if (cls.id === "arcanist") {
+        this.player.eCd = Math.max(0, this.player.eCd - 2.0);
+      } else if (cls.id === "chronomancer") {
+        this.player.qCd *= 0.75;
+        this.player.eCd *= 0.75;
+        for (const e of this.world.enemies) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 4.5) e.slowTimer = 3.0;
+        }
+      }
+
+      const phantomCrit = this.consumePhantomCrit();
+      const baseAngle = Math.atan2(this.player.facing.y, this.player.facing.x);
       const calcSkillDmg = () => (stats.atk * (sk.atkMult || 0) + stats.spell * (sk.spellMult || 0)) * stats.dmgOutMult;
 
+      // Trigger rich 2.5D ability animation
+      const animKind = sk.animType || "whirl_slash";
+      const meteorTargets = [];
+
       if (sk.type === "aoe_melee" || sk.type === "shockwave" || sk.type === "drain_nova") {
-        this.slashArcs.push({
-          x: this.player.x,
-          y: this.player.y,
-          angle: 0,
-          radius: sk.radius,
-          span: Math.PI * 2,
-          color: sk.color,
-          life: 0.3,
-          maxLife: 0.3
-        });
+        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.55);
         this.spawnBurst(this.player.x, this.player.y, sk.color, 26, 4.2);
 
         let totalDealt = 0;
         for (const e of [...this.world.enemies]) {
           if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
-            const dealt = this.damageEnemy(e, calcSkillDmg(), false, stats);
+            const dealt = this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats);
             totalDealt += dealt;
             if (sk.stunDuration) e.stunTimer = Math.max(e.stunTimer, sk.stunDuration);
           }
@@ -1485,8 +1666,8 @@
           this.spawnFloatingText(this.player.x, this.player.y, 1.3, `+${h}`, "#4ade80");
         }
       } else if (sk.type === "proj_fan") {
+        this.spawnSkillAnim(animKind, this.player.x, this.player.y, baseAngle, 2.8, sk.color, 0.45);
         const count = sk.count || 6;
-        const baseAngle = Math.atan2(this.player.facing.y, this.player.facing.x);
         for (let i = 0; i < count; i++) {
           const a = baseAngle + (i / count) * Math.PI * 2;
           this.projectiles.push({
@@ -1497,7 +1678,7 @@
             vy: Math.sin(a) * 10.5,
             radius: 0.36,
             damage: calcSkillDmg(),
-            guaranteedCrit: !!sk.guaranteedCrit,
+            guaranteedCrit: !!sk.guaranteedCrit || phantomCrit,
             pierce: 3,
             hitIds: new Set(),
             color: sk.color,
@@ -1518,21 +1699,27 @@
             tx = this.player.x + randRange(-3, 3);
             ty = this.player.y + randRange(-3, 3);
           }
+          meteorTargets.push({ x: tx, y: ty });
           this.spawnBurst(tx, ty, sk.color, 20, 3.8);
-          this.slashArcs.push({
-            x: tx,
-            y: ty,
-            angle: 0,
-            radius: sk.radius,
-            span: Math.PI * 2,
-            color: sk.color,
-            life: 0.28,
-            maxLife: 0.28
-          });
           for (const e of [...this.world.enemies]) {
             if (dist(tx, ty, e.x, e.y) <= sk.radius + e.radius) {
-              this.damageEnemy(e, calcSkillDmg(), false, stats);
+              this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats);
             }
+          }
+        }
+        this.spawnSkillAnim("starfall_beams", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.65, meteorTargets);
+      }
+
+      // Void Pyromancer Passive: Meteor Overload on every [Q]
+      if (cls.id === "pyromancer") {
+        const target = this.findNearestEnemy(this.player.x, this.player.y, 7.0);
+        const mx = target ? target.x : this.player.x + Math.cos(baseAngle) * 2.5;
+        const my = target ? target.y : this.player.y + Math.sin(baseAngle) * 2.5;
+        this.spawnSkillAnim("starfall_beams", mx, my, 0, 2.2, "#f97316", 0.55, [{ x: mx, y: my }]);
+        this.spawnBurst(mx, my, "#f97316", 18, 3.6);
+        for (const e of [...this.world.enemies]) {
+          if (dist(mx, my, e.x, e.y) <= 2.2 + e.radius) {
+            this.damageEnemy(e, stats.spell * 1.6 * stats.dmgOutMult, false, stats);
           }
         }
       }
@@ -1543,6 +1730,7 @@
       if (this.player.eCd > 0) return;
 
       const stats = this.getHeroStats();
+      const cls = this.getActiveClass();
       const relic = GearSystem.getTemplate(this.save.equipped.relic.templateId);
       const sk = DATA.SKILLS[relic.skillId];
       if (!sk) return;
@@ -1551,19 +1739,27 @@
       this.sfx.skillE();
       this.spawnBurst(this.player.x, this.player.y, sk.color, 22, 3.4);
 
+      if (cls.id === "chronomancer") {
+        this.player.qCd *= 0.75;
+        this.player.eCd *= 0.75;
+        for (const e of this.world.enemies) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 4.5) e.slowTimer = 3.0;
+        }
+      }
+
+      const phantomCrit = this.consumePhantomCrit();
+      const animKind = sk.animType || "aegis_dome";
+      this.spawnSkillAnim(animKind, this.player.x, this.player.y, 0, sk.radius || 2.5, sk.color, 0.65);
+
       if (sk.shieldPctHp) {
-        const amt = Math.round(stats.hp * sk.shieldPctHp);
-        this.player.shield = Math.max(this.player.shield, amt);
-        this.player.shieldTimer = sk.duration || 5.0;
+        const geoBonus = cls.id === "geomancer" ? 1.25 : 1.0;
+        const amt = Math.round(stats.hp * sk.shieldPctHp * geoBonus);
+        this.grantShield(amt, sk.duration || 5.0);
         this.spawnFloatingText(this.player.x, this.player.y, 1.35, `SHIELD +${amt}`, "#38bdf8", true);
       }
 
       if (sk.hazardRestore && this.run) {
-        const hType = this.run.dungeon.hazard.type;
-        if (hType === "oxygen") this.run.hazardState.value = Math.min(100, this.run.hazardState.value + sk.hazardRestore);
-        if (hType === "heat" || hType === "poison") {
-          this.run.hazardState.value = Math.max(0, this.run.hazardState.value - sk.hazardRestore);
-        }
+        this.purgeHazard(sk.hazardRestore);
       }
 
       if (sk.type === "haste_buff") {
@@ -1575,37 +1771,17 @@
       if (sk.type === "heal_pulse") {
         const h = Math.round(stats.hp * sk.healPctHp);
         this.healPlayer(h);
-        if (this.run.dungeon.hazard.type === "poison") this.run.hazardState.value = 0;
+        this.purgeHazard(65);
         this.spawnFloatingText(this.player.x, this.player.y, 1.4, `+${h} HP`, "#4ade80", true);
-        this.slashArcs.push({
-          x: this.player.x,
-          y: this.player.y,
-          angle: 0,
-          radius: sk.radius,
-          span: Math.PI * 2,
-          color: sk.color,
-          life: 0.3,
-          maxLife: 0.3
-        });
         const dmg = stats.spell * sk.spellMult * stats.dmgOutMult;
         for (const e of [...this.world.enemies]) {
           if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
-            this.damageEnemy(e, dmg, false, stats);
+            this.damageEnemy(e, dmg, phantomCrit, stats);
           }
         }
       }
 
       if (sk.type === "vortex_pull") {
-        this.slashArcs.push({
-          x: this.player.x,
-          y: this.player.y,
-          angle: 0,
-          radius: sk.radius,
-          span: Math.PI * 2,
-          color: sk.color,
-          life: 0.38,
-          maxLife: 0.38
-        });
         const dmg = stats.spell * sk.spellMult * stats.dmgOutMult;
         for (const e of [...this.world.enemies]) {
           const d = dist(this.player.x, this.player.y, e.x, e.y);
@@ -1614,7 +1790,7 @@
               const ang = Math.atan2(this.player.y - e.y, this.player.x - e.x);
               this.moveEntityWithCollision(e, Math.cos(ang) * (d * 0.45), Math.sin(ang) * (d * 0.45), e.radius);
             }
-            this.damageEnemy(e, dmg, false, stats);
+            this.damageEnemy(e, dmg, phantomCrit, stats);
           }
         }
       }
@@ -1623,9 +1799,17 @@
     damageEnemy(enemy, rawDamage, forceCrit = false, stats = null) {
       if (!enemy || enemy.hp <= 0) return 0;
       const st = stats || this.getHeroStats();
+      const cls = this.getActiveClass();
+
+      // Phantom Assassin Passive: Shadow Execution (+45% vs enemies <40% HP)
+      let execMult = 1.0;
+      if (cls.id === "assassin" && enemy.hp / enemy.maxHp <= 0.4) {
+        execMult = 1.45;
+      }
+
       const isCrit = forceCrit || Math.random() < st.crit;
       const variance = randRange(0.92, 1.08);
-      const finalDmg = Math.max(1, Math.round(rawDamage * (isCrit ? st.critMult : 1.0) * variance));
+      const finalDmg = Math.max(1, Math.round(rawDamage * execMult * (isCrit ? st.critMult : 1.0) * variance));
 
       enemy.hp -= finalDmg;
       enemy.hurtFlash = 0.12;
@@ -1634,6 +1818,10 @@
       if (isCrit) {
         this.sfx.crit();
         this.spawnFloatingText(enemy.x, enemy.y, enemy.height + 0.35, `${finalDmg}!`, "#fde047", true);
+        // Rift Berserker Passive: Bloodlust Frenzy heals 4% Max HP on crit
+        if (cls.id === "berserker") {
+          this.healPlayer(Math.max(1, Math.round(st.hp * 0.04)));
+        }
       } else {
         this.sfx.hit();
         this.spawnFloatingText(enemy.x, enemy.y, enemy.height + 0.25, `${finalDmg}`, "#ffffff", false);
@@ -1655,6 +1843,27 @@
     handleEnemyDeath(enemy) {
       const idx = this.world.enemies.indexOf(enemy);
       if (idx >= 0) this.world.enemies.splice(idx, 1);
+
+      const cls = this.getActiveClass();
+      const stats = this.getHeroStats();
+
+      // Warden / Blight Sovereign / Geomancer On-Kill Passives
+      if (cls.id === "warden") {
+        this.healPlayer(stats.hp * 0.05);
+        this.purgeHazard(12);
+      } else if (cls.id === "blight_sovereign") {
+        this.healPlayer(stats.hp * 0.08);
+        this.purgeHazard(12);
+        this.spawnSkillAnim("spore_geysers", enemy.x, enemy.y, 0, 2.2, "#84cc16", 0.45);
+        for (const other of [...this.world.enemies]) {
+          if (dist(enemy.x, enemy.y, other.x, other.y) <= 2.2 + other.radius) {
+            this.damageEnemy(other, stats.spell * 1.1 * stats.dmgOutMult, false, stats);
+          }
+        }
+      } else if (cls.id === "geomancer") {
+        this.healPlayer(stats.hp * 0.05);
+        this.purgeHazard(20);
+      }
 
       this.run.enemiesSlain += 1;
       this.spawnBurst(enemy.x, enemy.y, enemy.trim, enemy.isBoss ? 42 : 16, enemy.isBoss ? 5.0 : 3.0);
@@ -1795,9 +2004,8 @@
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(amount));
     }
 
-    // === END OF PART 1/2 — REPLY "2" FOR PART 2/2 ===
     /* ======================================================================
-       ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
+       ALL 6 ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
        ====================================================================== */
     updateDungeonHazard(dt, stats) {
       const h = this.run.dungeon.hazard;
@@ -1889,6 +2097,52 @@
         }
         hs.value = (hs.phaseTimer / h.cycleSeconds) * 100;
         inDanger = hs.phase === "heavy";
+      } else if (h.type === "frost") {
+        // Frostbite Sanctum: Hypothermia builds unless standing near warming Fire Braziers
+        const nearBrazier = this.world.braziers.some((b) => dist(this.player.x, this.player.y, b.x, b.y) <= b.radius);
+        if (nearBrazier) {
+          hs.value = Math.max(0, hs.value - h.thawPerSec * dt);
+        } else {
+          hs.value = Math.min(100, hs.value + h.chillPerSec * hMult * dt);
+        }
+        inDanger = hs.value >= 70;
+        if (hs.value >= 85) {
+          hs.dpsTick += dt;
+          if (hs.dpsTick >= 0.75) {
+            hs.dpsTick = 0;
+            this.damagePlayer(this.player.maxHp * h.frostDpsPct, true);
+          }
+        }
+      } else if (h.type === "shadow") {
+        // Abyssal Throne: Eclipse Corruption builds steadily; touch Radiant Light Orbs to purge
+        hs.value = Math.min(100, hs.value + h.corruptPerSec * hMult * dt);
+        hs.orbSpawnTimer -= dt;
+        if (hs.orbSpawnTimer <= 0 && this.world.lightOrbs.length < 3) {
+          hs.orbSpawnTimer = 5.5;
+          const pos = this.findOpenSpot(this.world.size, this.world.grid, 2, this.world.size - 3);
+          this.world.lightOrbs.push({ x: pos.x, y: pos.y, life: 15 });
+        }
+        for (let i = this.world.lightOrbs.length - 1; i >= 0; i--) {
+          const orb = this.world.lightOrbs[i];
+          orb.life -= dt;
+          if (dist(this.player.x, this.player.y, orb.x, orb.y) <= 0.95) {
+            hs.value = Math.max(0, hs.value - h.orbPurgeAmount);
+            this.sfx.flask();
+            this.spawnBurst(orb.x, orb.y, "#fde047", 14, 3.0);
+            this.spawnFloatingText(orb.x, orb.y, 1.3, "PURGED!", "#fde047", true);
+            this.world.lightOrbs.splice(i, 1);
+          } else if (orb.life <= 0) {
+            this.world.lightOrbs.splice(i, 1);
+          }
+        }
+        inDanger = hs.value >= 70;
+        if (hs.value >= 85) {
+          hs.dpsTick += dt;
+          if (hs.dpsTick >= 0.7) {
+            hs.dpsTick = 0;
+            this.damagePlayer(this.player.maxHp * h.corruptDpsPct, true);
+          }
+        }
       }
 
       survHud.classList.toggle("danger-pulse", inDanger);
@@ -1935,11 +2189,13 @@
     updateEnemies(dt) {
       for (const e of this.world.enemies) {
         e.hurtFlash = Math.max(0, e.hurtFlash - dt);
+        if (e.slowTimer > 0) e.slowTimer = Math.max(0, e.slowTimer - dt);
         if (e.stunTimer > 0) {
           e.stunTimer -= dt;
           continue;
         }
 
+        const slowMult = e.slowTimer > 0 ? 0.55 : 1.0;
         const dx = this.player.x - e.x;
         const dy = this.player.y - e.y;
         const d = Math.hypot(dx, dy) || 0.001;
@@ -1947,18 +2203,18 @@
         e.facing.y = dy / d;
 
         if (e.isBoss) {
-          this.updateBossAI(e, dt, dx, dy, d);
+          this.updateBossAI(e, dt, dx, dy, d, slowMult);
           continue;
         }
 
         const tpl = e.template;
-        e.attackTimer -= dt;
+        e.attackTimer -= dt * slowMult;
 
         if (tpl.ai === "ranged") {
           if (d > e.range * 0.85) {
-            this.moveEntityWithCollision(e, (dx / d) * e.speed * dt, (dy / d) * e.speed * dt, e.radius);
+            this.moveEntityWithCollision(e, (dx / d) * e.speed * slowMult * dt, (dy / d) * e.speed * slowMult * dt, e.radius);
           } else if (d < 2.6) {
-            this.moveEntityWithCollision(e, -(dx / d) * e.speed * 0.7 * dt, -(dy / d) * e.speed * 0.7 * dt, e.radius);
+            this.moveEntityWithCollision(e, -(dx / d) * e.speed * 0.7 * slowMult * dt, -(dy / d) * e.speed * 0.7 * slowMult * dt, e.radius);
           }
           if (d <= e.range && e.attackTimer <= 0) {
             e.attackTimer = e.attackCd;
@@ -1978,7 +2234,7 @@
           }
         } else {
           if (d > e.range) {
-            this.moveEntityWithCollision(e, (dx / d) * e.speed * dt, (dy / d) * e.speed * dt, e.radius);
+            this.moveEntityWithCollision(e, (dx / d) * e.speed * slowMult * dt, (dy / d) * e.speed * slowMult * dt, e.radius);
           } else if (e.attackTimer <= 0) {
             e.attackTimer = e.attackCd;
             this.damagePlayer(e.atk, false);
@@ -1988,7 +2244,7 @@
       }
     }
 
-    updateBossAI(boss, dt, dx, dy, d) {
+    updateBossAI(boss, dt, dx, dy, d, slowMult = 1.0) {
       if (boss.chargeTimer > 0 && boss.chargeVel) {
         boss.chargeTimer -= dt;
         this.moveEntityWithCollision(boss, boss.chargeVel.x * dt, boss.chargeVel.y * dt, boss.radius);
@@ -2000,10 +2256,10 @@
       }
 
       if (d > 2.2) {
-        this.moveEntityWithCollision(boss, (dx / d) * boss.speed * dt, (dy / d) * boss.speed * dt, boss.radius);
+        this.moveEntityWithCollision(boss, (dx / d) * boss.speed * slowMult * dt, (dy / d) * boss.speed * slowMult * dt, boss.radius);
       }
 
-      boss.patternTimer -= dt;
+      boss.patternTimer -= dt * slowMult;
       if (boss.patternTimer > 0) return;
 
       const patterns = boss.template.patterns;
@@ -2418,10 +2674,18 @@
         this.slashArcs[i].life -= dt;
         if (this.slashArcs[i].life <= 0) this.slashArcs.splice(i, 1);
       }
+
+      for (let i = this.skillAnims.length - 1; i >= 0; i--) {
+        this.skillAnims[i].elapsed += dt;
+        if (this.skillAnims[i].elapsed >= this.skillAnims[i].duration) {
+          this.skillAnims.splice(i, 1);
+        }
+      }
     }
 
+    // === END OF PART 2/3 — REPLY "3/3" FOR PART 3/3 ===
     /* ======================================================================
-       2.5D PIXEL-ART ISOMETRIC RENDERING ENGINE
+       2.5D ISOMETRIC RENDERING ENGINE & CHOREOGRAPHED ABILITY ANIMATIONS
        ====================================================================== */
     resizeCanvas() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -2481,7 +2745,7 @@
         }
       }
 
-      // 2. Ground Effects
+      // 2. Ground Effects & Telegraphs
       this.renderGroundEffects(ctx, toS);
 
       // 3. Depth-Sorted 2.5D Renderables
@@ -2520,6 +2784,20 @@
         renderables.push({
           depth: st.x + st.y,
           draw: () => this.drawStation(ctx, st, toS)
+        });
+      }
+
+      for (const b of this.world.braziers || []) {
+        renderables.push({
+          depth: b.x + b.y,
+          draw: () => this.drawBrazier(ctx, b, toS)
+        });
+      }
+
+      for (const orb of this.world.lightOrbs || []) {
+        renderables.push({
+          depth: orb.x + orb.y,
+          draw: () => this.drawLightOrb(ctx, orb, toS)
         });
       }
 
@@ -2572,7 +2850,10 @@
       renderables.sort((a, b) => a.depth - b.depth);
       for (const r of renderables) r.draw();
 
-      // 4. Square Pixel Particles
+      // 4. Choreographed 2.5D Ability Animations
+      this.renderSkillAnimations(ctx, toS);
+
+      // 5. Square Pixel Particles
       for (const pt of this.particles) {
         const p = toS(pt.x, pt.y, pt.z);
         const szPx = Math.max(2, Math.round(pt.size * 0.7));
@@ -2583,7 +2864,7 @@
         ctx.restore();
       }
 
-      // 5. Native HiDPI Smooth Floating Combat Numbers
+      // 6. Native HiDPI Smooth Floating Combat Numbers
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const ft of this.floatingTexts) {
@@ -2601,7 +2882,9 @@
       }
       ctx.restore();
     }
+
     renderGroundEffects(ctx, toS) {
+      // Oxygen Vents (Sunken Quarry)
       for (const v of this.world.vents) {
         const p = toS(v.x, v.y, 0);
         const pulse = 0.92 + Math.sin(this.elapsed * 3.5) * 0.08;
@@ -2609,6 +2892,14 @@
         drawIsoBlock(ctx, p.x, p.y, 12, 6, 13, "#bae6fd", "#38bdf8", "#0284c7", "#07090f");
       }
 
+      // Warming Zone Rings for Fire Braziers (Frostbite Sanctum)
+      for (const b of this.world.braziers || []) {
+        const p = toS(b.x, b.y, 0);
+        const pulse = 0.94 + Math.sin(this.elapsed * 4.5) * 0.06;
+        drawIsoGroundEllipse(ctx, p.x, p.y, b.radius * pulse, "rgba(249, 115, 22, 0.16)", "rgba(251, 146, 60, 0.75)", 1);
+      }
+
+      // Poison Spore Pools (Whispering Marsh)
       for (const pool of this.world.poisonPools) {
         const p = toS(pool.x, pool.y, 0);
         const alpha = clamp(pool.life / 2, 0, 1);
@@ -2623,6 +2914,7 @@
         );
       }
 
+      // Exit Portal
       if (this.world.portal) {
         const p = toS(this.world.portal.x, this.world.portal.y, 0);
         const pulse = 1 + Math.sin(this.elapsed * 5) * 0.12;
@@ -2648,6 +2940,8 @@
         ctx.fillText("NEXT ROOM", p.x * zoom, (p.y - 44) * zoom);
         ctx.restore();
       }
+
+      // Boss & Mutator Red Telegraphs
       for (const t of this.telegraphs) {
         const prog = clamp(t.elapsed / t.duration, 0, 1);
         if (t.type === "circle") {
@@ -2689,24 +2983,198 @@
         }
       }
 
+      // Basic Weapon Slash Arcs
       for (const arc of this.slashArcs) {
         const p = toS(arc.x, arc.y, 0.25);
         const alpha = clamp(arc.life / arc.maxLife, 0, 1);
         ctx.save();
-        ctx.globalAlpha = alpha * 0.82;
-        if (arc.span >= Math.PI * 1.9) {
-          drawIsoGroundEllipse(ctx, p.x, p.y, arc.radius * (1.15 - alpha * 0.25), null, arc.color, 3);
-        } else {
-          const tip = toS(arc.x + Math.cos(arc.angle), arc.y + Math.sin(arc.angle), 0.25);
-          const screenAng = Math.atan2(tip.y - p.y, tip.x - p.x);
-          ctx.strokeStyle = arc.color;
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, arc.radius * 18, screenAng - arc.span * 0.45, screenAng + arc.span * 0.45);
-          ctx.stroke();
-        }
+        ctx.globalAlpha = alpha * 0.85;
+        const tip = toS(arc.x + Math.cos(arc.angle), arc.y + Math.sin(arc.angle), 0.25);
+        const screenAng = Math.atan2(tip.y - p.y, tip.x - p.x);
+        ctx.strokeStyle = arc.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, arc.radius * 18, screenAng - arc.span * 0.45, screenAng + arc.span * 0.45);
+        ctx.stroke();
         ctx.restore();
       }
+    }
+
+    renderSkillAnimations(ctx, toS) {
+      for (const anim of this.skillAnims) {
+        const t = clamp(anim.elapsed / anim.duration, 0, 1);
+        const invT = 1 - t;
+        const center = toS(anim.x, anim.y, 0);
+
+        ctx.save();
+        ctx.globalAlpha = clamp(invT * 1.25, 0, 1);
+
+        if (anim.animType === "whirl_slash") {
+          // Twin spinning steel tornado rings
+          const r = anim.radius * (0.45 + t * 0.65);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 6, r, "rgba(226, 232, 240, 0.14)", "#ffffff", 3);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 12, r * 0.72, null, "#94a3b8", 2);
+          for (let k = 0; k < 4; k++) {
+            const a = t * Math.PI * 5 + (k * Math.PI) / 2;
+            const bx = center.x + Math.cos(a) * r * 22;
+            const by = center.y - 8 + Math.sin(a) * r * 11;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(Math.round(bx) - 2, Math.round(by) - 2, 5, 5);
+          }
+        } else if (anim.animType === "seismic_pillars") {
+          // Expanding shockwave + 8 erupting 2.5D stone/crystal pillars
+          const waveR = anim.radius * (0.3 + t * 0.75);
+          drawIsoGroundEllipse(ctx, center.x, center.y, waveR, "rgba(56, 189, 248, 0.16)", "#7dd3fc", 2.5);
+          const pillarH = Math.sin(t * Math.PI) * 26;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const px = anim.x + Math.cos(a) * (anim.radius * 0.75);
+            const py = anim.y + Math.sin(a) * (anim.radius * 0.75);
+            const sp = toS(px, py, 0);
+            drawIsoBlock(ctx, sp.x, sp.y, 12, 6, pillarH, "#bae6fd", "#38bdf8", "#0c4a6e", "#07090f");
+          }
+        } else if (anim.animType === "flame_nova") {
+          // Blazing expanding ring + 6 spinning fire vortex embers
+          const r = anim.radius * (0.25 + t * 0.95);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 4, r, "rgba(249, 115, 22, 0.2)", "#fde047", 3);
+          for (let i = 0; i < 6; i++) {
+            const a = anim.angle + (i / 6) * Math.PI * 2 + t * 2.5;
+            const fp = toS(anim.x + Math.cos(a) * r, anim.y + Math.sin(a) * r, 0.35);
+            ctx.fillStyle = "#f97316";
+            ctx.fillRect(fp.x - 4, fp.y - 4, 8, 8);
+            ctx.fillStyle = "#fef08a";
+            ctx.fillRect(fp.x - 2, fp.y - 2, 4, 4);
+          }
+        } else if (anim.animType === "spore_geysers") {
+          // Toxic emerald bloom + rising vertical spore plumes
+          const r = anim.radius * (0.35 + t * 0.7);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(34, 197, 94, 0.24)", "#a3e635", 2);
+          for (let i = 0; i < 7; i++) {
+            const a = (i / 7) * Math.PI * 2 + i;
+            const distR = (i === 0 ? 0 : 0.65) * anim.radius;
+            const gp = toS(anim.x + Math.cos(a) * distR, anim.y + Math.sin(a) * distR, t * 1.6);
+            ctx.fillStyle = i % 2 === 0 ? "#4ade80" : "#bef264";
+            ctx.fillRect(gp.x - 3, gp.y - 6, 6, 12);
+          }
+        } else if (anim.animType === "starfall_beams") {
+          // Crashing cosmic star beams on each target coordinate
+          const list = anim.targets && anim.targets.length > 0 ? anim.targets : [{ x: anim.x, y: anim.y }];
+          for (const tgt of list) {
+            const tp = toS(tgt.x, tgt.y, 0);
+            drawIsoGroundEllipse(ctx, tp.x, tp.y, anim.radius * (0.35 + t * 0.7), "rgba(232, 121, 249, 0.22)", "#f0abfc", 2);
+            const beamW = Math.max(2, Math.round(invT * 14));
+            ctx.fillStyle = anim.color;
+            ctx.fillRect(tp.x - Math.floor(beamW * 0.5), tp.y - 130, beamW, 130);
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(tp.x - Math.max(1, Math.floor(beamW * 0.25)), tp.y - 130, Math.max(2, Math.floor(beamW * 0.5)), 130);
+          }
+        } else if (anim.animType === "ice_spikes") {
+          // Concentric rings of jagged 2.5D permafrost spires
+          drawIsoGroundEllipse(ctx, center.x, center.y, anim.radius * (0.3 + t * 0.75), "rgba(125, 211, 252, 0.24)", "#e0f2fe", 2);
+          const spikeH = Math.sin(t * Math.PI) * 28;
+          for (let ring = 0; ring < 2; ring++) {
+            const cnt = ring === 0 ? 6 : 10;
+            const rad = anim.radius * (ring === 0 ? 0.42 : 0.82);
+            for (let i = 0; i < cnt; i++) {
+              const a = (i / cnt) * Math.PI * 2 + ring * 0.3;
+              const sp = toS(anim.x + Math.cos(a) * rad, anim.y + Math.sin(a) * rad, 0);
+              drawIsoBlock(ctx, sp.x, sp.y, 10, 5, spikeH * (ring === 0 ? 1.15 : 0.85), "#f0f9ff", "#7dd3fc", "#0284c7", "#07090f");
+            }
+          }
+        } else if (anim.animType === "shadow_scythes") {
+          // Twin crimson-violet eclipse scythe arcs sweeping around the hero
+          const r = anim.radius * (0.5 + t * 0.55);
+          drawIsoGroundEllipse(ctx, center.x, center.y - 4, r, "rgba(244, 63, 94, 0.18)", "#f43f5e", 2.5);
+          for (let s = 0; s < 2; s++) {
+            const baseA = t * Math.PI * 4 + s * Math.PI;
+            ctx.strokeStyle = s === 0 ? "#f43f5e" : "#e879f9";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(center.x, center.y - 8, r * 20, baseA - 0.9, baseA + 0.9);
+            ctx.stroke();
+          }
+        } else if (anim.animType === "aegis_dome" || anim.animType === "crystal_cage") {
+          // Protective 2.5D barrier dome + orbiting crystal shards
+          const r = 1.35 + Math.sin(t * Math.PI) * 0.35;
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(56, 189, 248, 0.24)", "#bae6fd", 2.5);
+          ctx.strokeStyle = "#7dd3fc";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(center.x, center.y - 12, 22 + t * 6, Math.PI, Math.PI * 2);
+          ctx.stroke();
+          if (anim.animType === "crystal_cage") {
+            for (let i = 0; i < 6; i++) {
+              const a = t * 5 + (i / 6) * Math.PI * 2;
+              const cp = toS(anim.x + Math.cos(a) * 1.15, anim.y + Math.sin(a) * 1.15, 0.5 + Math.sin(t * Math.PI) * 0.4);
+              drawIsoBlock(ctx, cp.x, cp.y, 7, 4, 10, "#e0f2fe", "#38bdf8", "#0369a1", "#07090f");
+            }
+          }
+        } else if (anim.animType === "lightning_surge") {
+          // Crackling vertical lightning bolts around hero
+          drawIsoGroundEllipse(ctx, center.x, center.y, 1.5 + t * 0.8, "rgba(249, 115, 22, 0.2)", "#fde047", 2);
+          for (let b = 0; b < 5; b++) {
+            const a = (b / 5) * Math.PI * 2 + t * 6;
+            const bx = center.x + Math.cos(a) * 18;
+            const by = center.y - 4 + Math.sin(a) * 9;
+            ctx.strokeStyle = b % 2 === 0 ? "#fde047" : "#fb923c";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx - 4, by - 14);
+            ctx.lineTo(bx + 4, by - 26);
+            ctx.lineTo(bx - 2, by - 38);
+            ctx.stroke();
+          }
+        } else if (anim.animType === "verdant_bloom") {
+          // Expanding floral heal wave + rising green light crosses
+          const r = anim.radius * (0.25 + t * 0.8);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(34, 197, 94, 0.2)", "#86efac", 2.5);
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            const hp = toS(anim.x + Math.cos(a) * 1.1, anim.y + Math.sin(a) * 1.1, t * 1.8);
+            ctx.fillStyle = "#4ade80";
+            ctx.fillRect(hp.x - 1, hp.y - 4, 3, 9);
+            ctx.fillRect(hp.x - 4, hp.y - 1, 9, 3);
+          }
+        } else if (anim.animType === "black_hole") {
+          // Imploding singularity vortex rings pulling inward
+          const outerR = anim.radius * (1.05 - t * 0.75);
+          drawIsoGroundEllipse(ctx, center.x, center.y, outerR, "rgba(126, 34, 206, 0.24)", "#e879f9", 2.5);
+          drawIsoGroundEllipse(ctx, center.x, center.y, Math.max(0.25, outerR * 0.5), "rgba(15, 7, 28, 0.85)", "#c084fc", 2);
+        } else if (anim.animType === "solar_flare" || anim.animType === "radiant_pillar") {
+          // Ascending radiant pillar of light + expanding sun-ring
+          const r = (anim.radius || 2.5) * (0.3 + t * 0.75);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(253, 224, 71, 0.22)", anim.color, 2.5);
+          const colW = Math.max(4, Math.round(invT * 22));
+          ctx.fillStyle = anim.color;
+          ctx.fillRect(center.x - Math.floor(colW * 0.5), center.y - 110, colW, 110);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(center.x - Math.max(2, Math.floor(colW * 0.25)), center.y - 110, Math.max(2, Math.floor(colW * 0.5)), 110);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    drawBrazier(ctx, b, toS) {
+      const p = toS(b.x, b.y, 0);
+      drawIsoBlock(ctx, p.x, p.y, 16, 8, 12, "#475569", "#1e293b", "#0f172a", "#07090f");
+      const flicker = Math.round(Math.sin(this.elapsed * 14 + b.x) * 2);
+      ctx.fillStyle = "#f97316";
+      ctx.fillRect(p.x - 4, p.y - 18 - flicker, 8, 7 + flicker);
+      ctx.fillStyle = "#fde047";
+      ctx.fillRect(p.x - 2, p.y - 16 - flicker, 4, 5);
+    }
+
+    drawLightOrb(ctx, orb, toS) {
+      const ground = toS(orb.x, orb.y, 0);
+      const bob = 0.45 + Math.sin(this.elapsed * 4 + orb.x) * 0.15;
+      const p = toS(orb.x, orb.y, bob);
+      drawIsoGroundEllipse(ctx, ground.x, ground.y, 0.45, "rgba(253, 224, 71, 0.25)", "#fde047", 1);
+      ctx.fillStyle = "#fde047";
+      ctx.fillRect(p.x - 5, p.y - 5, 10, 10);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
     }
 
     drawStation(ctx, st, toS) {
@@ -2726,6 +3194,10 @@
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
+      } else if (st.shape === "shrine") {
+        drawIsoBlock(ctx, p.x, p.y, 24, 12, 14, "#334155", "#1e293b", "#0f172a", "#07090f");
+        const floatY = Math.round(Math.sin(this.elapsed * 4) * 2);
+        drawIsoBlock(ctx, p.x, p.y - 18 + floatY, 12, 6, 12, "#fef08a", "#f59e0b", "#b45309", "#07090f");
       } else {
         drawIsoBlock(ctx, p.x, p.y, 24, 12, 18, st.color, "#1e293b", "#0f172a", "#07090f");
       }
@@ -2758,7 +3230,7 @@
     }
 
     drawLootDrop(ctx, drop, toS) {
-      const rar = DATA.RARITIES[drop.item.rarity];
+      const rar = DATA.RARITIES[drop.item.rarity] || DATA.RARITIES.common;
       const ground = toS(drop.x, drop.y, 0);
       const bob = Math.sin(this.elapsed * 5 + drop.life) * 0.14;
       const p = toS(drop.x, drop.y, drop.z + 0.3 + bob);
@@ -2792,19 +3264,24 @@
     drawHero(ctx, toS) {
       const armorTpl = GearSystem.getTemplate(this.save.equipped.armor.templateId);
       const wepTpl = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
+      const cls = this.getActiveClass();
       const vis = armorTpl.visuals || { body: "#334155", cloak: "#2563eb", trim: "#e2e8f0", aura: null };
 
       const p = toS(this.player.x, this.player.y, 0);
       const moving = Math.hypot(this.player.vx, this.player.vy) > 0.2;
       const bob = moving ? Math.round(Math.abs(Math.sin(this.elapsed * 14)) * 3) : Math.round(Math.sin(this.elapsed * 3));
 
-      // Screen-space 8-way facing direction
       const f = ISO.worldDirToScreen(this.player.facing.x, this.player.facing.y);
       const facingAway = f.y < -0.35;
 
       drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
       if (vis.aura) {
         drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, vis.aura, vis.trim, 1);
+      }
+
+      // Advanced Class Ascending Halo Ring
+      if (cls.tier === "advanced") {
+        drawIsoGroundEllipse(ctx, p.x, p.y - 28 - bob, 0.42, null, cls.color, 1.5);
       }
 
       if (this.player.shield > 0) {
@@ -2826,10 +3303,10 @@
         ctx.strokeRect(capeX - 5, capeY, 10, 12);
       }
 
-      // 2.5D Pixel Torso
+      // 2.5D Torso
       drawIsoBlock(ctx, p.x, p.y - bob, 18, 9, 18, trimCol, cloakCol, bodyCol, "#07090f");
 
-      // Cape in front when facing North (away from camera)
+      // Cape in front when facing North
       if (facingAway) {
         ctx.fillStyle = cloakCol;
         ctx.fillRect(p.x - 6, p.y - 17 - bob, 12, 13);
@@ -2838,11 +3315,22 @@
         ctx.strokeRect(p.x - 6, p.y - 17 - bob, 12, 13);
       }
 
-      // 2.5D Pixel Head / Helm
+      // 2.5D Head / Helm
       const headY = p.y - 18 - bob;
       drawIsoBlock(ctx, p.x, headY, 14, 7, 10, trimCol, bodyCol, "#0f172a", "#07090f");
 
-      // Directional Face Visor & Pixel Eyes
+      // Class Head Crest / Crown / Horns
+      ctx.fillStyle = cls.color;
+      if (cls.crest.includes("horns") || cls.crest.includes("antlers")) {
+        ctx.fillRect(p.x - 7, headY - 14, 2, 5);
+        ctx.fillRect(p.x + 5, headY - 14, 2, 5);
+      } else if (cls.crest.includes("crown")) {
+        ctx.fillRect(p.x - 4, headY - 13, 2, 3);
+        ctx.fillRect(p.x - 1, headY - 14, 2, 4);
+        ctx.fillRect(p.x + 2, headY - 13, 2, 3);
+      }
+
+      // Directional Face Visor & Eyes
       const eyeY = headY - 6;
       if (f.y > -0.62) {
         const shiftX = Math.round(f.x * 3);
@@ -2964,13 +3452,11 @@
           ctx.fillStyle = eyeCol;
           ctx.fillRect(p.x - 4 + eyeShiftX, p.y - 5 - bob, 2, 2);
           ctx.fillRect(p.x + 2 + eyeShiftX, p.y - 5 - bob, 2, 2);
-          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 3 - bob, 1, 1);
-          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 3 - bob, 1, 1);
         }
         return;
       }
 
-      if (id === "clockwork_hound") {
+      if (id === "clockwork_hound" || id === "frost_wolf") {
         ctx.fillStyle = cDark;
         const l1 = Math.round(stride * 3);
         ctx.fillRect(p.x - 8, p.y - 5 + l1, 3, 6);
@@ -2979,13 +3465,15 @@
         ctx.fillRect(p.x + 2, p.y - 3 + l1, 3, 5);
 
         drawIsoBlock(ctx, p.x, p.y - 3 - bob, 22, 11, 9, cTrim, cMain, cDark, "#07090f");
-        ctx.fillStyle = "#475569";
-        ctx.fillRect(p.x - Math.round(f.x * 4) - 2, p.y - 16 - bob, 3, 5);
+        if (id === "clockwork_hound") {
+          ctx.fillStyle = "#475569";
+          ctx.fillRect(p.x - Math.round(f.x * 4) - 2, p.y - 16 - bob, 3, 5);
+        }
         const hx = p.x + Math.round(f.x * 6);
         const hy = p.y - 7 - bob + Math.round(f.y * 3);
         drawIsoBlock(ctx, hx, hy, 12, 6, 7, cTrim, cMain, cDark, "#07090f");
         if (f.y > -0.45) {
-          ctx.fillStyle = "#ef4444";
+          ctx.fillStyle = id === "frost_wolf" ? "#38bdf8" : "#ef4444";
           ctx.fillRect(hx - 3 + Math.round(f.x * 2), hy - 5, 2, 2);
           ctx.fillRect(hx + 2 + Math.round(f.x * 2), hy - 5, 2, 2);
         }
@@ -2999,9 +3487,6 @@
         drawIsoBlock(ctx, p.x, p.y - 3 - bob, 14, 7, 10, cMain, cMain, cDark, "#07090f");
         const capY = p.y - 12 - bob;
         drawIsoBlock(ctx, p.x, capY, 26, 13, 7, cTrim, cMain, cDark, "#07090f");
-        ctx.fillStyle = "#fef08a";
-        ctx.fillRect(p.x - 5, capY - 7, 2, 2);
-        ctx.fillRect(p.x + 3, capY - 6, 2, 2);
         if (f.y > -0.45) {
           ctx.fillStyle = eyeCol;
           ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 10 - bob, 2, 2);
@@ -3010,7 +3495,7 @@
         return;
       }
 
-      if (id === "void_wraith" || ai === "chaser") {
+      if (id === "void_wraith" || id === "abyssal_stalker" || ai === "chaser") {
         const hover = 5 + Math.round(Math.sin(this.elapsed * 5 + e.x) * 2);
         ctx.fillStyle = cMain;
         ctx.fillRect(p.x - 7, p.y - hover - 2, 3, 5);
@@ -3018,11 +3503,8 @@
         ctx.fillRect(p.x + 5, p.y - hover - 2, 3, 5);
         drawIsoBlock(ctx, p.x, p.y - hover, 18, 9, 13, cMain, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 13 - hover, 13, 7, 8, cTrim, cMain, cDark, "#07090f");
-        ctx.fillStyle = cTrim;
-        ctx.fillRect(p.x - 11, p.y - 10 - hover + bob, 3, 3);
-        ctx.fillRect(p.x + 8, p.y - 10 - hover - bob, 3, 3);
         if (f.y > -0.45) {
-          ctx.fillStyle = "#f0abfc";
+          ctx.fillStyle = id === "abyssal_stalker" ? "#f43f5e" : "#f0abfc";
           ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 18 - hover, 2, 2);
           ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 18 - hover, 2, 2);
         }
@@ -3030,10 +3512,9 @@
       }
 
       // 2. BRUISERS
-      if (id === "quarry_golem" || id === "mire_hulk" || id === "slag_brutes" || id === "astral_sentinel" || ai === "bruiser") {
+      if (ai === "bruiser") {
         const isSlag = id === "slag_brutes";
-        const isHulk = id === "mire_hulk";
-        const isSentinel = id === "astral_sentinel";
+        const isSentinel = id === "astral_sentinel" || id === "dread_knight";
 
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 9, p.y - 6 + Math.round(stride * 2), 5, 7);
@@ -3041,20 +3522,10 @@
 
         drawIsoBlock(ctx, p.x, p.y - 4 - bob, 28, 14, 18, cTrim, cMain, cDark, "#07090f");
 
-        if (f.y > -0.3) {
-          ctx.fillStyle = isSlag ? "#f97316" : isHulk ? "#a3e635" : "#38bdf8";
-          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 14 - bob, 6, 5);
-          if (isSlag) {
-            ctx.fillStyle = "#07090f";
-            ctx.fillRect(p.x - 1 + eyeShiftX, p.y - 14 - bob, 1, 5);
-            ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 14 - bob, 1, 5);
-          }
-        }
-
         const swing = Math.round(stride * 3);
         if (isSentinel) {
-          drawIsoBlock(ctx, p.x - 16, p.y - 8 - bob, 8, 5, 16, "#38bdf8", "#1d4ed8", "#0f172a", "#07090f");
-          ctx.fillStyle = "#e879f9";
+          drawIsoBlock(ctx, p.x - 16, p.y - 8 - bob, 8, 5, 16, cTrim, cMain, "#0f172a", "#07090f");
+          ctx.fillStyle = id === "dread_knight" ? "#f43f5e" : "#e879f9";
           ctx.fillRect(p.x + 14, p.y - 24 - bob + swing, 3, 18);
         } else {
           drawIsoBlock(ctx, p.x - 16, p.y - 6 - bob + swing, 10, 5, 10, cTrim, cMain, cDark, "#07090f");
@@ -3066,10 +3537,6 @@
           ctx.fillStyle = "#475569";
           ctx.fillRect(p.x - 11, p.y - 29 - bob, 4, 7);
           ctx.fillRect(p.x + 7, p.y - 29 - bob, 4, 7);
-        } else if (isHulk || isSentinel) {
-          ctx.fillStyle = cTrim;
-          ctx.fillRect(p.x - 8, p.y - 31 - bob, 2, 6);
-          ctx.fillRect(p.x + 6, p.y - 31 - bob, 2, 6);
         }
 
         if (f.y > -0.45) {
@@ -3091,21 +3558,13 @@
         ctx.lineTo(p.x - 11, p.y + 2);
         ctx.moveTo(p.x, p.y - 8);
         ctx.lineTo(p.x + 11, p.y + 2);
-        ctx.moveTo(p.x, p.y - 8);
-        ctx.lineTo(p.x, p.y + 4);
         ctx.stroke();
 
         drawIsoBlock(ctx, p.x, p.y - 7, 18, 9, 11, cTrim, cMain, cDark, "#07090f");
         const bx = p.x + Math.round(f.x * 11);
         const by = p.y - 13 + Math.round(f.y * 5);
-        ctx.strokeStyle = "#07090f";
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y - 13);
-        ctx.lineTo(bx, by);
-        ctx.stroke();
         ctx.strokeStyle = "#fde047";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y - 13);
         ctx.lineTo(bx, by);
@@ -3117,26 +3576,15 @@
         drawIsoBlock(ctx, p.x, p.y, 20, 10, 9, cMain, cMain, cDark, "#07090f");
         const pulse = Math.round(Math.sin(this.elapsed * 6) * 2);
         drawIsoBlock(ctx, p.x, p.y - 9, 14 + pulse, 7 + Math.floor(pulse * 0.5), 8, "#bef264", cTrim, cMain, "#07090f");
-        if (f.y > -0.45) {
-          ctx.fillStyle = "#fef08a";
-          ctx.fillRect(p.x - 3 + eyeShiftX, p.y - 6, 2, 2);
-          ctx.fillRect(p.x + 1 + eyeShiftX, p.y - 6, 2, 2);
-        }
         return;
       }
 
       drawIsoBlock(ctx, p.x, p.y - hover - 4, 14, 7, 14, "#ffffff", cTrim, cMain, "#07090f");
       const orbA = this.elapsed * 3.5 + e.x;
-      const ox1 = p.x + Math.round(Math.cos(orbA) * 14);
-      const oy1 = p.y - hover - 10 + Math.round(Math.sin(orbA) * 6);
-      const ox2 = p.x + Math.round(Math.cos(orbA + Math.PI) * 14);
-      const oy2 = p.y - hover - 10 + Math.round(Math.sin(orbA + Math.PI) * 6);
       ctx.fillStyle = cTrim;
-      ctx.fillRect(ox1 - 2, oy1 - 2, 4, 4);
-      ctx.fillRect(ox2 - 2, oy2 - 2, 4, 4);
+      ctx.fillRect(p.x + Math.round(Math.cos(orbA) * 14) - 2, p.y - hover - 12 + Math.round(Math.sin(orbA) * 6), 4, 4);
+      ctx.fillRect(p.x + Math.round(Math.cos(orbA + Math.PI) * 14) - 2, p.y - hover - 12 + Math.round(Math.sin(orbA + Math.PI) * 6), 4, 4);
       if (f.y > -0.5) {
-        ctx.fillStyle = "#07090f";
-        ctx.fillRect(p.x - 3 + eyeShiftX, p.y - hover - 13, 6, 4);
         ctx.fillStyle = "#fef08a";
         ctx.fillRect(p.x - 1 + eyeShiftX, p.y - hover - 12, 3, 2);
       }
@@ -3150,30 +3598,17 @@
       const eyeShiftX = Math.round(f.x * 5);
       const bob = Math.round(Math.abs(Math.sin(this.elapsed * 6)) * 3);
 
-      // BOSS 1: OBSIDIAN COLOSSUS
       if (id === "obsidian_colossus") {
         ctx.fillStyle = cDark;
         ctx.fillRect(p.x - 14, p.y - 8, 8, 9);
         ctx.fillRect(p.x + 6, p.y - 8, 8, 9);
-
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 44, 22, 26, "#334155", cMain, cDark, "#07090f");
-
-        if (f.y > -0.3) {
-          ctx.fillStyle = "#38bdf8";
-          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 24 - bob, 4, 12);
-          ctx.fillRect(p.x - 5 + eyeShiftX, p.y - 20 - bob, 10, 3);
-        }
-
         drawIsoBlock(ctx, p.x - 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 24, p.y - 18 - bob, 18, 9, 14, cTrim, "#0284c7", cDark, "#07090f");
-
         const fistWave = Math.round(Math.sin(this.elapsed * 5) * 4);
         drawIsoBlock(ctx, p.x - 28, p.y - 4 - bob + fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 28, p.y - 4 - bob - fistWave, 14, 7, 12, cTrim, cMain, cDark, "#07090f");
-
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 12, cTrim, cMain, cDark, "#07090f");
-        drawIsoBlock(ctx, p.x, p.y - 44 - bob, 8, 4, 9, "#e0f2fe", "#38bdf8", "#0284c7", "#07090f");
-
         if (f.y > -0.45) {
           ctx.fillStyle = stunned ? "#38bdf8" : "#fef08a";
           ctx.fillRect(p.x - 6 + eyeShiftX, p.y - 38 - bob, 4, 3);
@@ -3182,7 +3617,6 @@
         return;
       }
 
-      // BOSS 2: IGNIS PRIME
       if (id === "arch_forge_automaton") {
         const haloY = p.y - 28 - bob;
         ctx.strokeStyle = cTrim;
@@ -3190,35 +3624,9 @@
         ctx.beginPath();
         ctx.arc(p.x, haloY, 24, 0, Math.PI * 2);
         ctx.stroke();
-        for (let k = 0; k < 8; k++) {
-          const a = this.elapsed * 2 + (k * Math.PI) / 4;
-          ctx.fillStyle = "#fde047";
-          ctx.fillRect(p.x + Math.round(Math.cos(a) * 25) - 2, haloY + Math.round(Math.sin(a) * 25) - 2, 4, 4);
-        }
-
-        ctx.fillStyle = "#1e293b";
-        ctx.fillRect(p.x - 14, p.y - 8, 9, 9);
-        ctx.fillRect(p.x + 5, p.y - 8, 9, 9);
-
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 46, 23, 26, cTrim, cMain, cDark, "#07090f");
-
-        if (f.y > -0.3) {
-          ctx.fillStyle = "#f97316";
-          ctx.fillRect(p.x - 9 + eyeShiftX, p.y - 22 - bob, 18, 10);
-          ctx.fillStyle = "#fef08a";
-          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 20 - bob, 14, 6);
-          ctx.fillStyle = "#07090f";
-          for (let gx = -5; gx <= 5; gx += 4) {
-            ctx.fillRect(p.x + gx + eyeShiftX, p.y - 22 - bob, 1, 10);
-          }
-        }
-
         drawIsoBlock(ctx, p.x - 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
         drawIsoBlock(ctx, p.x + 18, p.y - 30 - bob, 8, 4, 14, "#94a3b8", "#475569", "#1e293b", "#07090f");
-
-        drawIsoBlock(ctx, p.x - 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
-        drawIsoBlock(ctx, p.x + 27, p.y - 12 - bob, 14, 7, 14, cTrim, "#9a3412", cDark, "#07090f");
-
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 11, "#fde047", cTrim, cMain, "#07090f");
         if (f.y > -0.45) {
           ctx.fillStyle = "#ef4444";
@@ -3227,60 +3635,62 @@
         return;
       }
 
-      // BOSS 3: VESPERA THE ROT-QUEEN
       if (id === "mycelial_matriarch") {
-        for (let t = -3; t <= 3; t++) {
-          const sway = Math.round(Math.sin(this.elapsed * 5 + t) * 3);
-          ctx.fillStyle = t % 2 === 0 ? cMain : "#166534";
-          ctx.fillRect(p.x + t * 6 + sway - 2, p.y - 9, 4, 10);
-        }
-
         drawIsoBlock(ctx, p.x, p.y - 6 - bob, 32, 16, 26, cTrim, cMain, cDark, "#07090f");
-
-        drawIsoBlock(ctx, p.x - 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
-        drawIsoBlock(ctx, p.x + 20, p.y - 20 - bob, 14, 7, 10, "#bef264", "#22c55e", cDark, "#07090f");
-
         drawIsoBlock(ctx, p.x, p.y - 32 - bob, 56, 28, 10, "#bef264", "#16a34a", "#14532d", "#07090f");
         drawIsoBlock(ctx, p.x, p.y - 42 - bob, 34, 17, 8, "#fef08a", "#4ade80", "#15803d", "#07090f");
-
         if (f.y > -0.45) {
           ctx.fillStyle = "#fef08a";
           ctx.fillRect(p.x - 7 + eyeShiftX, p.y - 26 - bob, 3, 3);
           ctx.fillRect(p.x + 4 + eyeShiftX, p.y - 26 - bob, 3, 3);
-          ctx.fillRect(p.x - 2 + eyeShiftX, p.y - 23 - bob, 4, 2);
         }
         return;
       }
 
-      // BOSS 4: AETHELGARD, STAR-EATER
-      const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
-      drawIsoGroundEllipse(ctx, p.x, p.y - hover - 22, 1.55, null, "#e879f9", 2);
-      for (let m = 0; m < 4; m++) {
-        const a = this.elapsed * 2.8 + (m * Math.PI) / 2;
-        const mx = p.x + Math.round(Math.cos(a) * 34);
-        const my = p.y - hover - 22 + Math.round(Math.sin(a) * 14);
-        ctx.fillStyle = m % 2 === 0 ? "#38bdf8" : "#fde047";
-        ctx.fillRect(mx - 3, my - 3, 6, 6);
+      if (id === "valkyr_frost_warden") {
+        // Ice-winged Valkyrie Sovereign
+        const wingFlap = Math.round(Math.sin(this.elapsed * 6) * 4);
+        drawIsoBlock(ctx, p.x - 28, p.y - 16 - bob + wingFlap, 16, 8, 22, "#f0f9ff", "#7dd3fc", "#0284c7", "#07090f");
+        drawIsoBlock(ctx, p.x + 28, p.y - 16 - bob + wingFlap, 16, 8, 22, "#f0f9ff", "#7dd3fc", "#0284c7", "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 6 - bob, 36, 18, 26, cTrim, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 32 - bob, 22, 11, 12, "#ffffff", "#38bdf8", cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillRect(p.x - 6 + eyeShiftX, p.y - 38 - bob, 4, 3);
+          ctx.fillRect(p.x + 2 + eyeShiftX, p.y - 38 - bob, 4, 3);
+        }
+        return;
       }
 
+      if (id === "malakor_sovereign") {
+        // Emperor of the Abyssal Throne: Eclipse Halo + Quad Shadow Wings + Crown
+        const hover = 8 + Math.round(Math.sin(this.elapsed * 4.5) * 3);
+        drawIsoGroundEllipse(ctx, p.x, p.y - hover - 26, 1.75, "rgba(244, 63, 94, 0.14)", "#f43f5e", 2);
+        const wing = Math.round(Math.sin(this.elapsed * 5) * 5);
+        drawIsoBlock(ctx, p.x - 32, p.y - hover - 14 + wing, 18, 9, 26, "#f43f5e", "#881337", cDark, "#07090f");
+        drawIsoBlock(ctx, p.x + 32, p.y - hover - 14 + wing, 18, 9, 26, "#f43f5e", "#881337", cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - hover, 38, 19, 28, cTrim, cMain, cDark, "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - hover - 28, 24, 12, 12, "#fde047", "#be123c", cDark, "#07090f");
+        if (f.y > -0.45) {
+          ctx.fillStyle = "#f43f5e";
+          ctx.fillRect(p.x - 7 + eyeShiftX, p.y - hover - 34, 4, 3);
+          ctx.fillRect(p.x + 3 + eyeShiftX, p.y - hover - 34, 4, 3);
+        }
+        return;
+      }
+
+      // Chronos Archon
+      const hover = 10 + Math.round(Math.sin(this.elapsed * 4) * 3);
+      drawIsoGroundEllipse(ctx, p.x, p.y - hover - 22, 1.55, null, "#e879f9", 2);
       const wingFlap = Math.round(Math.sin(this.elapsed * 5) * 4);
       drawIsoBlock(ctx, p.x - 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
       drawIsoBlock(ctx, p.x + 28, p.y - hover - 14 + wingFlap, 14, 7, 22, "#f0abfc", "#9333ea", cDark, "#07090f");
-
       drawIsoBlock(ctx, p.x, p.y - hover, 34, 17, 26, cTrim, cMain, cDark, "#07090f");
-
       drawIsoBlock(ctx, p.x, p.y - hover - 26, 22, 11, 11, "#f5d0fe", "#7e22ce", cDark, "#07090f");
-      ctx.fillStyle = "#fde047";
-      ctx.fillRect(p.x - 8, p.y - hover - 42, 3, 6);
-      ctx.fillRect(p.x - 1, p.y - hover - 45, 3, 9);
-      ctx.fillRect(p.x + 6, p.y - hover - 42, 3, 6);
-
       if (f.y > -0.45) {
         ctx.fillStyle = "#38bdf8";
         ctx.fillRect(p.x - 6 + eyeShiftX, p.y - hover - 32, 3, 3);
         ctx.fillRect(p.x + 3 + eyeShiftX, p.y - hover - 32, 3, 3);
-        ctx.fillStyle = "#fde047";
-        ctx.fillRect(p.x - 1 + eyeShiftX, p.y - hover - 35, 3, 3);
       }
     }
 
@@ -3318,6 +3728,16 @@
         mctx.fillRect(ox + v.x * scale - 2, oy + v.y * scale - 2, 4, 4);
       }
 
+      for (const b of this.world.braziers || []) {
+        mctx.fillStyle = "#f97316";
+        mctx.fillRect(ox + b.x * scale - 2, oy + b.y * scale - 2, 4, 4);
+      }
+
+      for (const orb of this.world.lightOrbs || []) {
+        mctx.fillStyle = "#fde047";
+        mctx.fillRect(ox + orb.x * scale - 2, oy + orb.y * scale - 2, 4, 4);
+      }
+
       for (const st of this.world.stations) {
         mctx.fillStyle = st.color;
         mctx.fillRect(ox + st.x * scale - 2.5, oy + st.y * scale - 2.5, 5, 5);
@@ -3353,6 +3773,13 @@
       document.getElementById("skill-q-name").textContent = qSk.name;
       document.getElementById("skill-e-icon").textContent = eSk.icon;
       document.getElementById("skill-e-name").textContent = eSk.name;
+
+      const cls = this.getActiveClass();
+      const clsBadge = document.getElementById("player-class-badge");
+      if (clsBadge) {
+        clsBadge.textContent = cls.name;
+        clsBadge.style.color = cls.color;
+      }
 
       document.getElementById("mute-icon").textContent = this.sfx.muted ? "🔇" : "🔊";
       this.syncLiveHUD();
@@ -3472,7 +3899,7 @@
       this.activeModal = name;
       document.getElementById("modal-backdrop").classList.remove("hidden");
 
-      const ids = ["dungeon", "armory", "forge", "guild", "run-summary", "settings"];
+      const ids = ["dungeon", "armory", "forge", "guild", "class", "run-summary", "settings"];
       for (const id of ids) {
         const el = document.getElementById("modal-" + id);
         if (el) el.classList.toggle("hidden", id !== name);
@@ -3486,6 +3913,7 @@
       if (name === "armory") this.renderArmoryModal();
       if (name === "forge") this.renderForgeModal();
       if (name === "guild") this.renderGuildModal();
+      if (name === "class") this.renderClassModal();
       if (name === "settings") this.renderSettingsModal();
     }
 
@@ -4005,7 +4433,141 @@
       }
     }
 
-    /* --- 5. SETTINGS MODAL --- */
+    /* --- 5. CLASS & ADVANCED EVOLUTION MODAL --- */
+    renderClassModal() {
+      const activeCls = this.getActiveClass();
+      const baseId = this.getBaseClassId();
+      const baseCls = DATA.CLASSES[baseId];
+
+      // Active Class Banner
+      const banner = document.getElementById("current-class-banner");
+      banner.innerHTML = `
+        <div>
+          <div class="class-banner-title" style="color:${activeCls.color}">
+            ${activeCls.icon} ${activeCls.name}
+            <span class="muted-text">(${activeCls.tier === "advanced" ? "Ascended Class" : "Base Discipline"})</span>
+          </div>
+          <p class="muted-text" style="margin-top:3px">${activeCls.desc}</p>
+        </div>
+        <div class="class-passive-pill">
+          <strong>Passive — ${activeCls.passiveName}:</strong> ${activeCls.passiveDesc}
+        </div>
+      `;
+
+      // Base Class Cards
+      const baseGrid = document.getElementById("base-class-grid");
+      baseGrid.innerHTML = "";
+      const baseList = Object.values(DATA.CLASSES).filter((c) => c.tier === "base");
+
+      for (const bc of baseList) {
+        const isCurrentBase = bc.id === baseId;
+        const card = document.createElement("div");
+        card.className = "class-card" + (isCurrentBase ? " active" : "");
+
+        const bonusChips = Object.entries(bc.bonuses)
+          .map(([k, v]) => `<span class="class-stat-chip">+${fmtStatVal(k, v)} ${STAT_LABELS[k] || k}</span>`)
+          .join("");
+
+        card.innerHTML = `
+          <div class="class-card-head">
+            <span class="class-card-name" style="color:${bc.color}">${bc.icon} ${bc.name}</span>
+            ${isCurrentBase ? `<span class="gold-text" style="font-size:10px;font-weight:900">ACTIVE</span>` : ""}
+          </div>
+          <div class="muted-text">${bc.desc}</div>
+          <div class="class-stat-tags">${bonusChips}</div>
+          <div style="font-size:11px;color:#e0f2fe;margin-top:auto"><strong>${bc.passiveName}:</strong> ${bc.passiveDesc}</div>
+        `;
+        card.addEventListener("click", () => {
+          this.save.classId = bc.id;
+          const st = this.getHeroStats();
+          this.player.maxHp = st.hp;
+          if (this.mode === "hub") this.player.hp = st.hp;
+          this.sfx.uiClick();
+          this.syncAllHUD();
+          this.renderClassModal();
+          this.saveGame(false);
+        });
+        baseGrid.appendChild(card);
+      }
+
+      // Evolution Branch Cards
+      const canEvolveLv = this.save.level >= C.EVOLUTION_LEVEL_REQ;
+      const reqBadge = document.getElementById("evolution-req-badge");
+      reqBadge.textContent = canEvolveLv
+        ? `Unlocked (Hero Lv. ${this.save.level})`
+        : `Requires Hero Lv. ${C.EVOLUTION_LEVEL_REQ} (Current: Lv. ${this.save.level})`;
+
+      const evoGrid = document.getElementById("evolution-grid");
+      evoGrid.innerHTML = "";
+
+      for (const evoId of baseCls.evolutions || []) {
+        const evo = DATA.CLASSES[evoId];
+        if (!evo) continue;
+        const unlocked = !!this.save.unlockedEvolutions[evo.id];
+        const isEquipped = this.save.classId === evo.id;
+
+        const bonusChips = Object.entries(evo.bonuses)
+          .map(([k, v]) => `<span class="class-stat-chip">+${fmtStatVal(k, v)} ${STAT_LABELS[k] || k}</span>`)
+          .join("");
+
+        const card = document.createElement("div");
+        card.className = "evo-card" + (isEquipped ? " evolved" : "");
+
+        let actionHTML = "";
+        if (isEquipped) {
+          actionHTML = `<button class="btn btn-secondary btn-sm btn-block" disabled>&#10003; Currently Ascended</button>`;
+        } else if (unlocked) {
+          actionHTML = `<button class="btn btn-primary btn-sm btn-block">Ascend to ${evo.name}</button>`;
+        } else {
+          const canAfford =
+            canEvolveLv && this.save.gold >= evo.costGold && this.save.renown >= evo.costRenown;
+          actionHTML = `<button class="btn btn-accent btn-sm btn-block" ${canAfford ? "" : "disabled"}>
+            Evolve (${fmtNum(evo.costGold)} Gold + ${evo.costRenown} Renown)
+          </button>`;
+        }
+
+        card.innerHTML = `
+          <div>
+            <div class="class-card-head">
+              <span class="class-card-name" style="color:${evo.color}">${evo.icon} ${evo.name}</span>
+              <span class="muted-text">${unlocked ? "Unlocked" : "Lv. 10 Ascension"}</span>
+            </div>
+            <p class="muted-text" style="margin:4px 0 8px">${evo.desc}</p>
+            <div class="class-stat-tags" style="margin-bottom:8px">${bonusChips}</div>
+            <div style="font-size:11px;color:#fef08a"><strong>Ascended Passive — ${evo.passiveName}:</strong> ${evo.passiveDesc}</div>
+          </div>
+          ${actionHTML}
+        `;
+
+        const btn = card.querySelector("button");
+        if (btn && !btn.disabled) {
+          btn.onclick = () => {
+            if (!unlocked) {
+              if (!canEvolveLv || this.save.gold < evo.costGold || this.save.renown < evo.costRenown) return;
+              this.save.gold -= evo.costGold;
+              this.save.renown -= evo.costRenown;
+              this.save.unlockedEvolutions[evo.id] = true;
+              this.sfx.evolve();
+              this.spawnBurst(this.player.x, this.player.y, evo.color, 34, 4.5);
+              this.toast(`Ascended into ${evo.name}!`, "mythic");
+            } else {
+              this.sfx.upgrade();
+            }
+            this.save.classId = evo.id;
+            const st = this.getHeroStats();
+            this.player.maxHp = st.hp;
+            if (this.mode === "hub") this.player.hp = st.hp;
+            this.syncAllHUD();
+            this.renderClassModal();
+            this.saveGame(false);
+          };
+        }
+
+        evoGrid.appendChild(card);
+      }
+    }
+
+    /* --- 6. SETTINGS MODAL --- */
     renderSettingsModal() {
       document.getElementById("setting-volume").value = this.save.settings.volume;
       document.getElementById("setting-mute").checked = this.save.settings.muted;
@@ -4131,6 +4693,7 @@
           if (e.code === "Digit2") this.openModal("armory");
           if (e.code === "Digit3") this.openModal("forge");
           if (e.code === "Digit4") this.openModal("guild");
+          if (e.code === "Digit5") this.openModal("class");
         }
       });
 
@@ -4290,7 +4853,7 @@
       });
 
       document.getElementById("btn-reset-save")?.addEventListener("click", () => {
-        if (!window.confirm("Erase all Riftfall progress, gear, and mercenaries?")) return;
+        if (!window.confirm("Erase all Riftfall progress, gear, classes, and mercenaries?")) return;
         localStorage.removeItem(DATA.SAVE_KEY);
         this.save = this.createDefaultSave();
         this.closeAllModals();

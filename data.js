@@ -1,6 +1,7 @@
 /* ==========================================================================
    RIFTFALL — DATA CONFIGURATION (data.js)
-   Balanced progression, tighter rarity curves, and retro pixel palettes.
+   6 Themed Dungeons, Environmental Hazards, Enemies, Bosses, Gear Sets,
+   Base & Advanced Evolution Classes, Skill Animation Specs, and Blessings.
    ========================================================================== */
 
 window.GAME_DATA = {
@@ -19,7 +20,8 @@ window.GAME_DATA = {
     DASH_IFRAMES: 0.34,
     REROLL_BASE_SHARDS: 12,
     XP_BASE: 100,
-    XP_GROWTH: 1.26,
+    XP_GROWTH: 1.24,
+    EVOLUTION_LEVEL_REQ: 10,
     AUTO_SAVE_INTERVAL: 15,
     BASE_PLAYER_STATS: {
       hp: 240,
@@ -36,7 +38,188 @@ window.GAME_DATA = {
   },
 
   /* ------------------------------------------------------------------------
-     RARITY SYSTEM (Classic ARPG Drop Weights & Balanced Multipliers)
+     CLASS & ADVANCED EVOLUTION SYSTEM (4 Base Classes -> 8 Advanced Classes)
+     ------------------------------------------------------------------------ */
+  CLASSES: {
+    // --- BASE CLASSES ---
+    vanguard: {
+      id: "vanguard",
+      name: "Vanguard",
+      tier: "base",
+      icon: "⚔",
+      color: "#38bdf8",
+      crest: "crown_steel",
+      desc: "Frontline Rift sentinel trained in heavy armor and retaliatory strikes.",
+      bonuses: { hpPct: 0.16, atkPct: 0.10, armor: 12 },
+      passiveName: "Iron Bulwark",
+      passiveDesc: "Every 4th attack grants a protective barrier equal to 8% of Max HP.",
+      evolutions: ["paladin", "berserker"]
+    },
+    arcanist: {
+      id: "arcanist",
+      name: "Arcanist",
+      tier: "base",
+      icon: "✦",
+      color: "#c084fc",
+      crest: "halo_arcane",
+      desc: "Channeler of raw Rift energy who amplifies spell burst and skill cadence.",
+      bonuses: { spellPct: 0.18, cdr: 0.08, crit: 0.04 },
+      passiveName: "Arcane Echo",
+      passiveDesc: "Casting [Q] reduces the remaining cooldown of [E] by 2.0 seconds.",
+      evolutions: ["chronomancer", "pyromancer"]
+    },
+    shadowblade: {
+      id: "shadowblade",
+      name: "Shadowblade",
+      tier: "base",
+      icon: "🗡",
+      color: "#f59e0b",
+      crest: "hood_shadow",
+      desc: "Swift duelists who strike vital weak points and dance through boss telegraphs.",
+      bonuses: { atkPct: 0.12, crit: 0.10, speedPct: 0.12 },
+      passiveName: "Phantom Step",
+      passiveDesc: "Dashing guarantees your next attack or skill within 2.5s is a Critical Hit.",
+      evolutions: ["assassin", "ranger"]
+    },
+    warden: {
+      id: "warden",
+      name: "Warden",
+      tier: "base",
+      icon: "🌿",
+      color: "#22c55e",
+      crest: "antlers_verdant",
+      desc: "Wilderness mystics attuned to toxic swamps, frost winds, and life siphon.",
+      bonuses: { hpPct: 0.10, spellPct: 0.10, lifesteal: 0.05, hazardResist: 0.12 },
+      passiveName: "Verdant Pulse",
+      passiveDesc: "Slaying an enemy restores 5% Max HP and purges 12% of active dungeon hazards.",
+      evolutions: ["blight_sovereign", "geomancer"]
+    },
+
+    // --- ADVANCED EVOLUTIONS (Unlocks at Hero Level 10) ---
+    paladin: {
+      id: "paladin",
+      name: "Solar Paladin",
+      tier: "advanced",
+      baseId: "vanguard",
+      icon: "☀",
+      color: "#fde047",
+      crest: "crown_solar",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Ascended templar radiating blinding solar shields and purifying flame.",
+      bonuses: { hpPct: 0.30, atkPct: 0.18, spellPct: 0.14, armor: 26, hazardResist: 0.12 },
+      passiveName: "Solar Judgment",
+      passiveDesc: "Every 3rd attack grants a 12% HP Solar Shield and blasts nearby foes for 90% Spell Power."
+    },
+    berserker: {
+      id: "berserker",
+      name: "Rift Berserker",
+      tier: "advanced",
+      baseId: "vanguard",
+      icon: "🪓",
+      color: "#ef4444",
+      crest: "horns_crimson",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Unchained warlord whose fury scales as blood spills across the arena.",
+      bonuses: { hpPct: 0.18, atkPct: 0.32, crit: 0.12, lifesteal: 0.06, speedPct: 0.10 },
+      passiveName: "Bloodlust Frenzy",
+      passiveDesc: "Critical hits deal +35% bonus damage and restore 4% Max HP."
+    },
+    chronomancer: {
+      id: "chronomancer",
+      name: "Chronomancer",
+      tier: "advanced",
+      baseId: "arcanist",
+      icon: "⌛",
+      color: "#38bdf8",
+      crest: "halo_chrono",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Master of temporal fractures who bends cooldowns and freezes enemies in time.",
+      bonuses: { spellPct: 0.28, cdr: 0.18, speedPct: 0.14, crit: 0.08 },
+      passiveName: "Temporal Cascade",
+      passiveDesc: "Casting [Q] or [E] refunds 25% of all active skill cooldowns and slows nearby foes."
+    },
+    pyromancer: {
+      id: "pyromancer",
+      name: "Void Pyromancer",
+      tier: "advanced",
+      baseId: "arcanist",
+      icon: "🔥",
+      color: "#f97316",
+      crest: "crown_flame",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Cataclysmic archmage raining astral embers with every spell cast.",
+      bonuses: { spellPct: 0.36, atkPct: 0.12, crit: 0.12, cdr: 0.10 },
+      passiveName: "Meteor Overload",
+      passiveDesc: "Casting [Q] calls down an extra Void Meteor for 160% Spell Power."
+    },
+    assassin: {
+      id: "assassin",
+      name: "Phantom Assassin",
+      tier: "advanced",
+      baseId: "shadowblade",
+      icon: "☠",
+      color: "#e879f9",
+      crest: "hood_phantom",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Lethal shadow-weaver executing wounded bosses with devastating criticals.",
+      bonuses: { atkPct: 0.28, crit: 0.18, speedPct: 0.20, lifesteal: 0.05 },
+      passiveName: "Shadow Execution",
+      passiveDesc: "Dashing guarantees a Critical Hit and strikes enemies below 40% HP for +45% damage."
+    },
+    ranger: {
+      id: "ranger",
+      name: "Tempest Ranger",
+      tier: "advanced",
+      baseId: "shadowblade",
+      icon: "🏹",
+      color: "#34d399",
+      crest: "crown_wind",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Storm-forged marksman unleashing rapid wind-bolts and lightning volleys.",
+      bonuses: { atkPct: 0.24, crit: 0.14, speedPct: 0.24, cdr: 0.12 },
+      passiveName: "Gale Volley",
+      passiveDesc: "Every 3rd attack fires a piercing Tempest Bolt for 115% ATK damage."
+    },
+    blight_sovereign: {
+      id: "blight_sovereign",
+      name: "Blight Sovereign",
+      tier: "advanced",
+      baseId: "warden",
+      icon: "☣",
+      color: "#84cc16",
+      crest: "crown_spore",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Plague-lord whose virulent spores melt armor and sustain unending vitality.",
+      bonuses: { hpPct: 0.20, spellPct: 0.26, lifesteal: 0.10, hazardResist: 0.20 },
+      passiveName: "Toxic Symbiosis",
+      passiveDesc: "Slaying foes restores 8% Max HP and detonates a toxic burst for 110% Spell Power."
+    },
+    geomancer: {
+      id: "geomancer",
+      name: "Aegis Geomancer",
+      tier: "advanced",
+      baseId: "warden",
+      icon: "◈",
+      color: "#7dd3fc",
+      crest: "crown_crystal",
+      costGold: 600,
+      costRenown: 3,
+      desc: "Elemental bastion virtually impervious to dungeon hazards and boss slams.",
+      bonuses: { hpPct: 0.34, spellPct: 0.18, armor: 24, hazardResist: 0.28 },
+      passiveName: "Tectonic Immunity",
+      passiveDesc: "Purges 20% of dungeon hazards on kill and grants +25% Shield strength on [E]."
+    }
+  },
+
+  /* ------------------------------------------------------------------------
+     RARITY SYSTEM
      ------------------------------------------------------------------------ */
   RARITIES: {
     common: {
@@ -45,7 +228,7 @@ window.GAME_DATA = {
       order: 1,
       statMult: 1.0,
       substatCount: 1,
-      color: "#a8b5c8",
+      color: "#b4c0d3",
       sellBase: 26,
       salvageBase: 4,
       dropWeight: 76.0
@@ -174,11 +357,11 @@ window.GAME_DATA = {
   ],
 
   /* ------------------------------------------------------------------------
-     SANCTUARY BASE CAMP STATIONS
+     SANCTUARY BASE CAMP STATIONS (5 Interactive Stations)
      ------------------------------------------------------------------------ */
   SANCTUARY: {
     size: 15,
-    spawn: { x: 7.5, y: 8.5 },
+    spawn: { x: 7.5, y: 7.5 },
     palette: {
       bgTop: "#0b101e",
       bgBottom: "#05070e",
@@ -196,7 +379,7 @@ window.GAME_DATA = {
         name: "Rift Gate",
         prompt: "Open Rift Gate",
         x: 7.5,
-        y: 3.0,
+        y: 2.8,
         radius: 1.9,
         color: "#38bdf8",
         glow: "rgba(56, 189, 248, 0.55)",
@@ -207,8 +390,8 @@ window.GAME_DATA = {
         id: "armory",
         name: "Armory",
         prompt: "Open Armory & Gear",
-        x: 3.2,
-        y: 7.5,
+        x: 3.0,
+        y: 6.2,
         radius: 1.7,
         color: "#f59e0b",
         glow: "rgba(245, 158, 11, 0.48)",
@@ -219,8 +402,8 @@ window.GAME_DATA = {
         id: "forge",
         name: "Blacksmith",
         prompt: "Open Blacksmith Forge",
-        x: 11.8,
-        y: 7.5,
+        x: 12.0,
+        y: 6.2,
         radius: 1.7,
         color: "#f97316",
         glow: "rgba(249, 115, 22, 0.52)",
@@ -231,19 +414,31 @@ window.GAME_DATA = {
         id: "guild",
         name: "Mercenary Guild",
         prompt: "Open Mercenary Guild",
-        x: 7.5,
-        y: 12.0,
+        x: 11.4,
+        y: 11.4,
         radius: 1.7,
         color: "#a855f7",
         glow: "rgba(168, 85, 247, 0.48)",
         icon: "♕",
         shape: "banner"
+      },
+      {
+        id: "class",
+        name: "Class Shrine",
+        prompt: "Open Class & Evolution",
+        x: 3.6,
+        y: 11.4,
+        radius: 1.7,
+        color: "#fde047",
+        glow: "rgba(253, 224, 71, 0.48)",
+        icon: "✦",
+        shape: "shrine"
       }
     ]
   },
 
   /* ------------------------------------------------------------------------
-     4 THEMED DUNGEONS + SURVIVAL GIMMICKS + PALETTES
+     6 THEMED DUNGEONS + SURVIVAL GIMMICKS + PALETTES
      ------------------------------------------------------------------------ */
   DUNGEONS: [
     {
@@ -409,13 +604,94 @@ window.GAME_DATA = {
       bossId: "chronos_archon",
       lootPool: ["nova_grimoire", "starlight_vestments", "singularity_prism_relic"],
       lootSummary: ["Nova Grimoire", "Starlight Vestments", "Singularity Prism"]
+    },
+    {
+      id: "frostbite_sanctum",
+      name: "Frostbite Sanctum",
+      themeLabel: "Ice / Glacial",
+      themeColor: "#7dd3fc",
+      desc: "A frozen citadel swept by sub-zero blizzards that numb limbs unless warmed by fire braziers.",
+      rooms: 5,
+      recommendedPower: 1250,
+      baseGold: 1050,
+      baseShards: 88,
+      baseXp: 1450,
+      hazard: {
+        type: "frost",
+        name: "Hypothermia",
+        icon: "❄",
+        cssOverlay: "hazard-frost",
+        barTheme: "theme-frost",
+        shortDesc: "Hypothermia Chill: Frost stacks up away from Fire Braziers, slowing speed & dealing frostbite.",
+        tip: "Warm up near glowing orange Fire Braziers to thaw Hypothermia.",
+        chillPerSec: 11.5,
+        thawPerSec: 38.0,
+        frostDpsPct: 0.062
+      },
+      palette: {
+        bgTop: "#091b2b",
+        bgBottom: "#040b14",
+        tileA: "#1e3a52",
+        tileB: "#172e42",
+        tileBorder: "#0d1b29",
+        wallTop: "#67b7e6",
+        wallLeft: "#2c5a80",
+        wallRight: "#17344d",
+        pillarTop: "#bae6fd",
+        accent: "#7dd3fc"
+      },
+      enemies: ["frost_wolf", "glacial_juggernaut", "icicle_weaver"],
+      bossId: "valkyr_frost_warden",
+      lootPool: ["permafrost_halberd", "glacierguard_plate", "hearthstone_relic"],
+      lootSummary: ["Permafrost Halberd", "Glacier-Guard Plate", "Eternal Hearthstone"]
+    },
+    {
+      id: "abyssal_throne",
+      name: "Abyssal Throne",
+      themeLabel: "Shadow / Eclipse",
+      themeColor: "#e879f9",
+      desc: "The heart of the Rift where encroaching eclipse corruption tests ascended champions.",
+      rooms: 6,
+      recommendedPower: 2050,
+      baseGold: 1850,
+      baseShards: 155,
+      baseXp: 2600,
+      hazard: {
+        type: "shadow",
+        name: "Eclipse Corruption",
+        icon: "☾",
+        cssOverlay: "hazard-shadow",
+        barTheme: "theme-shadow",
+        shortDesc: "Eclipse Corruption: Darkness steadily corrupts your soul; touch Radiant Light Orbs to purge it.",
+        tip: "Collect floating golden Light Orbs in the arena to purge Eclipse Corruption.",
+        corruptPerSec: 9.5,
+        orbPurgeAmount: 48.0,
+        corruptDpsPct: 0.068
+      },
+      palette: {
+        bgTop: "#14071c",
+        bgBottom: "#06020a",
+        tileA: "#241133",
+        tileB: "#1b0c26",
+        tileBorder: "#0e0514",
+        wallTop: "#6b21a8",
+        wallLeft: "#3b0764",
+        wallRight: "#1e0533",
+        pillarTop: "#f0abfc",
+        accent: "#e879f9"
+      },
+      enemies: ["abyssal_stalker", "dread_knight", "eclipse_acolyte"],
+      bossId: "malakor_sovereign",
+      lootPool: ["soulreaver_scythe", "eclipselord_regalia", "dawnbreaker_sigil_relic"],
+      lootSummary: ["Soul-Reaver Scythe", "Eclipse-Lord Regalia", "Dawnbreaker Sigil"]
     }
   ],
 
   /* ------------------------------------------------------------------------
-     ENEMY TEMPLATES
+     ENEMY TEMPLATES (18 Distinct Archetypes)
      ------------------------------------------------------------------------ */
   ENEMIES: {
+    // 1. Sunken Quarry
     crystal_crawler: {
       id: "crystal_crawler",
       name: "Crystal Crawler",
@@ -467,6 +743,7 @@ window.GAME_DATA = {
       xp: 22
     },
 
+    // 2. Cinder Foundry
     clockwork_hound: {
       id: "clockwork_hound",
       name: "Clockwork Hound",
@@ -518,6 +795,7 @@ window.GAME_DATA = {
       xp: 40
     },
 
+    // 3. Whispering Marsh
     spore_stalker: {
       id: "spore_stalker",
       name: "Spore Stalker",
@@ -569,6 +847,7 @@ window.GAME_DATA = {
       xp: 72
     },
 
+    // 4. Astral Observatory
     void_wraith: {
       id: "void_wraith",
       name: "Void Wraith",
@@ -618,11 +897,115 @@ window.GAME_DATA = {
       trim: "#fde047",
       gold: 92,
       xp: 132
+    },
+
+    // 5. Frostbite Sanctum
+    frost_wolf: {
+      id: "frost_wolf",
+      name: "Rime Direwolf",
+      hp: 860,
+      atk: 126,
+      speed: 4.2,
+      range: 1.15,
+      attackCd: 0.9,
+      radius: 0.44,
+      height: 0.85,
+      ai: "chaser",
+      color: "#0284c7",
+      trim: "#e0f2fe",
+      gold: 135,
+      xp: 195
+    },
+    glacial_juggernaut: {
+      id: "glacial_juggernaut",
+      name: "Glacial Juggernaut",
+      hp: 1650,
+      atk: 168,
+      speed: 2.15,
+      range: 1.5,
+      attackCd: 1.65,
+      radius: 0.68,
+      height: 1.5,
+      ai: "bruiser",
+      color: "#1e3a8a",
+      trim: "#7dd3fc",
+      gold: 195,
+      xp: 270
+    },
+    icicle_weaver: {
+      id: "icicle_weaver",
+      name: "Icicle Weaver",
+      hp: 780,
+      atk: 145,
+      speed: 2.5,
+      range: 6.6,
+      attackCd: 1.6,
+      radius: 0.44,
+      height: 1.0,
+      ai: "ranged",
+      projColor: "#bae6fd",
+      projSpeed: 8.2,
+      color: "#0369a1",
+      trim: "#f0f9ff",
+      gold: 155,
+      xp: 220
+    },
+
+    // 6. Abyssal Throne
+    abyssal_stalker: {
+      id: "abyssal_stalker",
+      name: "Eclipse Fiend",
+      hp: 1450,
+      atk: 205,
+      speed: 4.4,
+      range: 1.2,
+      attackCd: 0.88,
+      radius: 0.46,
+      height: 1.1,
+      ai: "chaser",
+      color: "#581c87",
+      trim: "#f43f5e",
+      gold: 230,
+      xp: 330
+    },
+    dread_knight: {
+      id: "dread_knight",
+      name: "Abyssal Dreadknight",
+      hp: 2750,
+      atk: 265,
+      speed: 2.45,
+      range: 1.55,
+      attackCd: 1.5,
+      radius: 0.7,
+      height: 1.55,
+      ai: "bruiser",
+      color: "#1e1b4b",
+      trim: "#e879f9",
+      gold: 330,
+      xp: 460
+    },
+    eclipse_acolyte: {
+      id: "eclipse_acolyte",
+      name: "Eclipse Acolyte",
+      hp: 1320,
+      atk: 235,
+      speed: 2.7,
+      range: 6.8,
+      attackCd: 1.5,
+      radius: 0.45,
+      height: 1.05,
+      ai: "ranged",
+      projColor: "#f43f5e",
+      projSpeed: 8.8,
+      color: "#831843",
+      trim: "#fda4af",
+      gold: 265,
+      xp: 370
     }
   },
 
   /* ------------------------------------------------------------------------
-     BOSS TEMPLATES WITH TELEGRAPHED ATTACK PATTERNS
+     BOSS TEMPLATES (6 Rift Guardians)
      ------------------------------------------------------------------------ */
   BOSSES: {
     obsidian_colossus: {
@@ -705,19 +1088,63 @@ window.GAME_DATA = {
         { type: "triple_drop", name: "Supernova Rain", telegraph: 1.0, radius: 1.9, count: 5, dmgMult: 1.4, cooldown: 2.9 },
         { type: "radial_volley", name: "Astral Barrage", telegraph: 0.85, count: 12, dmgMult: 1.25, cooldown: 2.8 }
       ]
+    },
+    valkyr_frost_warden: {
+      id: "valkyr_frost_warden",
+      name: "Valkyr, Frost-Warden",
+      subtitle: "Sovereign of the Glacial Spire",
+      hp: 18500,
+      atk: 235,
+      speed: 2.95,
+      radius: 1.08,
+      height: 2.4,
+      color: "#0c4a6e",
+      trim: "#bae6fd",
+      gold: 1950,
+      shards: 145,
+      xp: 2900,
+      patterns: [
+        { type: "ring_nova", name: "Absolute Zero Ring", telegraph: 1.05, innerRadius: 1.7, outerRadius: 5.4, dmgMult: 1.75, cooldown: 3.0 },
+        { type: "line_charge", name: "Glacial Lance", telegraph: 0.85, width: 1.6, length: 8.5, dmgMult: 1.65, cooldown: 3.0 },
+        { type: "triple_drop", name: "Avalanche Shards", telegraph: 0.95, radius: 2.0, count: 5, dmgMult: 1.45, cooldown: 2.8 },
+        { type: "radial_volley", name: "Blizzard Fan", telegraph: 0.85, count: 14, dmgMult: 1.3, cooldown: 2.7 }
+      ]
+    },
+    malakor_sovereign: {
+      id: "malakor_sovereign",
+      name: "Malakor, Rift Sovereign",
+      subtitle: "Emperor of the Abyssal Throne",
+      hp: 32000,
+      atk: 340,
+      speed: 3.15,
+      radius: 1.15,
+      height: 2.55,
+      color: "#2e1065",
+      trim: "#f43f5e",
+      gold: 3400,
+      shards: 250,
+      xp: 5200,
+      patterns: [
+        { type: "cross_beam", name: "Eclipse Cataclysm", telegraph: 1.05, width: 1.45, length: 9.0, dmgMult: 1.85, cooldown: 2.9 },
+        { type: "slam_circle", name: "Abyssal Judgment", telegraph: 1.0, radius: 3.6, dmgMult: 1.8, cooldown: 3.1 },
+        { type: "triple_drop", name: "Soulfire Rain", telegraph: 0.9, radius: 2.1, count: 6, dmgMult: 1.5, cooldown: 2.7 },
+        { type: "radial_volley", name: "Shadow Annihilation", telegraph: 0.8, count: 16, dmgMult: 1.35, cooldown: 2.5 }
+      ]
     }
   },
 
   /* ------------------------------------------------------------------------
-     ACTIVE SKILLS (Q = Weapon Skill, E = Relic Skill)
+     ACTIVE SKILLS WITH CHOREOGRAPHED 2.5D ANIMATION TYPES
      ------------------------------------------------------------------------ */
   SKILLS: {
+    // Weapon Skills (Q)
     iron_cleave: {
       id: "iron_cleave",
       name: "Whirl Cleave",
       icon: "⚔",
       cooldown: 4.5,
       type: "aoe_melee",
+      animType: "whirl_slash",
       radius: 2.6,
       atkMult: 2.1,
       spellMult: 0.4,
@@ -730,6 +1157,7 @@ window.GAME_DATA = {
       icon: "⛰",
       cooldown: 5.5,
       type: "shockwave",
+      animType: "seismic_pillars",
       radius: 3.4,
       atkMult: 2.65,
       spellMult: 0.5,
@@ -743,6 +1171,7 @@ window.GAME_DATA = {
       icon: "✴",
       cooldown: 5.0,
       type: "proj_fan",
+      animType: "flame_nova",
       count: 6,
       range: 6.5,
       atkMult: 1.5,
@@ -757,6 +1186,7 @@ window.GAME_DATA = {
       icon: "✹",
       cooldown: 5.2,
       type: "drain_nova",
+      animType: "spore_geysers",
       radius: 3.5,
       atkMult: 0.7,
       spellMult: 2.35,
@@ -770,6 +1200,7 @@ window.GAME_DATA = {
       icon: "✦",
       cooldown: 5.8,
       type: "meteor_cluster",
+      animType: "starfall_beams",
       count: 4,
       radius: 2.3,
       atkMult: 0.45,
@@ -777,13 +1208,43 @@ window.GAME_DATA = {
       color: "#e879f9",
       desc: "Call down 4 astral meteors on nearby foes, each dealing 285% Spell Power damage."
     },
+    glacial_tempest: {
+      id: "glacial_tempest",
+      name: "Glacial Impale",
+      icon: "❄",
+      cooldown: 5.4,
+      type: "shockwave",
+      animType: "ice_spikes",
+      radius: 3.8,
+      atkMult: 2.9,
+      spellMult: 0.85,
+      stunDuration: 1.8,
+      color: "#7dd3fc",
+      desc: "Erupt jagged permafrost spires for 290% ATK + 85% Spell damage and freeze foes for 1.8s."
+    },
+    abyssal_reap: {
+      id: "abyssal_reap",
+      name: "Soul Harvest",
+      icon: "☾",
+      cooldown: 5.0,
+      type: "drain_nova",
+      animType: "shadow_scythes",
+      radius: 3.9,
+      atkMult: 2.4,
+      spellMult: 2.2,
+      healPctDmg: 0.30,
+      color: "#f43f5e",
+      desc: "Sweep twin eclipse scythes for 240% ATK + 220% Spell damage and siphon 30% of damage dealt."
+    },
 
+    // Relic Skills (E)
     sanctuary_aegis: {
       id: "sanctuary_aegis",
       name: "Gate Aegis",
       icon: "🛡",
       cooldown: 9.0,
       type: "shield_buff",
+      animType: "aegis_dome",
       shieldPctHp: 0.30,
       duration: 5.0,
       color: "#60a5fa",
@@ -795,6 +1256,7 @@ window.GAME_DATA = {
       icon: "◈",
       cooldown: 10.0,
       type: "shield_cleanse",
+      animType: "crystal_cage",
       shieldPctHp: 0.42,
       hazardRestore: 55,
       duration: 6.0,
@@ -807,6 +1269,7 @@ window.GAME_DATA = {
       icon: "⚡",
       cooldown: 10.5,
       type: "haste_buff",
+      animType: "lightning_surge",
       speedBonus: 0.38,
       atkSpeedBonus: 0.48,
       critBonus: 0.22,
@@ -820,6 +1283,7 @@ window.GAME_DATA = {
       icon: "❦",
       cooldown: 9.5,
       type: "heal_pulse",
+      animType: "verdant_bloom",
       healPctHp: 0.35,
       radius: 3.2,
       spellMult: 1.75,
@@ -832,16 +1296,43 @@ window.GAME_DATA = {
       icon: "◎",
       cooldown: 11.0,
       type: "vortex_pull",
+      animType: "black_hole",
       radius: 4.5,
       spellMult: 2.75,
       shieldPctHp: 0.25,
       color: "#c084fc",
       desc: "Collapse space, pulling enemies inward for 275% Spell damage and granting a 25% HP barrier."
+    },
+    solar_hearth: {
+      id: "solar_hearth",
+      name: "Hearth Nova",
+      icon: "☀",
+      cooldown: 10.0,
+      type: "shield_cleanse",
+      animType: "solar_flare",
+      shieldPctHp: 0.48,
+      hazardRestore: 75,
+      duration: 6.5,
+      color: "#fde047",
+      desc: "Ignite an eternal hearth: 48% Max HP shield and purges 75% Hypothermia/hazards."
+    },
+    dawnbreaker_burst: {
+      id: "dawnbreaker_burst",
+      name: "Eclipse Purge",
+      icon: "✹",
+      cooldown: 10.5,
+      type: "heal_pulse",
+      animType: "radiant_pillar",
+      healPctHp: 0.42,
+      radius: 4.2,
+      spellMult: 3.1,
+      color: "#f0abfc",
+      desc: "Detonate a radiant sunbeam: heals 42% HP, purges Eclipse Corruption, and blasts foes for 310% Spell."
     }
   },
 
   /* ------------------------------------------------------------------------
-     REBALANCED GEAR TEMPLATES (Smooth Tier Curve Across All 4 Dungeons)
+     GEAR TEMPLATES (Starter + 6 Dungeon Sets)
      ------------------------------------------------------------------------ */
   GEAR_TEMPLATES: {
     // --- STARTER LOADOUT ---
@@ -881,7 +1372,7 @@ window.GAME_DATA = {
       desc: "Hums softly with defensive energy from the Sanctuary Gate."
     },
 
-    // --- DUNGEON 1: SUNKEN QUARRY (Earthshaker Tank Set) ---
+    // --- DUNGEON 1: SUNKEN QUARRY ---
     seismic_hammer: {
       id: "seismic_hammer",
       name: "Seismic Hammer",
@@ -924,7 +1415,7 @@ window.GAME_DATA = {
       desc: "A resonant geode core that fortifies vitality and purifies dungeon air."
     },
 
-    // --- DUNGEON 2: CINDER FOUNDRY (Forge-Lord Crit Set) ---
+    // --- DUNGEON 2: CINDER FOUNDRY ---
     blaze_chakrams: {
       id: "blaze_chakrams",
       name: "Blaze Chakrams",
@@ -968,7 +1459,7 @@ window.GAME_DATA = {
       desc: "A pressurized brass turbine that supercharges reflexes on demand."
     },
 
-    // --- DUNGEON 3: WHISPERING MARSH (Venom-Weaver Lifesteal Set) ---
+    // --- DUNGEON 3: WHISPERING MARSH ---
     sporeburst_staff: {
       id: "sporeburst_staff",
       name: "Spore-Burst Staff",
@@ -1012,7 +1503,7 @@ window.GAME_DATA = {
       desc: "A pulsing floral core that blooms with restorative nectar in battle."
     },
 
-    // --- DUNGEON 4: ASTRAL OBSERVATORY (Starlight Spell Set) ---
+    // --- DUNGEON 4: ASTRAL OBSERVATORY ---
     nova_grimoire: {
       id: "nova_grimoire",
       name: "Nova Grimoire",
@@ -1054,6 +1545,92 @@ window.GAME_DATA = {
       skillId: "singularity_rift",
       baseStats: { hp: 320, spell: 78, crit: 0.08, cdr: 0.10 },
       desc: "A miniature black hole trapped in glass that bends spacetime around foes."
+    },
+
+    // --- DUNGEON 5: FROSTBITE SANCTUM ---
+    permafrost_halberd: {
+      id: "permafrost_halberd",
+      name: "Permafrost Halberd",
+      slot: "weapon",
+      setTag: "Glacier-Guard",
+      dungeonId: "frostbite_sanctum",
+      craftCost: 340,
+      icon: "❄",
+      attackType: "melee_heavy",
+      range: 2.55,
+      attackRate: 1.45,
+      weaponColor: "#7dd3fc",
+      trailColor: "#e0f2fe",
+      skillId: "glacial_tempest",
+      baseStats: { atk: 145, spell: 75, crit: 0.11, hp: 240 },
+      desc: "A towering glacial polearm that shatters frozen armor in wide sweeps."
+    },
+    glacierguard_plate: {
+      id: "glacierguard_plate",
+      name: "Glacier-Guard Plate",
+      slot: "armor",
+      setTag: "Glacier-Guard",
+      dungeonId: "frostbite_sanctum",
+      craftCost: 340,
+      icon: "🛡",
+      visuals: { body: "#0c4a6e", cloak: "#0284c7", trim: "#e0f2fe", aura: "rgba(125,211,252,0.35)" },
+      baseStats: { hp: 1050, atk: 58, armor: 34, hazardResist: 0.28 },
+      desc: "Runed frost-forged armor lined with thermal phoenix wool."
+    },
+    hearthstone_relic: {
+      id: "hearthstone_relic",
+      name: "Eternal Hearthstone",
+      slot: "relic",
+      setTag: "Glacier-Guard",
+      dungeonId: "frostbite_sanctum",
+      craftCost: 340,
+      icon: "☀",
+      skillId: "solar_hearth",
+      baseStats: { hp: 480, atk: 52, spell: 52, hazardResist: 0.24 },
+      desc: "Radiates unquenchable warmth that melts hypothermia and fortifies shields."
+    },
+
+    // --- DUNGEON 6: ABYSSAL THRONE ---
+    soulreaver_scythe: {
+      id: "soulreaver_scythe",
+      name: "Soul-Reaver Scythe",
+      slot: "weapon",
+      setTag: "Eclipse-Lord",
+      dungeonId: "abyssal_throne",
+      craftCost: 520,
+      icon: "☾",
+      attackType: "melee_heavy",
+      range: 2.75,
+      attackRate: 1.65,
+      weaponColor: "#f43f5e",
+      trailColor: "#f0abfc",
+      skillId: "abyssal_reap",
+      baseStats: { atk: 215, spell: 185, crit: 0.14, lifesteal: 0.07 },
+      desc: "Sovereign war-scythe forged from collapsed eclipse starlight."
+    },
+    eclipselord_regalia: {
+      id: "eclipselord_regalia",
+      name: "Eclipse-Lord Regalia",
+      slot: "armor",
+      setTag: "Eclipse-Lord",
+      dungeonId: "abyssal_throne",
+      craftCost: 520,
+      icon: "♛",
+      visuals: { body: "#2e1065", cloak: "#9f1239", trim: "#fda4af", aura: "rgba(244,63,94,0.36)" },
+      baseStats: { hp: 1580, atk: 95, spell: 95, crit: 0.11, armor: 44, hazardResist: 0.30 },
+      desc: "Imperial Rift armor worn by the conquerors of the Abyssal Throne."
+    },
+    dawnbreaker_sigil_relic: {
+      id: "dawnbreaker_sigil_relic",
+      name: "Dawnbreaker Sigil",
+      slot: "relic",
+      setTag: "Eclipse-Lord",
+      dungeonId: "abyssal_throne",
+      craftCost: 520,
+      icon: "✹",
+      skillId: "dawnbreaker_burst",
+      baseStats: { hp: 740, atk: 82, spell: 110, cdr: 0.12, lifesteal: 0.06 },
+      desc: "A blinding celestial crest that banishes abyssal corruption."
     }
   },
 
@@ -1072,7 +1649,7 @@ window.GAME_DATA = {
   ],
 
   /* ------------------------------------------------------------------------
-     MERCENARY GUILD SQUADS
+     MERCENARY GUILD SQUADS (6 Automated Squads)
      ------------------------------------------------------------------------ */
   MERCENARIES: [
     {
@@ -1122,6 +1699,30 @@ window.GAME_DATA = {
       upgradeGoldGrowth: 1.6,
       goldPerSecBase: 60.0,
       shardsPerSecBase: 4.5
+    },
+    {
+      id: "merc_frost",
+      dungeonId: "frostbite_sanctum",
+      name: "Frostbreakers",
+      role: "Auto-farms Frostbite Sanctum",
+      icon: "❄",
+      hireCostRenown: 7,
+      upgradeGoldBase: 5200,
+      upgradeGoldGrowth: 1.64,
+      goldPerSecBase: 145.0,
+      shardsPerSecBase: 11.0
+    },
+    {
+      id: "merc_abyss",
+      dungeonId: "abyssal_throne",
+      name: "Dawn Crusaders",
+      role: "Auto-farms Abyssal Throne",
+      icon: "☾",
+      hireCostRenown: 10,
+      upgradeGoldBase: 12000,
+      upgradeGoldGrowth: 1.68,
+      goldPerSecBase: 350.0,
+      shardsPerSecBase: 26.0
     }
   ],
 
