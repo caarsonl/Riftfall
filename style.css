@@ -1158,44 +1158,51 @@ kbd {
 }
 
 @media (max-width: 960px), (pointer: coarse) {
+  /* Keep Top HUD on ONE single compact row in landscape */
   .hud-bar {
-    flex-wrap: wrap;
-    padding: calc(6px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left));
-    gap: 5px;
+    flex-wrap: nowrap;
+    padding: calc(5px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 5px calc(8px + env(safe-area-inset-left));
+    gap: 6px;
   }
-  .hud-group { gap: 5px; }
-  .zone-card { min-width: 132px; padding: 4px 7px; }
-  .location-badge { font-size: 11px; }
-  .zone-meta { font-size: 10px; }
+  .hud-group { gap: 5px; min-width: 0; }
+  .zone-card { min-width: 0; padding: 4px 8px; }
+  .location-badge { font-size: 11px; white-space: nowrap; }
+  .zone-meta { display: none; }
+
   .player-badge { padding: 3px 6px; gap: 5px; }
-  .level-crest { width: 28px; height: 28px; }
-  .xp-wrap { width: 96px; }
-  .xp-header { font-size: 10px; }
+  .level-crest { width: 26px; height: 26px; }
+  .level-label { font-size: 8px; }
+  #player-level { font-size: 12px; }
+  .xp-wrap { width: 84px; }
+  .xp-header { font-size: 9px; margin-bottom: 2px; }
   .xp-subrow { display: none; }
 
-  .camp-tabs { padding: 3px; gap: 3px; }
-  .hud-tab { padding: 6px 9px; font-size: 13px; }
+  .camp-tabs { padding: 3px; gap: 3px; flex-shrink: 0; }
+  .hud-tab { padding: 5px 8px; font-size: 13px; }
   .tab-label, .camp-tabs kbd { display: none; }
 
   .currency-strip { gap: 4px; }
-  .currency-pill { min-width: 52px; padding: 4px 6px; gap: 4px; }
+  .currency-pill { min-width: 0; padding: 4px 6px; gap: 4px; }
+  .currency-dot { width: 8px; height: 8px; }
   .currency-amount { font-size: 11px; }
-  .icon-btn { width: 30px; height: 30px; font-size: 13px; }
+  .utility-btns { gap: 4px; }
+  .icon-btn { width: 28px; height: 28px; font-size: 13px; }
 
-  /* Anchor all top overlays dynamically below the real #top-hud height */
+  /* Objective & Hazard Stack anchored cleanly below the single-row Top HUD */
   .left-hud-stack {
-    top: calc(var(--top-hud-h, 64px) + 6px);
+    top: calc(var(--top-hud-h, 46px) + 6px);
     left: calc(8px + env(safe-area-inset-left));
-    width: min(230px, calc(100vw - 118px));
+    width: min(236px, 34vw);
     gap: 5px;
   }
   .objective-pill { padding: 5px 8px; font-size: 11px; }
   .survival-hud { padding: 6px 8px; }
   .hazard-tip { display: none; }
 
+  /* Top-Right Compact Minimap & Combo Counter */
   .minimap-panel {
     position: fixed;
-    top: calc(var(--top-hud-h, 64px) + 6px);
+    top: calc(var(--top-hud-h, 46px) + 6px);
     right: calc(8px + env(safe-area-inset-right));
     padding: 3px;
     z-index: 14;
@@ -1203,60 +1210,69 @@ kbd {
   #minimap-canvas { width: 92px; height: 58px; }
   .controls-hint { display: none; }
 
-  /* Place Boss Bar & Combo Counter cleanly below Objective Card & Minimap */
-  .boss-hud {
-    top: calc(var(--top-hud-h, 64px) + 74px);
-    width: min(420px, 92vw);
-    padding: 6px 10px;
-  }
-  .boss-name { font-size: 13px; }
-  .boss-subtitle { display: none; }
-
   .combo-hud {
-    top: calc(var(--top-hud-h, 64px) + 74px);
+    top: calc(var(--top-hud-h, 46px) + 72px);
     right: calc(8px + env(safe-area-inset-right));
     padding: 4px 8px;
   }
   .combo-num { font-size: 1.25rem; }
 
-  /* Landscape Thumb Layout */
+  /* Boss Bar centered between Left Stack & Minimap */
+  .boss-hud {
+    top: calc(var(--top-hud-h, 46px) + 6px);
+    width: min(330px, 36vw);
+    padding: 5px 9px;
+  }
+  .boss-name { font-size: 12px; }
+  .boss-subtitle, .boss-tags { display: none; }
+  .bar-boss { height: 15px; }
+
+  /* Bottom-Left Corner: Virtual Analog Joystick */
+  .touch-joystick-zone {
+    left: calc(8px + env(safe-area-inset-left));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: 116px;
+    height: 116px;
+  }
+  .touch-joystick-base { width: 92px; height: 92px; }
+  .touch-joystick-knob { width: 38px; height: 38px; margin-left: -19px; margin-top: -19px; }
+
+  /* Bottom HUD: Vitals placed NEXT to Joystick, Skill Pad on Bottom-Right */
   .bottom-hud {
-    padding: 8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    padding: 6px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(130px + env(safe-area-inset-left));
     align-items: flex-end;
+    gap: 8px;
   }
 
   .vitals-panel {
-    width: 176px;
+    width: 156px;
     padding: 6px 8px;
     gap: 5px;
   }
-  .flask-btn { padding: 6px 8px; }
+  .vital-labels { font-size: 10px; margin-bottom: 2px; }
+  .bar-hp { height: 14px; }
+  .flask-btn { padding: 5px 7px; gap: 6px; }
+  .flask-icon { font-size: 15px; }
+  .flask-label { font-size: 10px; }
+  .flask-count { font-size: 10px; }
   .flask-btn kbd { display: none; }
-
-  .touch-joystick-zone {
-    left: calc(10px + env(safe-area-inset-left));
-    bottom: calc(96px + env(safe-area-inset-bottom));
-    width: 132px;
-    height: 132px;
-  }
-  .touch-joystick-base { width: 100px; height: 100px; }
-  .touch-joystick-knob { width: 40px; height: 40px; margin-left: -20px; margin-top: -20px; }
 
   .skill-hotbar {
     padding: 5px;
     gap: 5px;
   }
   .skill-slot {
-    width: 58px;
-    height: 58px;
+    width: 54px;
+    height: 54px;
   }
-  .skill-icon { font-size: 19px; margin-top: 5px; }
-  .skill-name { font-size: 9px; max-width: 52px; }
+  .skill-key { font-size: 8px; padding: 0 3px; }
+  .skill-icon { font-size: 18px; margin-top: 6px; }
+  .skill-name { font-size: 8px; max-width: 48px; }
 
   .interact-prompt {
-    bottom: calc(96px + env(safe-area-inset-bottom));
-    padding: 9px 14px;
-    font-size: 12px;
+    bottom: calc(74px + env(safe-area-inset-bottom));
+    padding: 8px 13px;
+    font-size: 11px;
   }
 
   /* Stack Side-by-Side Tooltips Vertically on Mobile */
@@ -1271,58 +1287,57 @@ kbd {
   }
 }
 
-/* Portrait Phone Layout: Separate Left Joystick, HP Bar, Flask & Right Skill Pad */
+/* Portrait Phone Layout (Narrow Width <= 680px) */
 @media (max-width: 680px) {
+  .hud-bar { flex-wrap: wrap; }
   .hud-left { flex: 1 1 100%; justify-content: space-between; }
-  .zone-card { flex: 1; min-width: 0; }
-  .room-indicator { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+  .zone-card { flex: 1; }
+  .zone-meta { display: flex; }
+  .room-indicator { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 145px; }
   .hud-right { margin-left: auto; }
 
-  /* Left-bottom Joystick */
-  .touch-joystick-zone {
-    left: calc(6px + env(safe-area-inset-left));
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    width: 118px;
-    height: 118px;
+  .left-hud-stack {
+    width: min(230px, calc(100vw - 114px));
   }
-  .touch-joystick-base { width: 92px; height: 92px; }
-  .touch-joystick-knob { width: 38px; height: 38px; margin-left: -19px; margin-top: -19px; }
+
+  .boss-hud {
+    top: calc(var(--top-hud-h, 74px) + 74px);
+    width: min(420px, 92vw);
+  }
+
+  .bottom-hud {
+    padding-left: calc(8px + env(safe-area-inset-left));
+  }
 
   /* HP Bar neatly above Left Joystick */
   .vitals-panel {
     position: fixed;
     left: calc(8px + env(safe-area-inset-left));
-    bottom: calc(134px + env(safe-area-inset-bottom));
+    bottom: calc(130px + env(safe-area-inset-bottom));
     width: 146px;
     padding: 5px 7px;
   }
-  .vital-labels { font-size: 10px; margin-bottom: 2px; }
-  .bar-hp { height: 14px; }
 
   /* Flask Button neatly above Right Skill Pad */
   .flask-btn {
     position: fixed;
     right: calc(8px + env(safe-area-inset-right));
-    bottom: calc(68px + env(safe-area-inset-bottom));
+    bottom: calc(64px + env(safe-area-inset-bottom));
     width: 132px;
     padding: 5px 8px;
     z-index: 16;
   }
-  .flask-label { font-size: 11px; }
-  .flask-count { font-size: 10px; }
 
   /* Right-bottom Skill Pad */
   .skill-hotbar {
     position: fixed;
     right: calc(6px + env(safe-area-inset-right));
-    bottom: calc(10px + env(safe-area-inset-bottom));
+    bottom: calc(8px + env(safe-area-inset-bottom));
     padding: 4px;
     gap: 4px;
   }
   .skill-slot { width: 48px; height: 48px; }
   .skill-key { display: none; }
-  .skill-icon { font-size: 18px; margin-top: 2px; }
-  .skill-name { font-size: 8px; max-width: 44px; }
 
   .interact-prompt {
     bottom: calc(114px + env(safe-area-inset-bottom));

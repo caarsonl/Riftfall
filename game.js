@@ -674,6 +674,9 @@
       this.syncAllHUD();
 
       window.addEventListener("resize", () => this.resizeCanvas());
+      window.addEventListener("orientationchange", () => {
+        setTimeout(() => this.resizeCanvas(), 120);
+      });
       requestAnimationFrame((t) => this.loop(t));
     }
 
@@ -5712,6 +5715,8 @@
 
       document.getElementById("mute-icon").textContent = this.sfx.muted ? "🔇" : "🔊";
       this.syncLiveHUD();
+      this.syncLiveHUD();
+      this.resizeCanvas();
     }
 
     syncLiveHUD() {
@@ -5825,6 +5830,7 @@
        MODALS & RPG UI RENDERING
        ====================================================================== */
     openModal(name) {
+      if (this.resetJoystick) this.resetJoystick();
       this.sfx.uiClick();
       this.hideTooltip();
       this.activeModal = name;
@@ -6800,6 +6806,7 @@
 
       const resetJoystick = () => {
         this.joystick.active = false;
+        this.resetJoystick = resetJoystick;
         this.joystick.touchId = null;
         this.joystick.dx = 0;
         this.joystick.dy = 0;
