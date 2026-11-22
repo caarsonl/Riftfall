@@ -59,7 +59,7 @@
               <div id="xp-bar-fill" class="bar-fill xp-fill" style="width: 0%"></div>
             </div>
             <div class="xp-subrow">
-              <span id="xp-text" class="xp-text">0 / 95 XP</span>
+              <span id="xp-text" class="xp-text">0 / 266 XP</span>
             </div>
           </div>
         </div>
@@ -278,18 +278,25 @@
          ========================================================= -->
     <div id="modal-backdrop" class="modal-backdrop hidden">
 
-      <!-- 1. DUNGEON GATE MODAL (14 REALMS & 5 DIFFICULTIES) -->
+      <!-- 1. DUNGEON GATE MODAL (20 CAMPAIGN REALMS + 4 SPECIAL DUNGEONS & 6 DIFFICULTIES) -->
       <section id="modal-dungeon" class="rpg-modal modal-wide hidden" role="dialog" aria-labelledby="dungeon-modal-title">
         <header class="modal-header">
           <div>
-            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — 14 Realm Expeditions</h2>
-            <p class="modal-subtitle">Conquer 14 themed dungeons across 5 difficulty tiers, collect 2pc/3pc Set Bonuses, and toggle Rift Mutators.</p>
+            <h2 id="dungeon-modal-title">&#9876; The Rift Gate — Campaign &amp; Special Expeditions</h2>
+            <p class="modal-subtitle">Challenge 20 Campaign Realms (T1–T20) or enter 4 Special Dungeons for unique Signature Weapons.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
 
         <div class="modal-body dungeon-layout">
-          <div id="dungeon-list" class="dungeon-grid"></div>
+          <div class="dungeon-browser-col">
+            <div class="dungeon-cat-tabs" id="dungeon-cat-tabs">
+              <button class="filter-btn active" data-dungeon-cat="all">All Realms (24)</button>
+              <button class="filter-btn" data-dungeon-cat="campaign">Campaign (T1–T20)</button>
+              <button class="filter-btn special-tab-btn" data-dungeon-cat="special">&#9733; Special Dungeons (4)</button>
+            </div>
+            <div id="dungeon-list" class="dungeon-grid"></div>
+          </div>
 
           <aside class="expedition-config">
             <div id="selected-dungeon-header" class="selected-dungeon-header">
@@ -319,11 +326,15 @@
                 </button>
                 <button class="diff-btn" data-diff="torment">
                   <span class="diff-name">Torment</span>
-                  <span class="diff-meta">7.0x Loot</span>
+                  <span class="diff-meta">7.2x Loot</span>
                 </button>
                 <button class="diff-btn" data-diff="cataclysm">
                   <span class="diff-name">Cataclysm</span>
-                  <span class="diff-meta">10.5x Loot</span>
+                  <span class="diff-meta">11x Loot</span>
+                </button>
+                <button class="diff-btn" data-diff="apocalypse">
+                  <span class="diff-name">Apocalypse</span>
+                  <span class="diff-meta">16x Loot</span>
                 </button>
               </div>
               <div id="cfg-rec-power" class="rec-power-note">Recommended Power: 280</div>
@@ -446,7 +457,7 @@
         <header class="modal-header">
           <div>
             <h2 id="forge-modal-title">&#9874; Obsidian Blacksmith &amp; Artificer</h2>
-            <p class="modal-subtitle">Upgrade equipped gear up to +50 with Gold, reforge sub-stats, or craft targeted set pieces with Shards.</p>
+            <p class="modal-subtitle">Upgrade equipped gear up to +50 with Gold, reforge sub-stats, or craft endgame &amp; special weapons with Shards.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -497,8 +508,8 @@
 
             <div class="craft-section">
               <div class="craft-header">
-                <h3 class="section-title">Rift-Forged Set Crafting</h3>
-                <span class="muted-text">Craft specific dungeon set pieces</span>
+                <h3 class="section-title">Rift-Forged &amp; Special Arsenal</h3>
+                <span class="muted-text">Craft set pieces &amp; signature weapons</span>
               </div>
               <div class="class-filter-bar" id="craft-class-filters">
                 <button class="class-filter-btn active" data-craft-class="all">All</button>
@@ -527,8 +538,8 @@
         <div class="modal-body guild-layout">
           <div class="guild-banner">
             <div class="guild-metric">
-              <span class="metric-label">Dungeon Clears</span>
-              <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 70</span>
+              <span class="metric-label">Campaign Clears</span>
+              <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 120</span>
             </div>
             <div class="guild-metric">
               <span class="metric-label">Best Gauntlet Floor</span>

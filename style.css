@@ -1,7 +1,7 @@
 /* ==========================================================================
    RIFTFALL — CLASSIC RPG INTERFACE (style.css)
    Desktop + Full Mobile Touch Compatibility (Virtual Analog Joystick,
-   Ergonomic Thumb Skill Cluster, Safe-Area Insets & Vertical Mobile Tooltips).
+   Ergonomic Thumb Skill Cluster, Special Dungeons & 6-Difficulty Selector).
    ========================================================================== */
 
 :root {
@@ -115,7 +115,7 @@ kbd {
 }
 
 /* ==========================================================================
-   GAME VIEWPORT & 14 HAZARD OVERLAYS
+   GAME VIEWPORT & 20 HAZARD OVERLAYS
    ========================================================================== */
 #game-container {
   position: relative;
@@ -157,6 +157,12 @@ kbd {
 .hazard-overlay.hazard-chrono   { opacity: 1; box-shadow: inset 0 0 0 7px rgba(250, 204, 21, 0.58), inset 0 0 115px rgba(14, 116, 144, 0.52); }
 .hazard-overlay.hazard-prism    { opacity: 1; box-shadow: inset 0 0 0 7px rgba(244, 114, 182, 0.60), inset 0 0 115px rgba(99, 102, 241, 0.55); }
 .hazard-overlay.hazard-voidcore { opacity: 1; box-shadow: inset 0 0 0 8px rgba(251, 113, 133, 0.68), inset 0 0 140px rgba(24, 8, 42, 0.88); }
+.hazard-overlay.hazard-necrotic { opacity: 1; box-shadow: inset 0 0 0 8px rgba(52, 211, 153, 0.62), inset 0 0 135px rgba(6, 46, 36, 0.86); }
+.hazard-overlay.hazard-madness  { opacity: 1; box-shadow: inset 0 0 0 8px rgba(232, 121, 249, 0.68), inset 0 0 140px rgba(46, 16, 101, 0.88); }
+.hazard-overlay.hazard-dragon   { opacity: 1; box-shadow: inset 0 0 0 8px rgba(251, 146, 60, 0.72), inset 0 0 135px rgba(124, 45, 18, 0.84); }
+.hazard-overlay.hazard-entropy  { opacity: 1; box-shadow: inset 0 0 0 8px rgba(244, 63, 94, 0.68), inset 0 0 135px rgba(49, 16, 66, 0.86); }
+.hazard-overlay.hazard-divine   { opacity: 1; box-shadow: inset 0 0 0 8px rgba(254, 240, 138, 0.78), inset 0 0 130px rgba(180, 83, 9, 0.72); }
+.hazard-overlay.hazard-oblivion { opacity: 1; box-shadow: inset 0 0 0 9px rgba(255, 59, 92, 0.78), inset 0 0 150px rgba(12, 3, 24, 0.92); }
 .hazard-overlay.hazard-damage   { opacity: 1; box-shadow: inset 0 0 0 8px rgba(239, 68, 68, 0.78), inset 0 0 80px rgba(239, 68, 68, 0.65); }
 
 /* ==========================================================================
@@ -248,10 +254,11 @@ kbd {
   background: #0c2742;
   color: #7dd3fc;
 }
-.difficulty-badge.diff-nightmare { border-color: #c084fc; background: #271342; color: #e9d5ff; }
-.difficulty-badge.diff-abyssal   { border-color: #f43f5e; background: #3d0c19; color: #fda4af; }
-.difficulty-badge.diff-torment   { border-color: #f97316; background: #3b1908; color: #fed7aa; }
-.difficulty-badge.diff-cataclysm { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: 0 0 6px rgba(244, 63, 94, 0.55); }
+.difficulty-badge.diff-nightmare  { border-color: #c084fc; background: #271342; color: #e9d5ff; }
+.difficulty-badge.diff-abyssal    { border-color: #f43f5e; background: #3d0c19; color: #fda4af; }
+.difficulty-badge.diff-torment    { border-color: #f97316; background: #3b1908; color: #fed7aa; }
+.difficulty-badge.diff-cataclysm  { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: 0 0 6px rgba(244, 63, 94, 0.55); }
+.difficulty-badge.diff-apocalypse { border-color: #ff3b5c; background: #240414; color: #ffae19; box-shadow: 0 0 8px rgba(255, 59, 92, 0.75); }
 
 .zone-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
 .mutator-badges { display: inline-flex; gap: 4px; }
@@ -495,6 +502,7 @@ kbd {
 .boss-subtitle { font-size: 11px; color: #fca5a5; text-transform: uppercase; }
 .boss-tags { display: flex; gap: 5px; }
 .boss-tag { font-size: 10px; padding: 1px 6px; background: #3d0c19; color: #fda4af; border: 1px solid #f43f5e; text-transform: uppercase; }
+.boss-tag.enraged { background: #7f1d1d; color: #fde047; border-color: #fde047; }
 
 /* Progress Bars */
 .bar-track {
@@ -531,6 +539,12 @@ kbd {
 .hazard-fill.theme-chrono   { background: linear-gradient(90deg, #0e7490, #facc15, #fef9c3); }
 .hazard-fill.theme-prism    { background: linear-gradient(90deg, #6366f1, #ec4899, #fde047); }
 .hazard-fill.theme-voidcore { background: linear-gradient(90deg, #4c1d95, #f43f5e, #fef08a); }
+.hazard-fill.theme-necrotic { background: linear-gradient(90deg, #064e3b, #10b981, #a7f3d0); }
+.hazard-fill.theme-madness  { background: linear-gradient(90deg, #3b0764, #a855f7, #f5d0fe); }
+.hazard-fill.theme-dragon   { background: linear-gradient(90deg, #7c2d12, #f97316, #fef08a); }
+.hazard-fill.theme-entropy  { background: linear-gradient(90deg, #881337, #f43f5e, #38bdf8); }
+.hazard-fill.theme-divine   { background: linear-gradient(90deg, #b45309, #fde047, #ffffff); }
+.hazard-fill.theme-oblivion { background: linear-gradient(90deg, #1e052b, #ff3b5c, #ffd447); }
 
 .bar-text {
   position: absolute;
@@ -792,7 +806,7 @@ kbd {
   max-height: 90dvh;
   overflow: hidden;
 }
-.modal-wide { width: min(1120px, 96vw); }
+.modal-wide { width: min(1140px, 96vw); }
 .modal-medium { width: min(680px, 95vw); }
 
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 18px; border-bottom: 2px solid var(--border-subtle); background: #171e33; }
@@ -817,10 +831,15 @@ kbd {
 .section-title { font-family: var(--font-display); font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: #ffd447; text-shadow: 1px 1px 0 #000; margin-bottom: 10px; }
 
 /* ==========================================================================
-   1. DUNGEON GATE MODAL (14 DUNGEONS & 5 DIFFICULTIES)
+   1. DUNGEON GATE MODAL (20 CAMPAIGN REALMS + 4 SPECIAL DUNGEONS & 6 DIFFICULTIES)
    ========================================================================== */
 .dungeon-layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
-.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; max-height: 68vh; padding-right: 6px; }
+.dungeon-browser-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.dungeon-cat-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.special-tab-btn { border-color: var(--gold); color: #fef08a; }
+.special-tab-btn.active { background: #3b2608; border-color: #fde047; color: #ffd447; }
+
+.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; max-height: 62vh; padding-right: 6px; }
 
 .dungeon-card {
   background: var(--bg-surface);
@@ -833,6 +852,10 @@ kbd {
   gap: 6px;
 }
 .dungeon-card:hover { border-color: #cbd5e1; background: var(--bg-surface-hover); }
+.dungeon-card.special-card {
+  border-color: #f59e0b;
+  background: linear-gradient(160deg, #241936 0%, #192036 100%);
+}
 .dungeon-card.selected { border-color: var(--gold); background: #272216; box-shadow: inset 0 0 0 1px var(--gold), 4px 4px 0 #000; }
 .dungeon-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .dungeon-theme-pill { font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; }
@@ -860,7 +883,7 @@ kbd {
 
 .difficulty-selector {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .diff-btn {
@@ -868,7 +891,7 @@ kbd {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 7px 4px;
+  padding: 6px 4px;
   border: 2px solid var(--border-subtle);
   background: var(--bg-surface);
   box-shadow: 2px 2px 0 #000;
@@ -877,15 +900,16 @@ kbd {
 .diff-btn:hover { border-color: #cbd5e1; }
 .diff-btn .diff-name { font-weight: 900; font-size: 10px; text-transform: uppercase; }
 .diff-btn .diff-meta { font-size: 9px; color: var(--text-muted); }
-.diff-btn.active[data-diff="normal"]    { border-color: #38bdf8; background: #0e2942; color: #e0f2fe; }
-.diff-btn.active[data-diff="nightmare"] { border-color: #c084fc; background: #291545; color: #f3e8ff; }
-.diff-btn.active[data-diff="abyssal"]   { border-color: #f43f5e; background: #3d0f1d; color: #ffe4e6; }
-.diff-btn.active[data-diff="torment"]   { border-color: #f97316; background: #3b1908; color: #ffedd5; }
-.diff-btn.active[data-diff="cataclysm"] { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: inset 0 0 0 1px #f43f5e, 2px 2px 0 #000; }
+.diff-btn.active[data-diff="normal"]     { border-color: #38bdf8; background: #0e2942; color: #e0f2fe; }
+.diff-btn.active[data-diff="nightmare"]  { border-color: #c084fc; background: #291545; color: #f3e8ff; }
+.diff-btn.active[data-diff="abyssal"]    { border-color: #f43f5e; background: #3d0f1d; color: #ffe4e6; }
+.diff-btn.active[data-diff="torment"]    { border-color: #f97316; background: #3b1908; color: #ffedd5; }
+.diff-btn.active[data-diff="cataclysm"]  { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: inset 0 0 0 1px #f43f5e, 2px 2px 0 #000; }
+.diff-btn.active[data-diff="apocalypse"] { border-color: #ff3b5c; background: #240414; color: #ffae19; box-shadow: inset 0 0 0 1px #ffd447, 2px 2px 0 #000; }
 
 .rec-power-note { margin-top: 7px; font-size: 12px; color: var(--text-muted); }
 
-.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 155px; }
+.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 145px; }
 .mutator-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px; border: 2px solid var(--border-subtle); background: var(--bg-surface); cursor: pointer; }
 .mutator-row.active { border-color: var(--gold); background: #2b210e; }
 .mutator-info { display: flex; flex-direction: column; }
@@ -1158,7 +1182,6 @@ kbd {
 }
 
 @media (max-width: 960px), (pointer: coarse) {
-  /* Keep Top HUD on ONE single compact row in landscape */
   .hud-bar {
     flex-wrap: nowrap;
     padding: calc(5px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 5px calc(8px + env(safe-area-inset-left));
@@ -1188,7 +1211,6 @@ kbd {
   .utility-btns { gap: 4px; }
   .icon-btn { width: 28px; height: 28px; font-size: 13px; }
 
-  /* Objective & Hazard Stack anchored cleanly below the single-row Top HUD */
   .left-hud-stack {
     top: calc(var(--top-hud-h, 46px) + 6px);
     left: calc(8px + env(safe-area-inset-left));
@@ -1199,7 +1221,6 @@ kbd {
   .survival-hud { padding: 6px 8px; }
   .hazard-tip { display: none; }
 
-  /* Top-Right Compact Minimap & Combo Counter */
   .minimap-panel {
     position: fixed;
     top: calc(var(--top-hud-h, 46px) + 6px);
@@ -1217,7 +1238,6 @@ kbd {
   }
   .combo-num { font-size: 1.25rem; }
 
-  /* Boss Bar centered between Left Stack & Minimap */
   .boss-hud {
     top: calc(var(--top-hud-h, 46px) + 6px);
     width: min(330px, 36vw);
@@ -1227,7 +1247,6 @@ kbd {
   .boss-subtitle, .boss-tags { display: none; }
   .bar-boss { height: 15px; }
 
-  /* Bottom-Left Corner: Virtual Analog Joystick */
   .touch-joystick-zone {
     left: calc(8px + env(safe-area-inset-left));
     bottom: calc(8px + env(safe-area-inset-bottom));
@@ -1237,14 +1256,12 @@ kbd {
   .touch-joystick-base { width: 92px; height: 92px; }
   .touch-joystick-knob { width: 38px; height: 38px; margin-left: -19px; margin-top: -19px; }
 
-  /* Bottom HUD: Vitals placed NEXT to Joystick, Skill Pad on Bottom-Right */
   .bottom-hud {
     padding: 6px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(130px + env(safe-area-inset-left));
     align-items: flex-end;
     gap: 8px;
   }
 
-  /* Collapse dead bottom-left gap when Touch Joystick is turned Off */
   #game-container.touch-joystick-off .bottom-hud {
     padding-left: calc(8px + env(safe-area-inset-left));
   }
@@ -1280,7 +1297,6 @@ kbd {
     font-size: 11px;
   }
 
-  /* Stack Side-by-Side Tooltips Vertically on Mobile */
   .item-tooltip {
     flex-direction: column;
     max-width: calc(100vw - 16px);
@@ -1307,7 +1323,6 @@ kbd {
     width: min(230px, calc(100vw - 114px));
   }
 
-  /* When a Boss Bar is active on portrait phones, hide objective pill and shift stack down */
   #game-container.boss-active .objective-pill {
     display: none;
   }
@@ -1323,7 +1338,6 @@ kbd {
     padding-left: calc(8px + env(safe-area-inset-left));
   }
 
-  /* HP Bar neatly above Left Joystick (or bottom-left if joystick is disabled) */
   .vitals-panel {
     position: fixed;
     left: calc(8px + env(safe-area-inset-left));
@@ -1335,7 +1349,6 @@ kbd {
     bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
-  /* Flask Button cleared cleanly above Right Skill Pad (8px gap) */
   .flask-btn {
     position: fixed;
     right: calc(8px + env(safe-area-inset-right));
@@ -1345,7 +1358,6 @@ kbd {
     z-index: 16;
   }
 
-  /* Right-bottom Skill Pad */
   .skill-hotbar {
     position: fixed;
     right: calc(6px + env(safe-area-inset-right));
