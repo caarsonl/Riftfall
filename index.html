@@ -525,10 +525,14 @@
         </header>
 
         <div class="modal-body guild-layout">
-          <div class="guild-banner">
+          <div class="guild-banner" style="grid-template-columns: repeat(4, 1fr);">
             <div class="guild-metric">
               <span class="metric-label">Dungeon Clears</span>
               <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 70</span>
+            </div>
+            <div class="guild-metric">
+              <span class="metric-label">Best Gauntlet Floor</span>
+              <span id="guild-best-floor" class="metric-val" style="color:#4ade80">Floor 0</span>
             </div>
             <div class="guild-metric">
               <span class="metric-label">Bounties Claimed</span>

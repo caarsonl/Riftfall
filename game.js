@@ -692,7 +692,9 @@
     }
 
     createDefaultSave() {
-      return {
+      return {cleared: {},
+        bestGauntletFloor: 0,
+        bounties: this.createDefaultBounties(),
         version: 5,
         level: 1,
         xp: 0,
@@ -1154,6 +1156,10 @@
       this.syncAllHUD();
     }
 
+    getRealDungeons() {
+      return DATA.DUNGEONS.filter((d) => !d.isEndless);
+    }
+
     startDungeon(dungeonId, diffId, mutatorIds) {
       const dungeon = DATA.DUNGEONS.find((d) => d.id === dungeonId) || DATA.DUNGEONS[0];
       const diff = DATA.DIFFICULTIES[diffId] || DATA.DIFFICULTIES.normal;
@@ -1173,9 +1179,14 @@
         }
       }
 
-      const hType = dungeon.hazard.type;
+      const isEndless = !!dungeon.isEndless;
+      const initialRealm = isEndless ? pick(this.getRealDungeons()) : dungeon;
+      const hType = initialRealm.hazard.type;
+
       this.run = {
         dungeon,
+        activeRealm: initialRealm,
+        isEndless,
         diff,
         mutators: safeMutators,
         rewardMult,
@@ -1184,7 +1195,7 @@
         boonPickedForRoom: -1,
         lastLayout: "",
         roomIndex: 0,
-        totalRooms: dungeon.rooms,
+        totalRooms: isEndless ? 999 : dungeon.rooms,
         startTime: performance.now(),
         damageDealt: 0,
         enemiesSlain: 0,
@@ -1197,7 +1208,7 @@
         hazardState: {
           value: hType === "oxygen" ? 100 : 0,
           phase: hType === "chrono" ? "overdrive" : "low",
-          phaseTimer: dungeon.hazard.cycleSeconds || 14,
+          phaseTimer: initialRealm.hazard.cycleSeconds || 14,
           poolSpawnTimer: 2.5,
           orbSpawnTimer: 3.5,
           dpsTick: 0
@@ -1221,7 +1232,9 @@
 
       document.getElementById("camp-tabs").classList.add("hidden");
       document.getElementById("dungeon-actions").classList.remove("hidden");
-      document.getElementById("location-badge").textContent = dungeon.name;
+      document.getElementById("location-badge").textContent = isEndless
+        ? `Gauntlet • ${initialRealm.name}`
+        : dungeon.name;
 
       const diffEl = document.getElementById("difficulty-badge");
       diffEl.textContent = diff.name;
@@ -1235,129 +1248,148 @@
         })
         .join("");
 
-      const survHud = document.getElementById("survival-hud");
-      survHud.classList.remove("hidden", "danger-pulse");
-      document.getElementById("hazard-icon").textContent = dungeon.hazard.icon;
-      document.getElementById("hazard-name").textContent = dungeon.hazard.name;
-      document.getElementById("hazard-tip").textContent = dungeon.hazard.tip;
-      const barFill = document.getElementById("hazard-bar-fill");
-      barFill.className = "bar-fill hazard-fill " + (dungeon.hazard.barTheme || "");
-
+      this.applyRealmHazardHUD(initialRealm);
       this.syncBoonsHUD();
       this.generateDungeonRoom(0);
       this.syncAllHUD();
     }
 
+    applyRealmHazardHUD(realm) {
+      const survHud = document.getElementById("survival-hud");
+      survHud.classList.remove("hidden", "danger-pulse");
+      document.getElementById("hazard-icon").textContent = realm.hazard.icon;
+      document.getElementById("hazard-name").textContent = realm.hazard.name;
+      document.getElementById("hazard-tip").textContent = realm.hazard.tip;
+      const barFill = document.getElementById("hazard-bar-fill");
+      barFill.className = "bar-fill hazard-fill " + (realm.hazard.barTheme || "");
+    }
+
     buildRoomLayout(isBossRoom) {
-      const layouts = isBossRoom
-        ? ["amphitheater", "ringed_boss", "cruciform_boss"]
-        : ["cruciform", "twin_bridge", "octagon", "ringed", "split_hall"];
-
-      let chosen = pick(layouts);
-      if (chosen === this.run.lastLayout && layouts.length > 1) {
-        chosen = layouts[(layouts.indexOf(chosen) + 1) % layouts.length];
-      }
-      this.run.lastLayout = chosen;
-
-      const size = isBossRoom ? 25 : 21;
+      // Truly randomized room dimensions, asymmetric shapes, chasm islands, and procedural pillars
+      const size = isBossRoom ? randInt(23, 27) : randInt(17, 25);
       const cx = Math.floor(size / 2);
       const cy = Math.floor(size / 2);
       const grid = Array.from({ length: size }, () => Array(size).fill(-1));
 
       const fillRect = (x0, y0, x1, y1, val) => {
-        for (let y = Math.max(0, y0); y <= Math.min(size - 1, y1); y++) {
-          for (let x = Math.max(0, x0); x <= Math.min(size - 1, x1); x++) {
+        for (let y = Math.max(1, y0); y <= Math.min(size - 2, y1); y++) {
+          for (let x = Math.max(1, x0); x <= Math.min(size - 2, x1); x++) {
             grid[y][x] = val;
           }
         }
       };
 
-      let layoutName = "Grand Vault";
+      const carveCircle = (ox, oy, rad, val = 0) => {
+        for (let y = 1; y <= size - 2; y++) {
+          for (let x = 1; x <= size - 2; x++) {
+            if (Math.hypot(x - ox, y - oy) <= rad) grid[y][x] = val;
+          }
+        }
+      };
 
-      if (chosen === "cruciform" || chosen === "cruciform_boss") {
-        layoutName = "Grand Cruciform";
-        const arm = isBossRoom ? 5 : 4;
-        fillRect(cx - arm, 1, cx + arm, size - 2, 0);
-        fillRect(1, cy - arm, size - 2, cy + arm, 0);
-        [
-          [cx - arm + 1, cy - arm + 1],
-          [cx + arm - 1, cy - arm + 1],
-          [cx - arm + 1, cy + arm - 1],
-          [cx + arm - 1, cy + arm - 1]
-        ].forEach(([px, py]) => {
-          grid[py][px] = 2;
-        });
-      } else if (chosen === "twin_bridge") {
-        layoutName = "Twin-Bridge Chasm";
-        fillRect(2, 1, size - 3, 7, 0);
-        fillRect(2, size - 8, size - 3, size - 2, 0);
-        fillRect(3, 7, 6, size - 8, 0);
-        fillRect(size - 7, 7, size - 4, size - 8, 0);
-        fillRect(cx - 2, cy - 2, cx + 2, cy + 2, 0);
-        fillRect(6, cy - 1, size - 7, cy + 1, 0);
-        grid[4][5] = 2;
-        grid[4][size - 6] = 2;
-        grid[size - 5][5] = 2;
-        grid[size - 5][size - 6] = 2;
-      } else if (chosen === "octagon") {
-        layoutName = "Octagonal Sanctuary";
+      const archetypes = [
+        "organic_cavern",
+        "asymmetric_wings",
+        "multi_island",
+        "serpentine_hall",
+        "diamond_atrium",
+        "ringed_abyss"
+      ];
+      let chosen = pick(archetypes);
+      if (chosen === this.run.lastLayout) {
+        chosen = archetypes[(archetypes.indexOf(chosen) + 1) % archetypes.length];
+      }
+      this.run.lastLayout = chosen;
+
+      let layoutName = "Shifting Chamber";
+
+      if (chosen === "organic_cavern") {
+        layoutName = "Shattered Cavern";
+        const blobs = randInt(5, 8);
+        carveCircle(cx, cy, size * 0.28, 0);
+        for (let b = 0; b < blobs; b++) {
+          const bx = randInt(4, size - 5);
+          const by = randInt(4, size - 5);
+          const br = randRange(2.4, size * 0.22);
+          carveCircle(bx, by, br, 0);
+          // Connect blob to center via bridge
+          fillRect(Math.min(bx, cx) - 1, Math.min(by, cy) - 1, Math.max(bx, cx) + 1, Math.max(by, cy) + 1, 0);
+        }
+      } else if (chosen === "asymmetric_wings") {
+        layoutName = "Asymmetric Wings";
+        const shiftX = randInt(-2, 2);
+        fillRect(cx - 3 + shiftX, 2, cx + 3 + shiftX, size - 3, 0);
+        const leftY = randInt(4, cy - 1);
+        const rightY = randInt(cy + 1, size - 5);
+        fillRect(2, leftY - 2, cx + shiftX, leftY + 2, 0);
+        fillRect(cx + shiftX, rightY - 2, size - 3, rightY + 2, 0);
+        if (Math.random() < 0.65) {
+          fillRect(3, Math.min(leftY, rightY), 5, Math.max(leftY, rightY), 0);
+        }
+      } else if (chosen === "multi_island") {
+        layoutName = "Archipelago Bridges";
+        const r = Math.max(3, Math.floor(size * 0.16));
+        // North, South, West, East islands connected by narrow bridges
+        fillRect(cx - r, 1, cx + r, 2 + r, 0);
+        fillRect(cx - r, size - 3 - r, cx + r, size - 2, 0);
+        fillRect(1, cy - r, 2 + r, cy + r, 0);
+        fillRect(size - 3 - r, cy - r, size - 2, cy + r, 0);
+        const bridgeW = isBossRoom ? 2 : 1;
+        fillRect(cx - bridgeW, 2, cx + bridgeW, size - 3, 0);
+        fillRect(2, cy - bridgeW, size - 3, cy + bridgeW, 0);
+      } else if (chosen === "serpentine_hall") {
+        layoutName = "Serpentine Vault";
+        const zig = randInt(3, 5);
+        const bandH = Math.max(3, Math.floor((size - 4) / 3));
+        fillRect(2, size - 2 - bandH, size - 3 - zig, size - 2, 0);
+        fillRect(2 + zig, cy - Math.floor(bandH / 2), size - 3, cy + Math.ceil(bandH / 2), 0);
+        fillRect(2, 1, size - 3 - zig, 1 + bandH, 0);
+        // Wide vertical connectors
+        fillRect(size - 5 - zig, cy, size - 3 - zig, size - 2 - bandH, 0);
+        fillRect(2 + zig, 1 + bandH, 4 + zig, cy, 0);
+      } else if (chosen === "diamond_atrium") {
+        layoutName = "Faceted Atrium";
+        const skewX = randRange(0.85, 1.2);
+        const skewY = randRange(0.85, 1.2);
+        const maxR = size * 0.44;
         for (let y = 1; y <= size - 2; y++) {
           for (let x = 1; x <= size - 2; x++) {
-            const dx = Math.abs(x - cx);
-            const dy = Math.abs(y - cy);
-            if (dx + dy <= size - 7) grid[y][x] = 0;
+            const distM = Math.abs(x - cx) * skewX + Math.abs(y - cy) * skewY;
+            if (distM <= maxR) grid[y][x] = 0;
           }
         }
-        grid[cy - 3][cx - 4] = 2;
-        grid[cy - 3][cx + 4] = 2;
-        grid[cy + 3][cx - 4] = 2;
-        grid[cy + 3][cx + 4] = 2;
-      } else if (chosen === "ringed" || chosen === "ringed_boss") {
-        layoutName = "Abyssal Ring Arena";
-        fillRect(2, 1, size - 3, size - 2, 0);
-        fillRect(2, 1, 3, 2, -1);
-        fillRect(size - 4, 1, size - 3, 2, -1);
-        fillRect(2, size - 3, 3, size - 2, -1);
-        fillRect(size - 4, size - 3, size - 3, size - 2, -1);
-        const pit = isBossRoom ? 3 : 2;
-        fillRect(cx - pit, cy - pit, cx + pit, cy + pit, -1);
-        grid[cy - pit - 2][cx - pit - 2] = 2;
-        grid[cy - pit - 2][cx + pit + 2] = 2;
-        grid[cy + pit + 2][cx - pit - 2] = 2;
-        grid[cy + pit + 2][cx + pit + 2] = 2;
-      } else if (chosen === "split_hall") {
-        layoutName = "Split-Hall Catacomb";
-        fillRect(1, 1, size - 2, size - 2, 0);
-        fillRect(1, 1, 3, 3, -1);
-        fillRect(size - 4, 1, size - 2, 3, -1);
-        fillRect(1, size - 4, 3, size - 2, -1);
-        fillRect(size - 4, size - 4, size - 2, size - 2, -1);
-        fillRect(4, cy, size - 5, cy, 1);
-        fillRect(cx - 1, cy, cx + 1, cy, 0);
-        fillRect(4, cy, 5, cy, 0);
-        fillRect(size - 6, cy, size - 5, cy, 0);
-        grid[cy - 4][cx - 4] = 2;
-        grid[cy - 4][cx + 4] = 2;
-        grid[cy + 4][cx - 4] = 2;
-        grid[cy + 4][cx + 4] = 2;
       } else {
-        layoutName = "Grand Boss Amphitheater";
-        for (let y = 1; y <= size - 2; y++) {
-          for (let x = 1; x <= size - 2; x++) {
-            const dx = Math.abs(x - cx);
-            const dy = Math.abs(y - cy);
-            if (dx + dy <= size - 6) grid[y][x] = 0;
-          }
-        }
-        grid[cy - 4][cx - 5] = 2;
-        grid[cy - 4][cx + 5] = 2;
-        grid[cy + 4][cx - 5] = 2;
-        grid[cy + 4][cx + 5] = 2;
+        layoutName = "Sunken Ring";
+        const margin = randInt(1, 2);
+        fillRect(margin, margin, size - 1 - margin, size - 1 - margin, 0);
+        const pitW = randInt(2, isBossRoom ? 4 : 3);
+        const pitH = randInt(2, isBossRoom ? 4 : 3);
+        const offX = randInt(-1, 1);
+        const offY = randInt(-1, 1);
+        fillRect(cx - pitW + offX, cy - pitH + offY, cx + pitW + offX, cy + pitH + offY, -1);
       }
 
+      // Guarantee South Spawn & North Portal pads exist and connect to center
       fillRect(cx - 2, size - 4, cx + 2, size - 2, 0);
       fillRect(cx - 2, 1, cx + 2, 3, 0);
+      fillRect(cx - 1, 2, cx + 1, size - 3, 0);
 
+      // Scatter randomized cover pillars away from spawn, center, and portal
+      const pillarCount = isBossRoom ? randInt(3, 6) : randInt(2, 6);
+      for (let p = 0; p < pillarCount; p++) {
+        const px = randInt(3, size - 4);
+        const py = randInt(4, size - 5);
+        if (
+          grid[py][px] === 0 &&
+          Math.hypot(px - cx, py - (size - 2.5)) > 3.2 &&
+          Math.hypot(px - cx, py - 2.0) > 3.2 &&
+          Math.hypot(px - cx, py - cy) > 2.2
+        ) {
+          grid[py][px] = 2;
+        }
+      }
+
+      // Frame north & west edges with solid walls where adjacent to walkable floor
       for (let x = 1; x < size - 1; x++) {
         if (grid[1][x] === 0 && grid[0][x] === -1) grid[0][x] = 1;
       }
@@ -1402,8 +1434,18 @@
 
     generateDungeonRoom(roomIndex) {
       this.clearCombatFX();
-      const { dungeon, diff, totalRooms } = this.run;
-      const isBossRoom = roomIndex === totalRooms - 1;
+      const { dungeon, diff, totalRooms, isEndless } = this.run;
+
+      // In Endless Gauntlet, shift to a random realm every floor!
+      if (isEndless) {
+        const nextRealm = pick(this.getRealDungeons());
+        this.run.activeRealm = nextRealm;
+        document.getElementById("location-badge").textContent = `Gauntlet F${roomIndex + 1} • ${nextRealm.name}`;
+        this.applyRealmHazardHUD(nextRealm);
+      }
+
+      const realm = this.run.activeRealm || dungeon;
+      const isBossRoom = isEndless ? (roomIndex + 1) % 5 === 0 : roomIndex === totalRooms - 1;
       const { size, grid, layoutName, spawn, portalPos } = this.buildRoomLayout(isBossRoom);
 
       this.player.x = spawn.x;
@@ -1420,13 +1462,13 @@
           (t) =>
             t.y <= maxY &&
             dist(t.x, t.y, spawn.x, spawn.y) >= minDistPlayer &&
-            avoidList.every((a) => dist(t.x, t.y, a.x, a.y) >= 2.6)
+            avoidList.every((a) => dist(t.x, t.y, a.x, a.y) >= 2.5)
         );
         if (candidates.length > 0) return pick(candidates);
         return reachable.length > 0 ? pick(reachable) : { x: spawn.x, y: spawn.y - 2 };
       };
 
-      const hType = dungeon.hazard.type;
+      const hType = realm.hazard.type;
       const spawnZones = (enabled, baseCount, bossCount, radius) => {
         const arr = [];
         if (!enabled) return arr;
@@ -1481,13 +1523,36 @@
         urns.push({ x: pos.x, y: pos.y, hp: 1, kind: i < 2 ? "heal" : "gold" });
       }
 
+      // Roll Special Room Encounter on non-boss rooms
+      let specialEvent = null;
+      if (!isBossRoom && roomIndex >= 1) {
+        const roll = Math.random();
+        if (roll < 0.22) {
+          specialEvent = { type: "goblin", timer: 16.0 };
+        } else if (roll < 0.44) {
+          const cx = Math.floor(size / 2) + 0.5;
+          const shrineSpot =
+            reachable.find((t) => dist(t.x, t.y, cx, cx) < 2.2) || pickReachable(3.5, size - 4, allProps);
+          specialEvent = {
+            type: "cursed_shrine",
+            x: shrineSpot.x,
+            y: shrineSpot.y,
+            activated: false,
+            timer: 22.0,
+            spawnTick: 0
+          };
+        } else if (roll < 0.64) {
+          specialEvent = { type: "champion_duel" };
+        }
+      }
+
       this.world = {
         size,
         grid,
         layoutName,
         reachable,
         portalPos,
-        palette: dungeon.palette,
+        palette: realm.palette,
         stations: [],
         enemies: [],
         vents,
@@ -1505,14 +1570,15 @@
         chests: [],
         urns,
         portal: null,
-        isBossRoom
+        isBossRoom,
+        specialEvent
       };
 
       if (hType === "oxygen") {
         this.run.hazardState.value = 100;
       } else if (hType === "solar" || hType === "voidcore") {
         this.run.hazardState.value = 0;
-        this.run.hazardState.phaseTimer = dungeon.hazard.cycleSeconds || 14;
+        this.run.hazardState.phaseTimer = realm.hazard.cycleSeconds || 14;
       } else if (hType !== "gravity" && hType !== "chrono") {
         this.run.hazardState.value = 0;
       }
@@ -1523,14 +1589,55 @@
         this.grantShield(stats.hp * bn.roomShieldPct, 8.0);
       }
 
-      document.getElementById("room-indicator").textContent = isBossRoom
-        ? `Room ${roomIndex + 1}/${totalRooms} • ${layoutName} (BOSS)`
-        : `Room ${roomIndex + 1}/${totalRooms} • ${layoutName}`;
+      const floorPrefix = isEndless ? `Floor ${roomIndex + 1}` : `Room ${roomIndex + 1}/${totalRooms}`;
 
       if (isBossRoom) {
+        document.getElementById("room-indicator").textContent = `${floorPrefix} • ${layoutName} (BOSS)`;
         this.spawnBossEncounter();
+      } else if (specialEvent?.type === "goblin") {
+        document.getElementById("boss-hud").classList.add("hidden");
+        document.getElementById("room-indicator").textContent = `${floorPrefix} • TREASURE GOBLIN!`;
+        const gSpot = pickReachable(5.5, size - 5.5, []);
+        const gob = this.createEnemy(pick(realm.enemies), gSpot.x, gSpot.y, roomIndex, true);
+        gob.isGoblin = true;
+        gob.name = "Rift Treasure Goblin";
+        gob.hp = Math.round(gob.hp * 1.45);
+        gob.maxHp = gob.hp;
+        gob.speed = 4.35;
+        gob.color = "#f59e0b";
+        gob.trim = "#fde047";
+        this.world.enemies.push(gob);
+        this.toast("A Golden Treasure Goblin appeared! Slay it before it escapes!", "mythic");
+      } else if (specialEvent?.type === "cursed_shrine") {
+        document.getElementById("boss-hud").classList.add("hidden");
+        document.getElementById("room-indicator").textContent = `${floorPrefix} • Cursed Shrine`;
+        this.toast("Cursed Shrine discovered! Activate it [F] to survive a 22s ambush for Epic+ loot.", "loot");
+      } else if (specialEvent?.type === "champion_duel") {
+        document.getElementById("boss-hud").classList.add("hidden");
+        document.getElementById("room-indicator").textContent = `${floorPrefix} • Champion Arena`;
+        const affixes = [
+          { tag: "Vampiric", hpMult: 1.25, atkMult: 1.15, spdMult: 1.05, trim: "#f43f5e" },
+          { tag: "Hasted",   hpMult: 1.0,  atkMult: 1.1,  spdMult: 1.38, trim: "#38bdf8" },
+          { tag: "Colossal", hpMult: 1.65, atkMult: 1.25, spdMult: 0.9,  trim: "#f97316" },
+          { tag: "Arcane",   hpMult: 1.15, atkMult: 1.3,  spdMult: 1.1,  trim: "#c084fc" }
+        ];
+        const champCount = diff.id === "torment" || diff.id === "cataclysm" ? 3 : 2;
+        for (let c = 0; c < champCount; c++) {
+          const pos = pickReachable(5.0, size - 5.0, []);
+          const af = pick(affixes);
+          const champ = this.createEnemy(pick(realm.enemies), pos.x, pos.y, roomIndex, true);
+          champ.name = `${af.tag} ${champ.name.replace("Elite ", "")}`;
+          champ.hp = Math.round(champ.hp * af.hpMult);
+          champ.maxHp = champ.hp;
+          champ.atk = Math.round(champ.atk * af.atkMult);
+          champ.speed *= af.spdMult;
+          champ.trim = af.trim;
+          this.world.enemies.push(champ);
+        }
+        this.toast("Champion Arena! Defeat the empowered Rift Champions!", "danger");
       } else {
         document.getElementById("boss-hud").classList.add("hidden");
+        document.getElementById("room-indicator").textContent = `${floorPrefix} • ${layoutName}`;
         const diffBonus =
           diff.id === "cataclysm" ? 4 : diff.id === "torment" ? 3 : diff.id === "abyssal" ? 2 : diff.id === "nightmare" ? 1 : 0;
         const count = 6 + Math.min(8, roomIndex * 2) + diffBonus;
@@ -1548,7 +1655,7 @@
         const maxElites = diff.id === "cataclysm" || diff.id === "torment" ? 2 : 1;
 
         for (let i = 0; i < count; i++) {
-          const tplId = pick(dungeon.enemies);
+          const tplId = pick(realm.enemies);
           const pos = pickReachable(4.8, size - 5.2, []);
           const makeElite =
             elitesSpawned < maxElites && i >= count - 3 && Math.random() < eliteChance + roomIndex * 0.06;
@@ -1572,13 +1679,12 @@
     createEnemy(templateId, x, y, roomIndex, isElite = false) {
       const tpl = DATA.ENEMIES[templateId] || DATA.ENEMIES.crystal_crawler;
       const diff = this.run.diff;
-      const roomScale = 1 + roomIndex * 0.12;
       const speedMult = this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0;
       const dmgMut = this.run.mutators.includes("glass_cannon") ? 1.5 : 1.0;
-
+      const scale = this.run.isEndless ? Math.pow(1.14, roomIndex) : 1 + roomIndex * 0.12;
       const eliteHp = isElite ? 2.1 : 1.0;
       const eliteAtk = isElite ? 1.3 : 1.0;
-      const maxHp = Math.round(tpl.hp * diff.hpMult * roomScale * eliteHp);
+      const maxHp = Math.round(tpl.hp * diff.hpMult * scale * eliteHp);
 
       return {
         id: uid(),
@@ -1591,7 +1697,7 @@
         z: 0,
         hp: maxHp,
         maxHp,
-        atk: Math.round(tpl.atk * diff.dmgMult * roomScale * dmgMut * eliteAtk),
+        atk: Math.round(tpl.atk * diff.dmgMult * scale * dmgMut * eliteAtk),
         speed: tpl.speed * speedMult * (isElite ? 1.08 : 1.0),
         range: tpl.range,
         attackCd: tpl.attackCd / speedMult,
@@ -1610,9 +1716,13 @@
     }
 
     spawnBossEncounter() {
-      const bossTpl = DATA.BOSSES[this.run.dungeon.bossId];
+      const realm = this.run.activeRealm || this.run.dungeon;
+      const bossTpl = DATA.BOSSES[realm.bossId];
       const diff = this.run.diff;
-      const isTwin = this.run.mutators.includes("double_boss");
+      const endlessBossScale = this.run.isEndless ? Math.pow(1.16, this.run.roomIndex) : 1.0;
+      const isTwin =
+        this.run.mutators.includes("double_boss") ||
+        (this.run.isEndless && (this.run.roomIndex + 1) % 10 === 0);
       const speedMult = this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0;
       const dmgMut = this.run.mutators.includes("glass_cannon") ? 1.5 : 1.0;
 
@@ -1620,7 +1730,7 @@
 
       for (let i = 0; i < count; i++) {
         const hpScale = isTwin ? 0.65 : 1.0;
-        const maxHp = Math.round(bossTpl.hp * diff.hpMult * hpScale);
+        const maxHp = Math.round(bossTpl.hp * diff.hpMult * endlessBossScale * hpScale);
         const northSpots = this.world.reachable.filter((t) => t.y <= 7.5 && t.y >= 3.0);
         const spot =
           northSpots.length > 0
@@ -1639,7 +1749,7 @@
           z: 0,
           hp: maxHp,
           maxHp,
-          atk: Math.round(bossTpl.atk * diff.dmgMult * dmgMut),
+          atk: Math.round(bossTpl.atk * diff.dmgMult * endlessBossScale * dmgMut),
           speed: bossTpl.speed * speedMult,
           radius: bossTpl.radius,
           height: bossTpl.height,
@@ -1783,10 +1893,12 @@
 
       if (this.mode === "hub") {
         this.updateSanctuaryInteractions();
+      // Inside updateWorld(dt), inside the `else if (this.mode === "dungeon" && this.run && !this.run.finished)` block:
       } else if (this.mode === "dungeon" && this.run && !this.run.finished) {
         this.updateAutoAttack(dt, stats);
         this.updateDungeonHazard(dt, stats);
         this.updateMutatorEvents(dt);
+        this.updateSpecialEncounter(dt);
         this.updateEnemies(dt);
         this.updateTelegraphs(dt);
         this.updateProjectiles(dt, stats);
@@ -2742,12 +2854,39 @@
       if (this.world.enemies.length === 0) {
         this.onRoomCleared();
       }
+      if (enemy.isGoblin) {
+        const bonusG = Math.round(this.run.activeRealm.baseGold * 1.4 * currencyMult);
+        const bonusS = Math.round(18 * currencyMult);
+        this.save.gold += bonusG;
+        this.save.shards += bonusS;
+        this.run.goldEarned += bonusG;
+        this.run.shardsEarned += bonusS;
+        this.dropLootItem(enemy.x, enemy.y, true, 0.45);
+        this.dropLootItem(enemy.x, enemy.y, false, 0.35);
+        this.toast(`Treasure Goblin Slain! +${fmtNum(bonusG)}g & +${bonusS} Shards!`, "mythic");
+      }
     }
 
     onRoomCleared() {
       this.incrementBounty("roomsCleared", 1);
 
-      if (this.world.isBossRoom) {
+      if (this.run.isEndless) {
+        const clearedFloor = this.run.roomIndex + 1;
+        if (clearedFloor > (this.save.bestGauntletFloor || 0)) {
+          this.save.bestGauntletFloor = clearedFloor;
+        }
+        // Grant bonus shards on every 5th floor boss clear
+        if (clearedFloor % 5 === 0) {
+          const bossShards = Math.round((15 + clearedFloor * 3) * this.run.rewardMult);
+          this.save.shards += bossShards;
+          this.run.shardsEarned += bossShards;
+          this.save.renown += 1;
+          this.run.renownEarned += 1;
+          this.toast(`Gauntlet Floor ${clearedFloor} Boss Defeated! +${bossShards} Shards & +1 Renown!`, "mythic");
+        }
+      }
+
+      if (!this.run.isEndless && this.world.isBossRoom) {
         this.completeDungeonVictory();
       } else {
         const pPos = this.world.portalPos || { x: Math.floor(this.world.size / 2) + 0.5, y: 2.0 };
@@ -2772,7 +2911,72 @@
         }
       }
     }
+    activateCursedShrine() {
+      const ev = this.world?.specialEvent;
+      if (!ev || ev.type !== "cursed_shrine" || ev.activated) return;
+      ev.activated = true;
+      ev.spawnTick = 0.2;
+      this.sfx.bossWarn();
+      this.addScreenShake(0.25, 8);
+      this.toast("CURSED SHRINE ACTIVATED! Survive for 22 seconds!", "danger");
+    }
 
+    updateSpecialEncounter(dt) {
+      const ev = this.world?.specialEvent;
+      if (!ev) return;
+
+      if (ev.type === "goblin") {
+        const gob = this.world.enemies.find((e) => e.isGoblin);
+        if (!gob) {
+          this.world.specialEvent = null;
+          return;
+        }
+        ev.timer -= dt;
+        document.getElementById("room-indicator").textContent = `GOBLIN ESCAPING: ${Math.ceil(ev.timer)}s`;
+        if (ev.timer <= 0) {
+          this.world.enemies = this.world.enemies.filter((e) => !e.isGoblin);
+          this.world.specialEvent = null;
+          this.spawnBurst(gob.x, gob.y, "#fde047", 20, 3.0);
+          this.toast("The Treasure Goblin escaped into the Rift!", "info");
+          if (this.world.enemies.length === 0) this.onRoomCleared();
+        }
+      } else if (ev.type === "cursed_shrine") {
+        const prompt = document.getElementById("interact-prompt");
+        if (!ev.activated) {
+          const near = dist(this.player.x, this.player.y, ev.x, ev.y) <= 2.1;
+          if (near) {
+            document.getElementById("interact-prompt-text").textContent = "Activate Cursed Shrine (22s Survival)";
+            prompt.classList.remove("hidden");
+          } else {
+            prompt.classList.add("hidden");
+          }
+          return;
+        }
+
+        prompt.classList.add("hidden");
+        ev.timer -= dt;
+        ev.spawnTick -= dt;
+        document.getElementById("room-indicator").textContent = `CURSED AMBUSH • SURVIVE ${Math.ceil(Math.max(0, ev.timer))}s`;
+
+        if (ev.spawnTick <= 0 && this.world.enemies.length < 10) {
+          ev.spawnTick = 3.2;
+          const realm = this.run.activeRealm || this.run.dungeon;
+          for (let k = 0; k < 2; k++) {
+            const spot = this.findOpenSpot(4.5);
+            this.world.enemies.push(this.createEnemy(pick(realm.enemies), spot.x, spot.y, this.run.roomIndex, k === 0 && Math.random() < 0.3));
+          }
+        }
+
+        if (ev.timer <= 0) {
+          this.world.specialEvent = null;
+          this.world.enemies = [];
+          this.sfx.victory();
+          this.dropLootItem(ev.x, ev.y, true, 0.5);
+          this.toast("Cursed Shrine Cleansed! Bonus Epic+ Chest Unlocked!", "mythic");
+          this.onRoomCleared();
+        }
+      }
+    }
     openBoonModal() {
       const pool = [...DATA.RUN_BOONS];
       const choices = [];
@@ -2833,9 +3037,12 @@
         .join("");
     }
 
+    // In dropLootItem():
     dropLootItem(x, y, isBossDrop, extraLuck = 0) {
-      const pool = this.run.dungeon.lootPool;
+      const realm = this.run.activeRealm || this.run.dungeon;
+      const pool = realm.lootPool;
       const tplId = pick(pool);
+
       const bn = this.getRunBoonTotals();
       const minRarity = isBossDrop ? this.run.diff.minBossRarity || "common" : "common";
       const rarity = GearSystem.rollRarity(
@@ -3350,7 +3557,14 @@
         const d = Math.hypot(dx, dy) || 0.001;
         e.facing.x = dx / d;
         e.facing.y = dy / d;
-
+        if (e.isGoblin) {
+          // Flee away from player while dropping trail gold!
+          const fleeAng = Math.atan2(e.y - this.player.y, e.x - this.player.x) + Math.sin(this.elapsed * 3.5) * 0.55;
+          e.facing.x = Math.cos(fleeAng);
+          e.facing.y = Math.sin(fleeAng);
+          this.moveEntityWithCollision(e, e.facing.x * e.speed * slowMult * dt, e.facing.y * e.speed * slowMult * dt, e.radius);
+          continue;
+        }
         if (e.isBoss) {
           this.updateBossAI(e, dt, dx, dy, d, slowMult);
           continue;
@@ -4081,6 +4295,24 @@
       for (const ch of this.world.chests) {
         renderables.push({ depth: ch.x + ch.y, draw: () => this.drawChest(ctx, ch, toS) });
       }
+
+      // PUT IT RIGHT HERE:
+      if (this.world.specialEvent?.type === "cursed_shrine") {
+        const ev = this.world.specialEvent;
+        renderables.push({
+          depth: ev.x + ev.y,
+          draw: () => {
+            const p = toS(ev.x, ev.y, 0);
+            const col = ev.activated ? "#ef4444" : "#f43f5e";
+            drawIsoGroundEllipse(ctx, p.x, p.y, 1.5, "rgba(244, 63, 94, 0.22)", col, 2);
+            drawIsoBlock(ctx, p.x, p.y, 20, 10, 18, "#fda4af", "#9f1239", "#4c0519", "#07090f");
+            const bob = Math.round(Math.sin(this.elapsed * 6) * 3);
+            ctx.fillStyle = ev.activated ? "#fde047" : "#f43f5e";
+            ctx.fillRect(p.x - 4, p.y - 28 + bob, 8, 8);
+          }
+        });
+      }
+
       for (const drop of this.lootDrops) {
         renderables.push({ depth: drop.x + drop.y, draw: () => this.drawLootDrop(ctx, drop, toS) });
       }
@@ -6375,9 +6607,13 @@
       document.getElementById("guild-bounties-done").textContent = fmtNum(this.save.bountiesClaimed || 0);
       document.getElementById("guild-renown-val").textContent = fmtNum(this.save.renown);
 
+      // PUT IT RIGHT HERE:
+      const bestFloorEl = document.getElementById("guild-best-floor");
+      if (bestFloorEl) bestFloorEl.textContent = `Floor ${this.save.bestGauntletFloor || 0}`;
+
       const btyList = document.getElementById("bounty-list");
       btyList.innerHTML = "";
-
+      
       for (const tpl of DATA.BOUNTY_TEMPLATES) {
         const st = this.save.bounties[tpl.id] || { progress: 0, tier: 1 };
         const target = this.getBountyTarget(tpl, st.tier);
@@ -6739,14 +6975,9 @@
           this.castSkillE();
         } else if (e.code === "KeyR") {
           this.useFlask();
-        } else if (e.code === "KeyF" && this.mode === "hub" && this.nearbyStation) {
-          this.openModal(this.nearbyStation.id);
-        } else if (this.mode === "hub") {
-          if (e.code === "Digit1") this.openModal("dungeon");
-          if (e.code === "Digit2") this.openModal("armory");
-          if (e.code === "Digit3") this.openModal("forge");
-          if (e.code === "Digit4") this.openModal("guild");
-          if (e.code === "Digit5") this.openModal("class");
+        } else if (e.code === "KeyF") {
+          if (this.mode === "hub" && this.nearbyStation) this.openModal(this.nearbyStation.id);
+          else if (this.mode === "dungeon" && this.world?.specialEvent?.type === "cursed_shrine") this.activateCursedShrine();
         }
       });
       // Unlock Web Audio on first mobile touch gesture
@@ -6760,9 +6991,9 @@
 
       // Tappable Interact Prompt for Mobile & Mouse
       document.getElementById("interact-prompt")?.addEventListener("click", () => {
-        if (!this.activeModal && this.mode === "hub" && this.nearbyStation) {
-          this.openModal(this.nearbyStation.id);
-        }
+        if (this.activeModal) return;
+        if (this.mode === "hub" && this.nearbyStation) this.openModal(this.nearbyStation.id);
+        else if (this.mode === "dungeon" && this.world?.specialEvent?.type === "cursed_shrine") this.activateCursedShrine();
       });
 
       // Zero-delay touchstart + click binding for combat skills

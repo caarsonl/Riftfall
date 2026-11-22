@@ -230,6 +230,41 @@ window.GAME_DATA = {
      ------------------------------------------------------------------------ */
   DUNGEONS: [
     {
+      id: "endless_gauntlet",
+      name: "Endless Rift Gauntlet",
+      isEndless: true,
+      themeLabel: "∞ Endless • All Realms",
+      themeColor: "#ffd447",
+      dropClass: "all",
+      desc: "Infinite procedural descent shifting across all 14 dungeon realms, hazards, and bosses every floor. Bosses appear every 5th floor!",
+      rooms: 999,
+      recommendedPower: 320,
+      baseGold: 160,
+      baseShards: 15,
+      baseXp: 175,
+      hazard: {
+        type: "oxygen",
+        name: "Shifting Realm Hazard",
+        icon: "∞",
+        cssOverlay: "hazard-gravity",
+        barTheme: "",
+        shortDesc: "Shifting Realms: Each floor adopts a random dungeon's theme, enemies, and survival hazard.",
+        tip: "Adapt to the active floor's hazard! Bosses spawn every 5 floors.",
+        drainPerSec: 5.5,
+        restorePerSec: 38.0,
+        suffocateDpsPct: 0.05
+      },
+      palette: {
+        bgTop: "#141026", bgBottom: "#06040d", tileA: "#241d42", tileB: "#1b1533", tileBorder: "#0f0b1f",
+        wallTop: "#f59e0b", wallLeft: "#4c1d95", wallRight: "#1e1b4b", pillarTop: "#38bdf8", chasm: "#070412", accent: "#ffd447"
+      },
+      enemies: ["crystal_crawler", "clockwork_hound", "spore_stalker", "void_wraith"],
+      bossId: "obsidian_colossus",
+      lootPool: ["seismic_hammer", "blaze_chakrams", "sporeburst_staff", "nova_grimoire"],
+      lootSummary: ["All 14 Realm Sets", "Scaling Shards", "Leaderboard Record"]
+    },
+    // ...keep all 14 existing dungeons right below this!
+    {
       id: "sunken_quarry", name: "Sunken Quarry", themeLabel: "T1 • Earth / Crystal", themeColor: "#38bdf8", dropClass: "vanguard",
       desc: "Flooded subterranean crystal mines choked with stagnant air and crystalline golems.",
       rooms: 4, recommendedPower: 280, baseGold: 135, baseShards: 12, baseXp: 145,
