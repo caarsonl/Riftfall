@@ -256,8 +256,8 @@
 
         <button id="skill-dash" class="skill-slot skill-dash" title="Dash / Dodge Roll [Spacebar] — Brief invulnerability + speed burst">
           <span class="skill-key">SPACE</span>
-          <span class="skill-icon">&#10148;</span>
-          <span class="skill-name">Dash</span>
+          <span id="skill-dash-icon" class="skill-icon">&#10148;</span>
+          <span id="skill-dash-name" class="skill-name">Dash</span>
           <div id="skill-dash-cd" class="cooldown-curtain hidden"></div>
           <span id="skill-dash-cd-text" class="cooldown-text hidden"></span>
         </button>
@@ -525,7 +525,7 @@
         </header>
 
         <div class="modal-body guild-layout">
-          <div class="guild-banner" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="guild-banner">
             <div class="guild-metric">
               <span class="metric-label">Dungeon Clears</span>
               <span id="guild-bosses-cleared" class="metric-val gold-text">0 / 70</span>

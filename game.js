@@ -1,8 +1,8 @@
 /* ==========================================================================
    RIFTFALL — CORE ENGINE & RPG RUNTIME (game.js) — PART 1 OF 4
-   14 Themed Dungeons, 5 Balanced Difficulties, 14 2pc/3pc Set Bonuses,
-   Starfall & Thunderstep Fixes, Boss CC Resilience, Custom Animated Weapons,
-   4 Base + 8 Advanced Classes, and Crash-Proof Loop.
+   14 Themed Dungeons + Endless Gauntlet, 5 Balanced Difficulties,
+   14 2pc/3pc Set Bonuses, Isometric Hitboxes, Custom Animated Weapons,
+   4 Base + 8 Advanced Classes, Slower XP Curve, and Crash-Proof Loop.
    ========================================================================== */
 
 (() => {
@@ -282,7 +282,8 @@
     },
 
     getDungeonTierIndex(dungeonId) {
-      const idx = DATA.DUNGEONS.findIndex((d) => d.id === dungeonId);
+      const realDungeons = DATA.DUNGEONS.filter((d) => !d.isEndless);
+      const idx = realDungeons.findIndex((d) => d.id === dungeonId);
       return idx >= 0 ? idx + 1 : 1;
     },
 
@@ -561,8 +562,9 @@
 
   function drawIsoGroundEllipse(ctx, sx, sy, radiusTiles, fill, stroke = null, lineWidth = 1) {
     const r = Number.isFinite(radiusTiles) ? Math.max(0.05, radiusTiles) : 0.5;
-    const rx = Math.max(1, Math.round(r * ISO.TILE_W * 0.52));
-    const ry = Math.max(1, Math.round(r * ISO.TILE_H * 0.52));
+    const isoScale = 0.5 * Math.SQRT2;
+    const rx = Math.max(1, Math.round(r * ISO.TILE_W * isoScale));
+    const ry = Math.max(1, Math.round(r * ISO.TILE_H * isoScale));
     ctx.beginPath();
     ctx.ellipse(Math.round(sx), Math.round(sy), rx, ry, 0, 0, Math.PI * 2);
     if (fill) {
@@ -611,6 +613,7 @@
         dx: 0,
         dy: 0
       };
+      this.resetJoystick = null;
       this.world = null;
       this.cam = { x: 8.5, y: 8.5, shakeTime: 0, shakeMag: 0 };
       this.elapsed = 0;
@@ -692,9 +695,7 @@
     }
 
     createDefaultSave() {
-      return {cleared: {},
-        bestGauntletFloor: 0,
-        bounties: this.createDefaultBounties(),
+      return {
         version: 5,
         level: 1,
         xp: 0,
@@ -702,6 +703,7 @@
         shards: 20,
         renown: 0,
         flasks: 3,
+        bestGauntletFloor: 0,
         classId: "vanguard",
         unlockedEvolutions: {},
         equipped: {
@@ -728,6 +730,52 @@
       };
     }
 
+    sanitizeSave(parsed) {
+      const def = this.createDefaultSave();
+      const s = { ...def, ...(parsed && typeof parsed === "object" ? parsed : {}) };
+      s.settings = {
+        ...def.settings,
+        ...(parsed?.settings && typeof parsed.settings === "object" ? parsed.settings : {})
+      };
+
+      if (!Array.isArray(s.inventory)) {
+        s.inventory = [];
+      } else {
+        s.inventory = s.inventory.filter(
+          (it) => it && typeof it === "object" && DATA.GEAR_TEMPLATES[it.templateId] && DATA.RARITIES[it.rarity]
+        );
+      }
+
+      if (!s.bounties || typeof s.bounties !== "object" || Array.isArray(s.bounties)) {
+        s.bounties = this.createDefaultBounties();
+      } else {
+        for (const b of DATA.BOUNTY_TEMPLATES) {
+          if (!s.bounties[b.id] || typeof s.bounties[b.id] !== "object") {
+            s.bounties[b.id] = { progress: 0, tier: 1 };
+          }
+        }
+      }
+
+      if (!s.blessings || typeof s.blessings !== "object" || Array.isArray(s.blessings)) s.blessings = {};
+      if (!s.cleared || typeof s.cleared !== "object" || Array.isArray(s.cleared)) s.cleared = {};
+      if (!Array.isArray(s.selectedMutators)) s.selectedMutators = [];
+      if (!s.unlockedEvolutions || typeof s.unlockedEvolutions !== "object" || Array.isArray(s.unlockedEvolutions)) {
+        s.unlockedEvolutions = {};
+      }
+      if (!DATA.CLASSES[s.classId]) s.classId = "vanguard";
+      if (!DATA.DUNGEONS.some((d) => d.id === s.selectedDungeonId)) s.selectedDungeonId = "sunken_quarry";
+      if (!DATA.DIFFICULTIES[s.selectedDiff]) s.selectedDiff = "normal";
+      if (!s.equipped || typeof s.equipped !== "object") s.equipped = def.equipped;
+
+      for (const slot of ["weapon", "armor", "relic"]) {
+        const it = s.equipped[slot];
+        if (!it || !DATA.GEAR_TEMPLATES[it.templateId]) s.equipped[slot] = def.equipped[slot];
+      }
+
+      s.bestGauntletFloor = Number.isFinite(s.bestGauntletFloor) ? Math.max(0, Math.floor(s.bestGauntletFloor)) : 0;
+      return s;
+    }
+
     saveGame(showToast = false) {
       this.save.lastTimestamp = Date.now();
       try {
@@ -742,46 +790,7 @@
       try {
         const raw = localStorage.getItem(DATA.SAVE_KEY);
         if (!raw) return;
-        const parsed = JSON.parse(raw);
-        const def = this.createDefaultSave();
-        this.save = { ...def, ...parsed };
-        this.save.settings = { ...def.settings, ...(parsed.settings || {}) };
-
-        if (!Array.isArray(this.save.inventory)) {
-          this.save.inventory = [];
-        } else {
-          this.save.inventory = this.save.inventory.filter(
-            (it) => it && typeof it === "object" && DATA.GEAR_TEMPLATES[it.templateId] && DATA.RARITIES[it.rarity]
-          );
-        }
-
-        if (!this.save.bounties || typeof this.save.bounties !== "object") {
-          this.save.bounties = this.createDefaultBounties();
-        } else {
-          for (const b of DATA.BOUNTY_TEMPLATES) {
-            if (!this.save.bounties[b.id]) this.save.bounties[b.id] = { progress: 0, tier: 1 };
-          }
-        }
-
-        if (!Array.isArray(this.save.selectedMutators)) this.save.selectedMutators = [];
-        if (!this.save.unlockedEvolutions || typeof this.save.unlockedEvolutions !== "object") {
-          this.save.unlockedEvolutions = {};
-        }
-        if (!DATA.CLASSES[this.save.classId]) this.save.classId = "vanguard";
-        if (!DATA.DUNGEONS.some((d) => d.id === this.save.selectedDungeonId)) {
-          this.save.selectedDungeonId = "sunken_quarry";
-        }
-        if (!DATA.DIFFICULTIES[this.save.selectedDiff]) this.save.selectedDiff = "normal";
-        if (!this.save.equipped || typeof this.save.equipped !== "object") {
-          this.save.equipped = def.equipped;
-        }
-        for (const slot of ["weapon", "armor", "relic"]) {
-          const it = this.save.equipped[slot];
-          if (!it || !DATA.GEAR_TEMPLATES[it.templateId]) {
-            this.save.equipped[slot] = def.equipped[slot];
-          }
-        }
-
+        this.save = this.sanitizeSave(JSON.parse(raw));
         this.sfx.volume = this.save.settings.volume / 100;
         this.sfx.muted = !!this.save.settings.muted;
       } catch (err) {
@@ -831,7 +840,7 @@
     getTotalClearsCount() {
       const diffIds = Object.keys(DATA.DIFFICULTIES);
       let total = 0;
-      for (const d of DATA.DUNGEONS) {
+      for (const d of this.getRealDungeons()) {
         const rec = this.save.cleared[d.id];
         if (!rec) continue;
         for (const df of diffIds) {
@@ -848,6 +857,37 @@
     getBaseClassId() {
       const cls = this.getActiveClass();
       return cls.tier === "advanced" ? cls.baseId : cls.id;
+    }
+
+    getCurrentRealm() {
+      if (!this.run) return null;
+      return this.run.activeRealm || this.run.dungeon;
+    }
+
+    scoreGearForHero(item, baseClassId = this.getBaseClassId()) {
+      if (!item) return -1;
+      const tpl = GearSystem.getTemplate(item.templateId);
+      const basePwr = GearSystem.computeItemPower(item, baseClassId);
+      const offClass = tpl.classReq && tpl.classReq !== "all" && tpl.classReq !== baseClassId;
+      return offClass ? basePwr * 0.78 : basePwr;
+    }
+
+    refreshHeroVitals(healFullInHub = true) {
+      const stats = this.getHeroStats();
+      this.player.maxHp = stats.hp;
+      if (this.mode === "hub" && healFullInHub) {
+        this.player.hp = stats.hp;
+      } else {
+        this.player.hp = Math.min(this.player.hp, stats.hp);
+      }
+    }
+
+    syncTopHudOffset() {
+      const topHud = document.getElementById("top-hud");
+      const container = document.getElementById("game-container");
+      if (topHud && container) {
+        container.style.setProperty("--top-hud-h", `${topHud.offsetHeight}px`);
+      }
     }
 
     getActiveSetInfo() {
@@ -999,7 +1039,7 @@
         if (this.run.mutators.includes("hyper_speed")) s.speed *= 1.15;
         if (this.run.mutators.includes("glass_cannon")) s.dmgOutMult *= 1.5;
 
-        const h = this.run.dungeon.hazard;
+        const h = this.getCurrentRealm().hazard;
         if (h.type === "gravity") {
           if (this.run.hazardState.phase === "low") {
             s.speed *= 1 + h.lowGSpeedBonus;
@@ -1043,7 +1083,8 @@
     }
 
     getXpNeeded(level) {
-      return Math.round(C.XP_BASE * Math.pow(C.XP_GROWTH, level - 1));
+      // Slower, steady leveling curve (~2.8x base XP and 1.28x growth per level)
+      return Math.round(C.XP_BASE * 2.8 * Math.pow(1.28, level - 1));
     }
 
     grantXp(amount) {
@@ -1071,7 +1112,7 @@
 
     // === END OF PART 1/4 — REPLY "2/4" FOR PART 2/4 ===
     /* ======================================================================
-       SANCTUARY (17x17) & GRAND NON-SQUARE DUNGEON ROOMS (21x21 & 25x25)
+       SANCTUARY (17x17) & GRAND NON-SQUARE DUNGEON ROOMS (17x17 to 27x27)
        Grid: -1 = Abyssal Chasm, 0 = Walkable Floor, 1 = Wall, 2 = Pillar
        ====================================================================== */
     enterSanctuary() {
@@ -1131,16 +1172,28 @@
       this.player.maxHp = stats.hp;
       this.player.hp = stats.hp;
       this.player.shield = 0;
+      this.player.shieldTimer = 0;
       this.player.qCd = 0;
       this.player.eCd = 0;
       this.player.dashCd = 0;
+      this.player.dashTimer = 0;
+      this.player.iframeTimer = 0;
+      this.player.phantomCritTimer = 0;
       this.player.flaskCd = 0;
       this.player.setPulseCd = 0;
+      this.player.hurtFlash = 0;
+      this.player.swingAnim = 0;
+      this.player.hasteTimer = 0;
+      this.player.hasteData = null;
       this.player.combo = 0;
       this.player.comboTimer = 0;
+      this.player.afterimages = [];
       this.cam.x = this.player.x;
       this.cam.y = this.player.y;
 
+      this.bossBannerTimer = 0;
+      document.getElementById("boss-banner").classList.add("hidden");
+      document.getElementById("game-container").classList.remove("boss-active");
       document.getElementById("camp-tabs").classList.remove("hidden");
       document.getElementById("dungeon-actions").classList.add("hidden");
       document.getElementById("boss-hud").classList.add("hidden");
@@ -1221,15 +1274,27 @@
       this.player.z = 0;
       this.player.castAnim = null;
       this.player.shield = 0;
+      this.player.shieldTimer = 0;
       this.player.qCd = 0;
       this.player.eCd = 0;
       this.player.dashCd = 0;
+      this.player.dashTimer = 0;
+      this.player.iframeTimer = 0;
+      this.player.flaskCd = 0;
       this.player.setPulseCd = 0;
+      this.player.hurtFlash = 0;
+      this.player.swingAnim = 0;
+      this.player.hasteTimer = 0;
+      this.player.hasteData = null;
       this.player.attackCounter = 0;
       this.player.phantomCritTimer = 0;
       this.player.combo = 0;
       this.player.comboTimer = 0;
+      this.player.afterimages = [];
 
+      this.bossBannerTimer = 0;
+      document.getElementById("boss-banner").classList.add("hidden");
+      document.getElementById("game-container").classList.remove("boss-active");
       document.getElementById("camp-tabs").classList.add("hidden");
       document.getElementById("dungeon-actions").classList.remove("hidden");
       document.getElementById("location-badge").textContent = isEndless
@@ -1265,7 +1330,6 @@
     }
 
     buildRoomLayout(isBossRoom) {
-      // Truly randomized room dimensions, asymmetric shapes, chasm islands, and procedural pillars
       const size = isBossRoom ? randInt(23, 27) : randInt(17, 25);
       const cx = Math.floor(size / 2);
       const cy = Math.floor(size / 2);
@@ -1312,7 +1376,6 @@
           const by = randInt(4, size - 5);
           const br = randRange(2.4, size * 0.22);
           carveCircle(bx, by, br, 0);
-          // Connect blob to center via bridge
           fillRect(Math.min(bx, cx) - 1, Math.min(by, cy) - 1, Math.max(bx, cx) + 1, Math.max(by, cy) + 1, 0);
         }
       } else if (chosen === "asymmetric_wings") {
@@ -1329,7 +1392,6 @@
       } else if (chosen === "multi_island") {
         layoutName = "Archipelago Bridges";
         const r = Math.max(3, Math.floor(size * 0.16));
-        // North, South, West, East islands connected by narrow bridges
         fillRect(cx - r, 1, cx + r, 2 + r, 0);
         fillRect(cx - r, size - 3 - r, cx + r, size - 2, 0);
         fillRect(1, cy - r, 2 + r, cy + r, 0);
@@ -1344,7 +1406,6 @@
         fillRect(2, size - 2 - bandH, size - 3 - zig, size - 2, 0);
         fillRect(2 + zig, cy - Math.floor(bandH / 2), size - 3, cy + Math.ceil(bandH / 2), 0);
         fillRect(2, 1, size - 3 - zig, 1 + bandH, 0);
-        // Wide vertical connectors
         fillRect(size - 5 - zig, cy, size - 3 - zig, size - 2 - bandH, 0);
         fillRect(2 + zig, 1 + bandH, 4 + zig, cy, 0);
       } else if (chosen === "diamond_atrium") {
@@ -1369,10 +1430,9 @@
         fillRect(cx - pitW + offX, cy - pitH + offY, cx + pitW + offX, cy + pitH + offY, -1);
       }
 
-      // Guarantee South Spawn & North Portal pads exist and connect to center
+      // Guarantee South Spawn & North Portal pads exist
       fillRect(cx - 2, size - 4, cx + 2, size - 2, 0);
       fillRect(cx - 2, 1, cx + 2, 3, 0);
-      fillRect(cx - 1, 2, cx + 1, size - 3, 0);
 
       // Scatter randomized cover pillars away from spawn, center, and portal
       const pillarCount = isBossRoom ? randInt(3, 6) : randInt(2, 6);
@@ -1389,6 +1449,18 @@
         }
       }
 
+      const spawn = { x: cx + 0.5, y: size - 2.5 };
+      const portalPos = { x: cx + 0.5, y: 2.0 };
+
+      // Carve a center connector ONLY if BFS proves the North Portal is unreachable
+      const reachCheck = this.getReachableFloorTiles(size, grid, spawn.x, spawn.y);
+      const portalReachable = reachCheck.some(
+        (t) => Math.floor(t.x) === Math.floor(portalPos.x) && Math.floor(t.y) === Math.floor(portalPos.y)
+      );
+      if (!portalReachable) {
+        fillRect(cx - 1, 2, cx + 1, size - 3, 0);
+      }
+
       // Frame north & west edges with solid walls where adjacent to walkable floor
       for (let x = 1; x < size - 1; x++) {
         if (grid[1][x] === 0 && grid[0][x] === -1) grid[0][x] = 1;
@@ -1397,8 +1469,6 @@
         if (grid[y][1] === 0 && grid[y][0] === -1) grid[y][0] = 1;
       }
 
-      const spawn = { x: cx + 0.5, y: size - 2.5 };
-      const portalPos = { x: cx + 0.5, y: 2.0 };
       return { size, grid, layoutName, spawn, portalPos };
     }
 
@@ -1434,9 +1504,9 @@
 
     generateDungeonRoom(roomIndex) {
       this.clearCombatFX();
-      const { dungeon, diff, totalRooms, isEndless } = this.run;
+      const { diff, totalRooms, isEndless } = this.run;
 
-      // In Endless Gauntlet, shift to a random realm every floor!
+      // In Endless Gauntlet, shift to a random realm every floor
       if (isEndless) {
         const nextRealm = pick(this.getRealDungeons());
         this.run.activeRealm = nextRealm;
@@ -1444,7 +1514,7 @@
         this.applyRealmHazardHUD(nextRealm);
       }
 
-      const realm = this.run.activeRealm || dungeon;
+      const realm = this.getCurrentRealm();
       const isBossRoom = isEndless ? (roomIndex + 1) % 5 === 0 : roomIndex === totalRooms - 1;
       const { size, grid, layoutName, spawn, portalPos } = this.buildRoomLayout(isBossRoom);
 
@@ -1523,7 +1593,6 @@
         urns.push({ x: pos.x, y: pos.y, hp: 1, kind: i < 2 ? "heal" : "gold" });
       }
 
-      // Roll Special Room Encounter on non-boss rooms
       let specialEvent = null;
       if (!isBossRoom && roomIndex >= 1) {
         const roll = Math.random();
@@ -1574,14 +1643,24 @@
         specialEvent
       };
 
+      this.run.hazardState.dpsTick = 0;
       if (hType === "oxygen") {
+        this.run.hazardState.value = 100;
+      } else if (hType === "gravity") {
+        this.run.hazardState.phase = "low";
+        this.run.hazardState.phaseTimer = realm.hazard.cycleSeconds || 15;
+        this.run.hazardState.value = 100;
+      } else if (hType === "chrono") {
+        this.run.hazardState.phase = "overdrive";
+        this.run.hazardState.phaseTimer = realm.hazard.cycleSeconds || 12;
         this.run.hazardState.value = 100;
       } else if (hType === "solar" || hType === "voidcore") {
         this.run.hazardState.value = 0;
         this.run.hazardState.phaseTimer = realm.hazard.cycleSeconds || 14;
-      } else if (hType !== "gravity" && hType !== "chrono") {
+      } else {
         this.run.hazardState.value = 0;
       }
+      document.getElementById("game-container").classList.toggle("boss-active", isBossRoom);
 
       const bn = this.getRunBoonTotals();
       if (bn.roomShieldPct > 0) {
@@ -1716,7 +1795,7 @@
     }
 
     spawnBossEncounter() {
-      const realm = this.run.activeRealm || this.run.dungeon;
+      const realm = this.getCurrentRealm();
       const bossTpl = DATA.BOSSES[realm.bossId];
       const diff = this.run.diff;
       const endlessBossScale = this.run.isEndless ? Math.pow(1.16, this.run.roomIndex) : 1.0;
@@ -1728,13 +1807,26 @@
 
       const count = isTwin ? 2 : 1;
 
+      const isOpenSpot = (t) => {
+        const tx = Math.floor(t.x);
+        const ty = Math.floor(t.y);
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            if (this.world.grid[ty + oy]?.[tx + ox] !== 0) return false;
+          }
+        }
+        return true;
+      };
+
       for (let i = 0; i < count; i++) {
         const hpScale = isTwin ? 0.65 : 1.0;
         const maxHp = Math.round(bossTpl.hp * diff.hpMult * endlessBossScale * hpScale);
-        const northSpots = this.world.reachable.filter((t) => t.y <= 7.5 && t.y >= 3.0);
+        const northAll = this.world.reachable.filter((t) => t.y <= 8.5 && t.y >= 3.0);
+        const northOpen = northAll.filter(isOpenSpot);
+        const pool = northOpen.length > 0 ? northOpen : northAll;
         const spot =
-          northSpots.length > 0
-            ? northSpots[Math.floor(((i + 1) / (count + 1)) * northSpots.length)]
+          pool.length > 0
+            ? pool[Math.floor(((i + 1) / (count + 1)) * pool.length)]
             : { x: this.world.size * 0.5, y: 6.0 };
 
         this.world.enemies.push({
@@ -1762,9 +1854,11 @@
           facing: { x: 0, y: 1 },
           patternIdx: i % bossTpl.patterns.length,
           patternTimer: 1.8 + i * 0.9,
-          casting: false,
+          castingTimer: 0,
           chargeVel: null,
-          chargeTimer: 0
+          chargeTimer: 0,
+          chargeDmg: 0,
+          chargeHit: false
         });
       }
 
@@ -1893,16 +1987,16 @@
 
       if (this.mode === "hub") {
         this.updateSanctuaryInteractions();
-      // Inside updateWorld(dt), inside the `else if (this.mode === "dungeon" && this.run && !this.run.finished)` block:
       } else if (this.mode === "dungeon" && this.run && !this.run.finished) {
+        const stillRunning = () => this.mode === "dungeon" && this.run && !this.run.finished && !this.activeModal;
         this.updateAutoAttack(dt, stats);
-        this.updateDungeonHazard(dt, stats);
-        this.updateMutatorEvents(dt);
-        this.updateSpecialEncounter(dt);
-        this.updateEnemies(dt);
-        this.updateTelegraphs(dt);
-        this.updateProjectiles(dt, stats);
-        this.updateLootAndPortals(dt);
+        if (stillRunning()) this.updateDungeonHazard(dt, stats);
+        if (stillRunning()) this.updateMutatorEvents(dt);
+        if (stillRunning()) this.updateSpecialEncounter(dt);
+        if (stillRunning()) this.updateEnemies(dt);
+        if (stillRunning()) this.updateTelegraphs(dt);
+        if (stillRunning()) this.updateProjectiles(dt, stats);
+        if (stillRunning()) this.updateLootAndPortals(dt);
       }
 
       this.updateParticlesAndText(dt);
@@ -1918,10 +2012,12 @@
 
     updateTouchControlsVisibility() {
       const zone = document.getElementById("touch-joystick-zone");
+      const container = document.getElementById("game-container");
       if (!zone) return;
       const mode = this.save?.settings?.touchControls || "auto";
       const show = mode === "on" || (mode === "auto" && this.isTouchDevice());
       zone.classList.toggle("hidden", !show);
+      if (container) container.classList.toggle("touch-joystick-off", !show);
     }
 
     updatePlayerMovement(dt, stats) {
@@ -1932,13 +2028,11 @@
       if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) screenX -= 1;
       if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) screenX += 1;
 
-      // Blend Virtual Analog Joystick Input
       if (this.joystick && this.joystick.active) {
         screenX += this.joystick.dx;
         screenY += this.joystick.dy;
       }
 
-      // Clamp diagonal / combined magnitude to 1.0 while preserving analog tilt speed
       const mag = Math.hypot(screenX, screenY);
       if (mag > 1) {
         screenX /= mag;
@@ -1998,12 +2092,17 @@
     }
 
     moveEntityWithCollision(ent, dx, dy, radius) {
+      const r = Math.min(radius, 0.44);
       const isBlocked = (nx, ny) => {
         const checks = [
-          [nx - radius, ny - radius],
-          [nx + radius, ny - radius],
-          [nx - radius, ny + radius],
-          [nx + radius, ny + radius]
+          [nx - r, ny - r],
+          [nx + r, ny - r],
+          [nx - r, ny + r],
+          [nx + r, ny + r],
+          [nx, ny - r],
+          [nx, ny + r],
+          [nx - r, ny],
+          [nx + r, ny]
         ];
         for (const [cx, cy] of checks) {
           if (!this.isWalkableTile(cx, cy)) return true;
@@ -2095,8 +2194,9 @@
     }
 
     purgeHazard(amount) {
-      if (!this.run) return;
-      const h = this.run.dungeon.hazard;
+      const realm = this.getCurrentRealm();
+      if (!realm) return;
+      const h = realm.hazard;
       const hType = h.type;
       if (hType === "oxygen") {
         this.run.hazardState.value = Math.min(100, this.run.hazardState.value + amount);
@@ -2139,7 +2239,9 @@
         this.spawnFloatingText(u.x, u.y, 1.1, `+${heal} HP`, "#4ade80", true);
       } else {
         const bn = this.getRunBoonTotals();
-        const gold = Math.round(this.run.dungeon.baseGold * 0.18 * (this.run.rewardMult + bn.lootMultBonus));
+        const realm = this.getCurrentRealm() || this.run.dungeon;
+        const endlessScale = this.run.isEndless ? Math.pow(1.12, this.run.roomIndex) : 1;
+        const gold = Math.round(realm.baseGold * 0.18 * endlessScale * (this.run.rewardMult + bn.lootMultBonus));
         this.save.gold += gold;
         this.run.goldEarned += gold;
         this.spawnBurst(u.x, u.y, "#ffd447", 12, 2.6);
@@ -2165,7 +2267,7 @@
       }
 
       if (this.mode === "dungeon" && this.run) {
-        const h = this.run.dungeon.hazard;
+        const h = this.getCurrentRealm().hazard;
         if (h.type === "heat") {
           this.purgeHazard(h.dashCoolBurst);
           this.spawnFloatingText(this.player.x, this.player.y, 1.1, "VENTED!", "#7dd3fc");
@@ -2449,9 +2551,6 @@
           });
         }
       } else if (sk.type === "meteor_cluster") {
-        // FIXED STARFALL & CHRONO BARRAGE:
-        // Re-targets living enemies, breaks urns, stops cleanly on room clear,
-        // applies Phantom Crit to first meteor only, and scales repeat hits by repeatDmgMult (45%).
         const count = sk.count || 5;
         const repeatMult = sk.repeatDmgMult || 0.45;
         const hitCounts = new Map();
@@ -2495,8 +2594,6 @@
         }
         this.spawnSkillAnim("starfall_beams", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.7, meteorTargets);
       } else if (sk.type === "chain_barrage") {
-        // FIXED THUNDERSTEP & PRISM REFRACTION:
-        // Guaranteed crits now work properly with fromChain = true (still prevents infinite Chain Lightning recursion).
         this.sfx.lightning();
         const strikeTargets = [];
         const strikes = sk.count || 6;
@@ -2651,7 +2748,13 @@
           if (d <= sk.radius + e.radius) {
             if (d > 1.2) {
               const ang = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-              this.moveEntityWithCollision(e, Math.cos(ang) * (d * 0.42), Math.sin(ang) * (d * 0.42), e.radius);
+              const totalPull = d * 0.42;
+              const steps = 6;
+              const stepX = (Math.cos(ang) * totalPull) / steps;
+              const stepY = (Math.sin(ang) * totalPull) / steps;
+              for (let s = 0; s < steps; s++) {
+                this.moveEntityWithCollision(e, stepX, stepY, e.radius);
+              }
             }
             this.damageEnemy(e, dmg, phantomCrit, stats, 0);
           }
@@ -2715,7 +2818,6 @@
         enemy.slowTimer = Math.max(enemy.slowTimer, 2.5);
       }
 
-      // FIXED CRIT CHECK: forceCrit always crits even when fromChain = true (e.g. Thunderstep)
       const isCrit = forceCrit || (!fromChain && Math.random() < st.crit);
       const variance = randRange(0.92, 1.08);
       const finalDmg = Math.max(
@@ -2785,8 +2887,8 @@
       if (enemy.isElite) this.incrementBounty("eliteKills", 1);
       if (enemy.isBoss) this.incrementBounty("bossKills", 1);
 
-      if (this.run && this.run.dungeon.hazard.type === "blood") {
-        this.purgeHazard(this.run.dungeon.hazard.killPurgeAmount || 24);
+      if (this.run && this.getCurrentRealm().hazard.type === "blood") {
+        this.purgeHazard(this.getCurrentRealm().hazard.killPurgeAmount || 24);
       }
 
       if (cls.id === "warden") {
@@ -2851,11 +2953,10 @@
         this.dropLootItem(enemy.x, enemy.y, false);
       }
 
-      if (this.world.enemies.length === 0) {
-        this.onRoomCleared();
-      }
       if (enemy.isGoblin) {
-        const bonusG = Math.round(this.run.activeRealm.baseGold * 1.4 * currencyMult);
+        const realm = this.getCurrentRealm();
+        const endlessScale = this.run.isEndless ? Math.pow(1.12, this.run.roomIndex) : 1;
+        const bonusG = Math.round(realm.baseGold * 1.4 * endlessScale * currencyMult);
         const bonusS = Math.round(18 * currencyMult);
         this.save.gold += bonusG;
         this.save.shards += bonusS;
@@ -2865,17 +2966,26 @@
         this.dropLootItem(enemy.x, enemy.y, false, 0.35);
         this.toast(`Treasure Goblin Slain! +${fmtNum(bonusG)}g & +${bonusS} Shards!`, "mythic");
       }
+
+      const shrineActive = this.world.specialEvent?.type === "cursed_shrine";
+      if (this.world.enemies.length === 0 && !shrineActive) {
+        this.onRoomCleared();
+      }
     }
 
     onRoomCleared() {
       this.incrementBounty("roomsCleared", 1);
+
+      // Clear lingering hostile projectiles and telegraphs on room clear
+      this.projectiles = this.projectiles.filter((p) => p.friendly);
+      this.telegraphs = [];
+      document.getElementById("game-container").classList.remove("boss-active");
 
       if (this.run.isEndless) {
         const clearedFloor = this.run.roomIndex + 1;
         if (clearedFloor > (this.save.bestGauntletFloor || 0)) {
           this.save.bestGauntletFloor = clearedFloor;
         }
-        // Grant bonus shards on every 5th floor boss clear
         if (clearedFloor % 5 === 0) {
           const bossShards = Math.round((15 + clearedFloor * 3) * this.run.rewardMult);
           this.save.shards += bossShards;
@@ -2890,7 +3000,7 @@
         this.completeDungeonVictory();
       } else {
         const pPos = this.world.portalPos || { x: Math.floor(this.world.size / 2) + 0.5, y: 2.0 };
-        this.world.portal = { x: pPos.x, y: pPos.y, radius: 1.35 };
+        this.world.portal = { x: pPos.x, y: pPos.y, radius: 1.35, cooldown: 1.0 };
 
         const cx = this.world.size * 0.5;
         let chestSpot = this.world.reachable[0] || { x: this.player.x, y: this.player.y };
@@ -2911,9 +3021,11 @@
         }
       }
     }
+
     activateCursedShrine() {
       const ev = this.world?.specialEvent;
       if (!ev || ev.type !== "cursed_shrine" || ev.activated) return;
+      if (dist(this.player.x, this.player.y, ev.x, ev.y) > 2.1) return;
       ev.activated = true;
       ev.spawnTick = 0.2;
       this.sfx.bossWarn();
@@ -2960,7 +3072,7 @@
 
         if (ev.spawnTick <= 0 && this.world.enemies.length < 10) {
           ev.spawnTick = 3.2;
-          const realm = this.run.activeRealm || this.run.dungeon;
+          const realm = this.getCurrentRealm();
           for (let k = 0; k < 2; k++) {
             const spot = this.findOpenSpot(4.5);
             this.world.enemies.push(this.createEnemy(pick(realm.enemies), spot.x, spot.y, this.run.roomIndex, k === 0 && Math.random() < 0.3));
@@ -2971,12 +3083,13 @@
           this.world.specialEvent = null;
           this.world.enemies = [];
           this.sfx.victory();
-          this.dropLootItem(ev.x, ev.y, true, 0.5);
+          this.dropLootItem(ev.x, ev.y, true, 0.5, "epic");
           this.toast("Cursed Shrine Cleansed! Bonus Epic+ Chest Unlocked!", "mythic");
           this.onRoomCleared();
         }
       }
     }
+
     openBoonModal() {
       const pool = [...DATA.RUN_BOONS];
       const choices = [];
@@ -3037,14 +3150,13 @@
         .join("");
     }
 
-    // In dropLootItem():
-    dropLootItem(x, y, isBossDrop, extraLuck = 0) {
-      const realm = this.run.activeRealm || this.run.dungeon;
+    dropLootItem(x, y, isBossDrop, extraLuck = 0, minRarityOverride = null) {
+      const realm = this.getCurrentRealm();
       const pool = realm.lootPool;
       const tplId = pick(pool);
 
       const bn = this.getRunBoonTotals();
-      const minRarity = isBossDrop ? this.run.diff.minBossRarity || "common" : "common";
+      const minRarity = minRarityOverride || (isBossDrop ? this.run.diff.minBossRarity || "common" : "common");
       const rarity = GearSystem.rollRarity(
         this.run.rarityLuck + bn.rarityLuck + extraLuck + (isBossDrop ? 0.25 : 0),
         minRarity
@@ -3098,15 +3210,13 @@
       if (this.run && this.run.finished) return;
 
       const stats = this.getHeroStats();
-      const hType = this.run?.dungeon?.hazard?.type;
+      const hType = this.getCurrentRealm()?.hazard?.type;
       let dmg = rawAmount;
 
       if (!isHazard) {
-        // Tuned armor scaling: armor / (armor + 180) keeps endgame hits meaningful
         const mitigation = stats.armor / (stats.armor + 180);
         dmg = Math.max(1, Math.round(rawAmount * (1 - mitigation)));
       } else {
-        // Solar Flare & Reality Collapse enforce a 35% floor so shelter mechanics stay mandatory
         const resistMult =
           hType === "solar" || hType === "voidcore"
             ? Math.max(0.35, 1 - stats.hazardResist)
@@ -3139,7 +3249,6 @@
         );
       }
 
-      // 3-Piece Retaliation Set Procs (Earthshaker & Bloodlord)
       if (!isHazard && (this.player.setPulseCd || 0) <= 0 && this.player.hp > 0) {
         if (stats.active3pc?.has("earthshaker_pulse")) {
           this.player.setPulseCd = 3.0;
@@ -3187,9 +3296,10 @@
        ALL 14 ENVIRONMENTAL SURVIVAL HAZARDS & MUTATORS
        ====================================================================== */
     updateDungeonHazard(dt, stats) {
-      const h = this.run.dungeon.hazard;
+      const h = this.getCurrentRealm().hazard;
       const hs = this.run.hazardState;
       const hMult = this.run.diff.hazardMult * (1 - stats.hazardResist * 0.65);
+      const hasEnemies = this.world.enemies.length > 0;
       const overlay = document.getElementById("hazard-overlay");
       const survHud = document.getElementById("survival-hud");
       let inDanger = false;
@@ -3197,9 +3307,9 @@
       if (h.type === "oxygen") {
         const inVent = this.world.vents.some((v) => dist(this.player.x, this.player.y, v.x, v.y) <= v.radius);
         if (inVent) hs.value = Math.min(100, hs.value + h.restorePerSec * dt);
-        else hs.value = Math.max(0, hs.value - h.drainPerSec * hMult * dt);
-        inDanger = hs.value <= 20;
-        if (hs.value <= 0) {
+        else if (hasEnemies) hs.value = Math.max(0, hs.value - h.drainPerSec * hMult * dt);
+        inDanger = hasEnemies && hs.value <= 20;
+        if (hasEnemies && hs.value <= 0) {
           hs.dpsTick += dt;
           if (hs.dpsTick >= 0.75) {
             hs.dpsTick = 0;
@@ -3209,9 +3319,9 @@
       } else if (h.type === "heat") {
         const moving = Math.hypot(this.player.vx, this.player.vy) > 0.4;
         if (moving) hs.value = Math.max(0, hs.value - h.moveCoolPerSec * dt);
-        else hs.value = Math.min(100, hs.value + h.idleHeatPerSec * hMult * dt);
-        inDanger = hs.value >= 75;
-        if (hs.value >= 100) {
+        else if (hasEnemies) hs.value = Math.min(100, hs.value + h.idleHeatPerSec * hMult * dt);
+        inDanger = hasEnemies && hs.value >= 75;
+        if (hasEnemies && hs.value >= 100) {
           hs.dpsTick += dt;
           if (hs.dpsTick >= 0.65) {
             hs.dpsTick = 0;
@@ -3220,7 +3330,7 @@
         }
       } else if (h.type === "poison") {
         hs.poolSpawnTimer -= dt;
-        if (hs.poolSpawnTimer <= 0 && this.world.enemies.length > 0) {
+        if (hs.poolSpawnTimer <= 0 && hasEnemies) {
           hs.poolSpawnTimer = h.poolSpawnInterval / Math.sqrt(this.run.diff.hazardMult);
           const pos = this.findOpenSpot(2.2);
           this.world.poisonPools.push({
@@ -3269,9 +3379,9 @@
       } else if (h.type === "frost") {
         const nearBrazier = this.world.braziers.some((b) => dist(this.player.x, this.player.y, b.x, b.y) <= b.radius);
         if (nearBrazier) hs.value = Math.max(0, hs.value - h.thawPerSec * dt);
-        else hs.value = Math.min(100, hs.value + h.chillPerSec * hMult * dt);
-        inDanger = hs.value >= 70;
-        if (hs.value >= 85) {
+        else if (hasEnemies) hs.value = Math.min(100, hs.value + h.chillPerSec * hMult * dt);
+        inDanger = hasEnemies && hs.value >= 70;
+        if (hasEnemies && hs.value >= 85) {
           hs.dpsTick += dt;
           if (hs.dpsTick >= 0.75) {
             hs.dpsTick = 0;
@@ -3279,7 +3389,7 @@
           }
         }
       } else if (h.type === "shadow") {
-        if (this.world.enemies.length > 0) {
+        if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.corruptPerSec * hMult * dt);
         }
         hs.orbSpawnTimer -= dt;
@@ -3315,7 +3425,7 @@
         );
         if (nearConduit) {
           hs.value = Math.max(0, hs.value - h.dischargePerSec * dt);
-        } else if (this.world.enemies.length > 0) {
+        } else if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.chargePerSec * hMult * dt);
         }
         inDanger = hs.value >= 75;
@@ -3327,7 +3437,7 @@
           this.damagePlayer(this.player.maxHp * h.strikeDmgPct, true);
         }
       } else if (h.type === "solar") {
-        if (this.world.enemies.length > 0) {
+        if (hasEnemies) {
           hs.phaseTimer -= dt * Math.sqrt(this.run.diff.hazardMult);
         }
         const cycle = h.cycleSeconds || 14;
@@ -3348,13 +3458,12 @@
           }
         }
       } else if (h.type === "blood") {
-        // T9: Crimson Catacombs — Blood Tithe rises unless standing in Sanguine Fonts or slaying enemies
         const inFont = (this.world.bloodFonts || []).some(
           (f) => dist(this.player.x, this.player.y, f.x, f.y) <= f.radius
         );
         if (inFont) {
           hs.value = Math.max(0, hs.value - h.fontPurgePerSec * dt);
-        } else if (this.world.enemies.length > 0) {
+        } else if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.cursePerSec * hMult * dt);
         }
         inDanger = hs.value >= 72;
@@ -3366,9 +3475,8 @@
           }
         }
       } else if (h.type === "ash") {
-        // T10: Ashen Caldera — Pyroclastic Ash clouds + passive soot cleared by Wind Vents or Dashing
         hs.poolSpawnTimer -= dt;
-        if (hs.poolSpawnTimer <= 0 && this.world.enemies.length > 0) {
+        if (hs.poolSpawnTimer <= 0 && hasEnemies) {
           hs.poolSpawnTimer = h.poolSpawnInterval / Math.sqrt(this.run.diff.hazardMult);
           const pos = this.findOpenSpot(2.2);
           this.world.ashPools.push({
@@ -3394,7 +3502,7 @@
           hs.value = Math.max(0, hs.value - h.ventClearPerSec * dt);
         } else if (inAshPool) {
           hs.value = Math.min(100, hs.value + h.ashGainInPool * hMult * dt);
-        } else if (this.world.enemies.length > 0) {
+        } else if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.ashGainPerSec * hMult * dt);
         }
         inDanger = inAshPool || hs.value >= 72;
@@ -3406,13 +3514,12 @@
           }
         }
       } else if (h.type === "pressure") {
-        // T11: Sunken Leviathan — Abyssal Pressure builds unless inside turquoise Air Domes
         const inDome = (this.world.airDomes || []).some(
           (d) => dist(this.player.x, this.player.y, d.x, d.y) <= d.radius
         );
         if (inDome) {
           hs.value = Math.max(0, hs.value - h.equalizePerSec * dt);
-        } else if (this.world.enemies.length > 0) {
+        } else if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.risePerSec * hMult * dt);
         }
         inDanger = hs.value >= 74;
@@ -3424,7 +3531,6 @@
           }
         }
       } else if (h.type === "chrono") {
-        // T12: Shattered Clockwork — Alternates Overdrive (+Speed/+CDR) & Dilation (+40% DMG, -20% Speed)
         hs.phaseTimer -= dt;
         if (hs.phaseTimer <= 0) {
           hs.phase = hs.phase === "overdrive" ? "dilation" : "overdrive";
@@ -3442,8 +3548,7 @@
         hs.value = (hs.phaseTimer / h.cycleSeconds) * 100;
         inDanger = hs.phase === "dilation";
       } else if (h.type === "prism") {
-        // T13: Mirror Labyrinth — Refraction Glare cleared by Prism Orbs or Dashing
-        if (this.world.enemies.length > 0) {
+        if (hasEnemies) {
           hs.value = Math.min(100, hs.value + h.glarePerSec * hMult * dt);
         }
         hs.orbSpawnTimer -= dt;
@@ -3474,8 +3579,7 @@
           }
         }
       } else if (h.type === "voidcore") {
-        // T14: Primordial Singularity — Periodic Reality Collapse; shelter inside Reality Anchors!
-        if (this.world.enemies.length > 0) {
+        if (hasEnemies) {
           hs.phaseTimer -= dt * Math.sqrt(this.run.diff.hazardMult);
         }
         const cycle = h.cycleSeconds || 13;
@@ -3532,7 +3636,10 @@
     }
 
     getDungeonOrder() {
-      return DATA.DUNGEONS.findIndex((d) => d.id === this.run.dungeon.id);
+      if (!this.run) return 0;
+      if (this.run.isEndless) return Math.min(13, Math.floor(this.run.roomIndex / 2));
+      const idx = this.getRealDungeons().findIndex((d) => d.id === this.run.dungeon.id);
+      return Math.max(0, idx);
     }
 
     /* ======================================================================
@@ -3558,7 +3665,6 @@
         e.facing.x = dx / d;
         e.facing.y = dy / d;
         if (e.isGoblin) {
-          // Flee away from player while dropping trail gold!
           const fleeAng = Math.atan2(e.y - this.player.y, e.x - this.player.x) + Math.sin(this.elapsed * 3.5) * 0.55;
           e.facing.x = Math.cos(fleeAng);
           e.facing.y = Math.sin(fleeAng);
@@ -3658,15 +3764,26 @@
       if (boss.chargeTimer > 0 && boss.chargeVel) {
         boss.chargeTimer -= dt;
         this.moveEntityWithCollision(boss, boss.chargeVel.x * dt, boss.chargeVel.y * dt, boss.radius);
-        if (dist(boss.x, boss.y, this.player.x, this.player.y) <= boss.radius + 0.55) {
-          this.damagePlayer(boss.atk * 1.15, false);
+        if (!boss.chargeHit && dist(boss.x, boss.y, this.player.x, this.player.y) <= boss.radius + 0.55) {
+          boss.chargeHit = true;
+          this.damagePlayer(boss.chargeDmg || boss.atk * 1.35, false);
           boss.chargeTimer = 0;
         }
         return;
       }
 
+      if (boss.castingTimer > 0) {
+        boss.castingTimer = Math.max(0, boss.castingTimer - dt);
+        return;
+      }
+
       if (d > 2.4) {
-        this.moveEntityWithCollision(boss, (dx / d) * boss.speed * slowMult * dt, (dy / d) * boss.speed * slowMult * dt, boss.radius);
+        this.moveEntityWithCollision(
+          boss,
+          (dx / d) * boss.speed * slowMult * dt,
+          (dy / d) * boss.speed * slowMult * dt,
+          boss.radius
+        );
       }
 
       boss.patternTimer -= dt * slowMult;
@@ -3685,6 +3802,7 @@
       if (pat.type === "slam_circle") {
         this.telegraphs.push({
           type: "circle",
+          sourceId: boss.id,
           x: this.player.x,
           y: this.player.y,
           radius: pat.radius,
@@ -3694,8 +3812,10 @@
           color: "#ef4444"
         });
       } else if (pat.type === "ring_nova") {
+        boss.castingTimer = teleDur;
         this.telegraphs.push({
           type: "ring",
+          sourceId: boss.id,
           x: boss.x,
           y: boss.y,
           innerRadius: pat.innerRadius,
@@ -3706,9 +3826,11 @@
           color: "#f97316"
         });
       } else if (pat.type === "line_charge") {
+        boss.castingTimer = teleDur;
         const ang = Math.atan2(dy, dx);
         this.telegraphs.push({
           type: "line",
+          sourceId: boss.id,
           x: boss.x,
           y: boss.y,
           angle: ang,
@@ -3716,18 +3838,22 @@
           width: pat.width,
           elapsed: 0,
           duration: teleDur,
-          damage: dmg,
+          damage: 0,
           color: "#ef4444",
           onDetonate: () => {
             boss.chargeVel = { x: Math.cos(ang) * 15, y: Math.sin(ang) * 15 };
-            boss.chargeTimer = 0.45;
+            boss.chargeDmg = dmg;
+            boss.chargeHit = false;
+            boss.chargeTimer = Math.min(0.65, pat.length / 15);
           }
         });
       } else if (pat.type === "cross_beam") {
+        boss.castingTimer = teleDur;
         const baseA = Math.random() < 0.5 ? 0 : Math.PI * 0.25;
         for (let k = 0; k < 4; k++) {
           this.telegraphs.push({
             type: "line",
+            sourceId: boss.id,
             x: boss.x,
             y: boss.y,
             angle: baseA + (k * Math.PI) / 2,
@@ -3744,6 +3870,7 @@
           const spot = i === 0 ? { x: this.player.x, y: this.player.y } : this.findOpenSpot(0.5);
           this.telegraphs.push({
             type: "circle",
+            sourceId: boss.id,
             x: spot.x,
             y: spot.y,
             radius: pat.radius,
@@ -3756,9 +3883,11 @@
           });
         }
       } else if (pat.type === "radial_volley") {
+        boss.castingTimer = teleDur;
         const count = pat.count || 12;
         this.telegraphs.push({
           type: "circle",
+          sourceId: boss.id,
           x: boss.x,
           y: boss.y,
           radius: 1.9,
@@ -3791,6 +3920,10 @@
     updateTelegraphs(dt) {
       for (let i = this.telegraphs.length - 1; i >= 0; i--) {
         const t = this.telegraphs[i];
+        if (t.sourceId && !this.world.enemies.some((e) => e.id === t.sourceId && e.hp > 0)) {
+          this.telegraphs.splice(i, 1);
+          continue;
+        }
         t.elapsed += dt;
         if (t.elapsed < t.duration) continue;
 
@@ -3807,6 +3940,8 @@
         if (t.leavesAsh) {
           this.world.ashPools.push({ x: t.x, y: t.y, radius: t.radius * 0.75, maxRadius: t.radius, life: 9.0 });
         }
+
+        if (t.damage <= 0) continue;
 
         let hit = false;
         if (t.type === "circle") {
@@ -3909,10 +4044,12 @@
       }
 
       const bn = this.getRunBoonTotals();
+      const realm = this.getCurrentRealm() || this.run.dungeon;
+      const endlessScale = this.run.isEndless ? Math.pow(1.12, this.run.roomIndex) : 1;
       for (const ch of this.world.chests) {
         if (!ch.opened && dist(this.player.x, this.player.y, ch.x, ch.y) < 1.25) {
           ch.opened = true;
-          const bonusGold = Math.round(this.run.dungeon.baseGold * 0.45 * (this.run.rewardMult + bn.lootMultBonus));
+          const bonusGold = Math.round(realm.baseGold * 0.45 * endlessScale * (this.run.rewardMult + bn.lootMultBonus));
           this.save.gold += bonusGold;
           this.run.goldEarned += bonusGold;
           this.sfx.loot("rare");
@@ -3923,16 +4060,22 @@
       }
 
       const prompt = document.getElementById("interact-prompt");
+      const hasUnactivatedShrine =
+        this.world.specialEvent?.type === "cursed_shrine" && !this.world.specialEvent.activated;
+
       if (this.world.portal) {
+        if (this.world.portal.cooldown > 0) {
+          this.world.portal.cooldown = Math.max(0, this.world.portal.cooldown - dt);
+        }
         const pd = dist(this.player.x, this.player.y, this.world.portal.x, this.world.portal.y);
-        if (pd < this.world.portal.radius) {
+        if (this.world.portal.cooldown <= 0 && pd < this.world.portal.radius) {
           while (this.lootDrops.length > 0) this.collectLootDrop(this.lootDrops.pop());
           this.run.roomIndex += 1;
           this.sfx.portal();
           this.generateDungeonRoom(this.run.roomIndex);
           prompt.classList.add("hidden");
         }
-      } else {
+      } else if (!hasUnactivatedShrine) {
         prompt.classList.add("hidden");
       }
     }
@@ -3977,7 +4120,9 @@
       titleEl.textContent = victory ? "RIFT CONQUERED" : "FALLEN IN THE RIFT";
       titleEl.style.color = victory ? "#fde047" : "#fda4af";
 
-      document.getElementById("summary-subtitle").textContent = `${this.run.dungeon.name} — ${this.run.diff.name} (${elapsedSec}s)`;
+      const floorText = this.run.isEndless ? ` • Floor ${this.run.roomIndex + 1}` : "";
+      document.getElementById("summary-subtitle").textContent =
+        `${this.run.dungeon.name}${floorText} — ${this.run.diff.name} (${elapsedSec}s)`;
 
       const bn = this.getRunBoonTotals();
       const finalMult = this.run.rewardMult + bn.lootMultBonus;
@@ -4124,12 +4269,7 @@
       this.canvas.height = Math.floor(h * dpr);
       this.dpr = dpr;
       this.worldZoom = w < 768 ? 1.15 : 1.32;
-
-      const topHud = document.getElementById("top-hud");
-      const container = document.getElementById("game-container");
-      if (topHud && container) {
-        container.style.setProperty("--top-hud-h", `${topHud.offsetHeight}px`);
-      }
+      this.syncTopHudOffset();
     }
 
     render() {
@@ -4238,7 +4378,7 @@
             const heightPx = cell === 2 ? 32 : 20;
             const topCol = cell === 2 && pal.pillarTop ? pal.pillarTop : pal.wallTop;
             renderables.push({
-              depth: x + y + 0.5,
+              depth: x + y + 1.0,
               draw: () => {
                 const p = toS(x + 0.5, y + 0.5, 0);
                 drawIsoBlock(
@@ -4296,7 +4436,6 @@
         renderables.push({ depth: ch.x + ch.y, draw: () => this.drawChest(ctx, ch, toS) });
       }
 
-      // PUT IT RIGHT HERE:
       if (this.world.specialEvent?.type === "cursed_shrine") {
         const ev = this.world.specialEvent;
         renderables.push({
@@ -4973,7 +5112,7 @@
       ctx.restore();
     }
 
-    // === END OF PART 3/4 — REPLY "4" FOR PART 4/4 ===
+    // === END OF PART 3/4 — REPLY "4/4" FOR PART 4/4 ===
     /* ----------------------------------------------------------------------
        CUSTOM ANIMATED 2.5D WEAPON MODELS (9 Distinct Silhouettes)
        ---------------------------------------------------------------------- */
@@ -5601,7 +5740,6 @@
       }
 
       if (id === "vladimir_blood_duke") {
-        // Boss 9: Lord Carmine — Bat-Winged Crimson Sovereign + Blood Moon Halo
         const hover = 7 + Math.round(Math.sin(this.elapsed * 4.5) * 3);
         const wing = Math.round(Math.sin(this.elapsed * 6) * 5);
         drawIsoGroundEllipse(ctx, p.x, p.y - hover - 28, 1.7, "rgba(220, 38, 38, 0.2)", "#ef4444", 2);
@@ -5618,7 +5756,6 @@
       }
 
       if (id === "pyrax_ash_wyrm") {
-        // Boss 10: Pyrax — Molten Obsidian Wyrm with Glowing Magma Spines
         const sway = Math.round(Math.sin(this.elapsed * 5) * 5);
         drawIsoBlock(ctx, p.x - 24, p.y - 4 - bob, 22, 11, 18, "#fb923c", "#57534e", cDark, "#07090f");
         drawIsoBlock(ctx, p.x + 24, p.y - 4 - bob, 22, 11, 18, "#fb923c", "#57534e", cDark, "#07090f");
@@ -5633,7 +5770,6 @@
       }
 
       if (id === "thalassa_leviathan") {
-        // Boss 11: Thalassa — Abyssal Sea Leviathan with Orbiting Tentacle Spires
         const swell = Math.round(Math.sin(this.elapsed * 4.2) * 4);
         for (let k = 0; k < 4; k++) {
           const a = this.elapsed * 1.8 + (k * Math.PI) / 2;
@@ -5652,7 +5788,6 @@
       }
 
       if (id === "kronos_horologist") {
-        // Boss 12: Kronos — Spinning Brass Gear Halo + Pendulum Arms
         const hover = 9 + Math.round(Math.sin(this.elapsed * 4.5) * 3);
         const gearY = p.y - hover - 26;
         ctx.strokeStyle = "#facc15";
@@ -5675,7 +5810,6 @@
       }
 
       if (id === "auriel_prism_monarch") {
-        // Boss 13: Auriel — Floating Kaleidoscope Diamond Shards
         const hover = 10 + Math.round(Math.sin(this.elapsed * 5) * 3);
         for (let k = 0; k < 4; k++) {
           const a = this.elapsed * 3 + (k * Math.PI) / 2;
@@ -5694,7 +5828,6 @@
       }
 
       if (id === "omega_rift_origin") {
-        // Boss 14: Omega — Apex Primordial Singularity with Dual Orbiting Rings & Crown
         const hover = 11 + Math.round(Math.sin(this.elapsed * 4.5) * 4);
         drawIsoGroundEllipse(ctx, p.x, p.y - hover - 28, 2.1, "rgba(251, 113, 133, 0.16)", "#fde047", 2.5);
         drawIsoGroundEllipse(ctx, p.x, p.y - hover - 28, 1.45, null, "#fb7185", 2);
@@ -5847,7 +5980,7 @@
       const myBaseClass = this.getBaseClassId();
       for (const item of this.save.inventory) {
         const cur = this.save.equipped[item.slot];
-        if (!cur || GearSystem.computeItemPower(item, myBaseClass) > GearSystem.computeItemPower(cur, myBaseClass)) {
+        if (!cur || this.scoreGearForHero(item, myBaseClass) > this.scoreGearForHero(cur, myBaseClass)) {
           return true;
         }
       }
@@ -5876,7 +6009,7 @@
     }
 
     canAffordBlacksmithUpgrade() {
-      for (const slot of ["weapon", "armor"]) {
+      for (const slot of ["weapon", "armor", "relic"]) {
         const it = this.save.equipped[slot];
         if (it && it.level < C.MAX_UPGRADE_LEVEL && this.save.gold >= GearSystem.getUpgradeCost(it)) {
           return true;
@@ -5947,8 +6080,7 @@
 
       document.getElementById("mute-icon").textContent = this.sfx.muted ? "🔇" : "🔊";
       this.syncLiveHUD();
-      this.syncLiveHUD();
-      this.resizeCanvas();
+      this.syncTopHudOffset();
     }
 
     syncLiveHUD() {
@@ -6001,7 +6133,7 @@
 
       if (this.mode === "dungeon" && this.run) {
         const hs = this.run.hazardState;
-        const hType = this.run.dungeon.hazard.type;
+        const hType = this.getCurrentRealm().hazard.type;
         document.getElementById("hazard-bar-fill").style.width = `${clamp(hs.value, 0, 100)}%`;
         const statusEl = document.getElementById("hazard-status-text");
         if (hType === "gravity") {
@@ -6093,7 +6225,7 @@
       document.querySelectorAll(".hud-tab").forEach((btn) => btn.classList.remove("active"));
     }
 
-    /* --- 1. DUNGEON GATE MODAL (14 REALMS & 5 DIFFICULTIES) --- */
+    /* --- 1. DUNGEON GATE MODAL (14 REALMS + ENDLESS & 5 DIFFICULTIES) --- */
     renderDungeonModal() {
       const list = document.getElementById("dungeon-list");
       list.innerHTML = "";
@@ -6107,6 +6239,16 @@
         const cMeta = GearSystem.getClassMeta(d.dropClass);
         const isMyClass = d.dropClass === myBaseClass || d.dropClass === "all";
 
+        const footerPips = d.isEndless
+          ? `<span class="clear-pip cleared">Best Floor: ${this.save.bestGauntletFloor || 0}</span>`
+          : `
+            <span class="clear-pip ${clr.normal ? "cleared" : ""}">Norm</span>
+            <span class="clear-pip ${clr.nightmare ? "cleared" : ""}">Night</span>
+            <span class="clear-pip ${clr.abyssal ? "cleared" : ""}">Abyss</span>
+            <span class="clear-pip ${clr.torment ? "cleared" : ""}">Torm</span>
+            <span class="clear-pip ${clr.cataclysm ? "cleared" : ""}">Cata</span>
+          `;
+
         card.innerHTML = `
           <div class="dungeon-card-top">
             <span class="dungeon-theme-pill" style="background:${d.themeColor}22;color:${d.themeColor};border:1px solid ${d.themeColor}66">${d.themeLabel}</span>
@@ -6114,13 +6256,7 @@
           </div>
           <h3>${d.name}</h3>
           <div class="dungeon-hazard-tag">${d.hazard.icon} ${d.hazard.shortDesc}</div>
-          <div class="dungeon-clear-badges">
-            <span class="clear-pip ${clr.normal ? "cleared" : ""}">Norm</span>
-            <span class="clear-pip ${clr.nightmare ? "cleared" : ""}">Night</span>
-            <span class="clear-pip ${clr.abyssal ? "cleared" : ""}">Abyss</span>
-            <span class="clear-pip ${clr.torment ? "cleared" : ""}">Torm</span>
-            <span class="clear-pip ${clr.cataclysm ? "cleared" : ""}">Cata</span>
-          </div>
+          <div class="dungeon-clear-badges">${footerPips}</div>
         `;
         card.addEventListener("click", () => {
           this.save.selectedDungeonId = d.id;
@@ -6233,7 +6369,6 @@
         </div>
       `;
 
-      // Active Set Bonuses Box
       const setsEl = document.getElementById("active-sets-preview");
       if (setsEl) {
         const setInfo = this.getActiveSetInfo();
@@ -6347,7 +6482,8 @@
       const cMeta = GearSystem.getClassMeta(tpl.classReq);
       const pwr = GearSystem.computeItemPower(item, myBaseClass);
       const eq = compareEquipped ? this.save.equipped[item.slot] : null;
-      const isUpgrade = compareEquipped && (!eq || pwr > GearSystem.computeItemPower(eq, myBaseClass));
+      const isUpgrade =
+        compareEquipped && (!eq || this.scoreGearForHero(item, myBaseClass) > this.scoreGearForHero(eq, myBaseClass));
 
       const card = document.createElement("div");
       card.className = `gear-card rarity-${item.rarity}`;
@@ -6369,7 +6505,6 @@
         }
       });
       return card;
-
     }
 
     equipBestGear() {
@@ -6377,22 +6512,14 @@
       const oldPower = this.getHeroPowerScore();
       let changedCount = 0;
 
-      const scoreForHero = (it) => {
-        if (!it) return -1;
-        const tpl = GearSystem.getTemplate(it.templateId);
-        const basePwr = GearSystem.computeItemPower(it, myBaseClass);
-        const offClass = tpl.classReq && tpl.classReq !== "all" && tpl.classReq !== myBaseClass;
-        return offClass ? basePwr * 0.78 : basePwr;
-      };
-
       for (const slot of ["weapon", "armor", "relic"]) {
         const current = this.save.equipped[slot];
         let bestItem = current;
-        let bestScore = scoreForHero(current);
+        let bestScore = this.scoreGearForHero(current, myBaseClass);
 
         for (const candidate of this.save.inventory) {
           if (candidate.slot !== slot) continue;
-          const sc = scoreForHero(candidate);
+          const sc = this.scoreGearForHero(candidate, myBaseClass);
           if (sc > bestScore) {
             bestScore = sc;
             bestItem = candidate;
@@ -6417,9 +6544,7 @@
         return;
       }
 
-      const stats = this.getHeroStats();
-      this.player.maxHp = stats.hp;
-      if (this.mode === "hub") this.player.hp = stats.hp;
+      this.refreshHeroVitals(true);
 
       const newPower = this.getHeroPowerScore();
       const delta = newPower - oldPower;
@@ -6441,9 +6566,7 @@
       if (prev) this.save.inventory.push(prev);
       this.selectedInvUid = null;
 
-      const stats = this.getHeroStats();
-      this.player.maxHp = stats.hp;
-      if (this.mode === "hub") this.player.hp = stats.hp;
+      this.refreshHeroVitals(true);
 
       this.sfx.upgrade();
       this.syncAllHUD();
@@ -6602,18 +6725,17 @@
 
     /* --- 4. GUILD HALL MODAL (ACTIVE BOUNTIES & PERMANENT BLESSINGS) --- */
     renderGuildModal() {
-      const totalPossibleClears = DATA.DUNGEONS.length * Object.keys(DATA.DIFFICULTIES).length;
+      const totalPossibleClears = this.getRealDungeons().length * Object.keys(DATA.DIFFICULTIES).length;
       document.getElementById("guild-bosses-cleared").textContent = `${this.getTotalClearsCount()} / ${totalPossibleClears}`;
       document.getElementById("guild-bounties-done").textContent = fmtNum(this.save.bountiesClaimed || 0);
       document.getElementById("guild-renown-val").textContent = fmtNum(this.save.renown);
 
-      // PUT IT RIGHT HERE:
       const bestFloorEl = document.getElementById("guild-best-floor");
       if (bestFloorEl) bestFloorEl.textContent = `Floor ${this.save.bestGauntletFloor || 0}`;
 
       const btyList = document.getElementById("bounty-list");
       btyList.innerHTML = "";
-      
+
       for (const tpl of DATA.BOUNTY_TEMPLATES) {
         const st = this.save.bounties[tpl.id] || { progress: 0, tier: 1 };
         const target = this.getBountyTarget(tpl, st.tier);
@@ -6682,6 +6804,7 @@
           if (isMax || this.save.renown < cost) return;
           this.save.renown -= cost;
           this.save.blessings[b.id] = rank + 1;
+          this.refreshHeroVitals(true);
           this.sfx.levelUp();
           this.syncLiveHUD();
           this.renderGuildModal();
@@ -6738,9 +6861,7 @@
         `;
         card.addEventListener("click", () => {
           this.save.classId = bc.id;
-          const st = this.getHeroStats();
-          this.player.maxHp = st.hp;
-          if (this.mode === "hub") this.player.hp = st.hp;
+          this.refreshHeroVitals(true);
           this.sfx.uiClick();
           this.syncAllHUD();
           this.renderClassModal();
@@ -6812,9 +6933,7 @@
               this.sfx.upgrade();
             }
             this.save.classId = evo.id;
-            const st = this.getHeroStats();
-            this.player.maxHp = st.hp;
-            if (this.mode === "hub") this.player.hp = st.hp;
+            this.refreshHeroVitals(true);
             this.syncAllHUD();
             this.renderClassModal();
             this.saveGame(false);
@@ -6929,6 +7048,12 @@
     moveTooltip(ev) {
       const tip = document.getElementById("item-tooltip");
       if (tip.classList.contains("hidden")) return;
+      if (this.isTouchDevice()) {
+        const rect = tip.getBoundingClientRect();
+        tip.style.left = Math.max(8, Math.round((window.innerWidth - rect.width) * 0.5)) + "px";
+        tip.style.top = "10px";
+        return;
+      }
       const rect = tip.getBoundingClientRect();
       let left = ev.clientX + 16;
       let top = ev.clientY + 14;
@@ -6966,6 +7091,14 @@
 
         if (this.activeModal) return;
 
+        if (this.mode === "hub") {
+          const tabMap = { Digit1: "dungeon", Digit2: "armory", Digit3: "forge", Digit4: "guild", Digit5: "class" };
+          if (tabMap[e.code]) {
+            this.openModal(tabMap[e.code]);
+            return;
+          }
+        }
+
         if (e.code === "Space") {
           e.preventDefault();
           this.triggerDash();
@@ -6980,7 +7113,7 @@
           else if (this.mode === "dungeon" && this.world?.specialEvent?.type === "cursed_shrine") this.activateCursedShrine();
         }
       });
-      // Unlock Web Audio on first mobile touch gesture
+
       const unlockAudio = () => {
         this.sfx.init();
         window.removeEventListener("touchstart", unlockAudio);
@@ -6989,15 +7122,12 @@
       window.addEventListener("touchstart", unlockAudio, { passive: true });
       window.addEventListener("pointerdown", unlockAudio, { passive: true });
 
-      // Tappable Interact Prompt for Mobile & Mouse
       document.getElementById("interact-prompt")?.addEventListener("click", () => {
         if (this.activeModal) return;
         if (this.mode === "hub" && this.nearbyStation) this.openModal(this.nearbyStation.id);
         else if (this.mode === "dungeon" && this.world?.specialEvent?.type === "cursed_shrine") this.activateCursedShrine();
       });
 
-      // Zero-delay touchstart + click binding for combat skills
-      // Zero-delay touchstart + click binding for combat skills
       const bindFastAction = (id, fn) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -7017,10 +7147,17 @@
           fn();
         });
       };
-      // Dismiss mobile gear tooltip when tapping empty space inside Armory
-      document.getElementById("modal-armory")?.addEventListener("click", (e) => {
+
+      document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
         if (this.isTouchDevice() && !e.target.closest(".gear-card")) {
           this.hideTooltip();
+        }
+        if (
+          e.target.id === "modal-backdrop" &&
+          this.activeModal !== "run-summary" &&
+          this.activeModal !== "boon"
+        ) {
+          this.closeAllModals();
         }
       });
 
@@ -7037,7 +7174,6 @@
 
       const resetJoystick = () => {
         this.joystick.active = false;
-        this.resetJoystick = resetJoystick;
         this.joystick.touchId = null;
         this.joystick.dx = 0;
         this.joystick.dy = 0;
@@ -7045,6 +7181,7 @@
         if (joyBase) joyBase.style.transform = "";
         if (joyKnob) joyKnob.style.transform = "translate3d(0px, 0px, 0px)";
       };
+      this.resetJoystick = resetJoystick;
 
       if (joyZone && joyBase && joyKnob) {
         joyZone.addEventListener(
@@ -7141,8 +7278,9 @@
 
       document.getElementById("btn-retreat")?.addEventListener("click", () => {
         this.sfx.uiClick();
+        this.saveGame(false);
         this.enterSanctuary();
-        this.toast("Retreated safely to Sanctuary.", "info");
+        this.toast("Retreated safely to Sanctuary. Progress saved.", "info");
       });
 
       document.getElementById("btn-mute")?.addEventListener("click", () => this.toggleMute());
@@ -7150,15 +7288,6 @@
 
       document.querySelectorAll("[data-close-modal]").forEach((btn) => {
         btn.addEventListener("click", () => this.closeAllModals());
-      });
-      document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
-        if (
-          e.target.id === "modal-backdrop" &&
-          this.activeModal !== "run-summary" &&
-          this.activeModal !== "boon"
-        ) {
-          this.closeAllModals();
-        }
       });
 
       document.querySelectorAll(".diff-btn").forEach((btn) => {
@@ -7216,6 +7345,7 @@
         if (item.level >= C.MAX_UPGRADE_LEVEL || this.save.gold < cost) return;
         this.save.gold -= cost;
         item.level += 1;
+        this.refreshHeroVitals(true);
         this.sfx.upgrade();
         this.syncAllHUD();
         this.renderForgeModal();
@@ -7229,6 +7359,7 @@
         this.save.shards -= cost;
         const tpl = GearSystem.getTemplate(item.templateId);
         item.substats = GearSystem.rollSubstats(item.rarity, GearSystem.getDungeonTierIndex(tpl.dungeonId));
+        this.refreshHeroVitals(true);
         this.sfx.upgrade();
         this.syncAllHUD();
         this.renderForgeModal();
@@ -7288,8 +7419,13 @@
         if (!raw) return;
         try {
           const parsed = JSON.parse(raw);
-          if (!parsed.equipped || !parsed.equipped.weapon) throw new Error("Invalid format");
-          this.save = { ...this.createDefaultSave(), ...parsed };
+          if (!parsed || typeof parsed !== "object" || !parsed.equipped || !parsed.equipped.weapon) {
+            throw new Error("Invalid format");
+          }
+          this.save = this.sanitizeSave(parsed);
+          this.sfx.volume = this.save.settings.volume / 100;
+          this.sfx.muted = !!this.save.settings.muted;
+          this.updateTouchControlsVisibility();
           this.saveGame(false);
           this.closeAllModals();
           this.enterSanctuary();
@@ -7323,3 +7459,4 @@
     window.riftfall = new RiftfallGame();
   });
 })();
+     
