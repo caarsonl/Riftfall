@@ -474,7 +474,7 @@
     }
   }
 
-  function drawIsoCliffEdge(ctx, sx, sy, tileW, tileH, depthPx, colLeft, colRight, drawLeft, drawRight) {
+  function drawIsoCliffEdge(ctx, sx, sy, tileW, tileH, depthPx, colLeft, colRight, drawLeft, drawRight, accentCol = "#38bdf8") {
     const x = Math.round(sx);
     const y = Math.round(sy);
     const hw = Math.round(tileW * 0.5);
@@ -490,6 +490,44 @@
       ctx.closePath();
       ctx.fillStyle = colLeft;
       ctx.fill();
+
+      // Top lip shadow + tiered stone masonry courses
+      ctx.fillStyle = "rgba(0, 0, 0, 0.36)";
+      ctx.beginPath();
+      ctx.moveTo(x - hw, y);
+      ctx.lineTo(x, y + hh);
+      ctx.lineTo(x, y + hh + 3);
+      ctx.lineTo(x - hw, y + 3);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.lineWidth = 1;
+      for (const ratio of [0.38, 0.72]) {
+        const dy = Math.round(d * ratio);
+        ctx.beginPath();
+        ctx.moveTo(x - hw, y + dy);
+        ctx.lineTo(x, y + hh + dy);
+        ctx.stroke();
+      }
+      // Vertical brick joint
+      const mx = Math.round(x - hw * 0.5);
+      const my = Math.round(y + hh * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx, my + Math.round(d * 0.38));
+      ctx.moveTo(x - Math.round(hw * 0.25), y + Math.round(hh * 0.75) + Math.round(d * 0.38));
+      ctx.lineTo(x - Math.round(hw * 0.25), y + Math.round(hh * 0.75) + Math.round(d * 0.72));
+      ctx.stroke();
+
+      // Subtle abyssal glow along the bottom cliff edge
+      ctx.strokeStyle = accentCol;
+      ctx.globalAlpha = 0.22;
+      ctx.beginPath();
+      ctx.moveTo(x - hw, y + d - 1);
+      ctx.lineTo(x, y + hh + d - 1);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     if (drawRight) {
@@ -501,10 +539,43 @@
       ctx.closePath();
       ctx.fillStyle = colRight;
       ctx.fill();
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+      ctx.beginPath();
+      ctx.moveTo(x + hw, y);
+      ctx.lineTo(x, y + hh);
+      ctx.lineTo(x, y + hh + 3);
+      ctx.lineTo(x + hw, y + 3);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.lineWidth = 1;
+      for (const ratio of [0.38, 0.72]) {
+        const dy = Math.round(d * ratio);
+        ctx.beginPath();
+        ctx.moveTo(x + hw, y + dy);
+        ctx.lineTo(x, y + hh + dy);
+        ctx.stroke();
+      }
+      const mx = Math.round(x + hw * 0.5);
+      const my = Math.round(y + hh * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(mx, my + Math.round(d * 0.38));
+      ctx.lineTo(mx, my + Math.round(d * 0.72));
+      ctx.stroke();
+
+      ctx.strokeStyle = accentCol;
+      ctx.globalAlpha = 0.16;
+      ctx.beginPath();
+      ctx.moveTo(x + hw, y + d - 1);
+      ctx.lineTo(x, y + hh + d - 1);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 
-  function drawIsoBlock(ctx, sx, sy, tileW, tileH, heightPx, colTop, colLeft, colRight, stroke = "#090c14") {
+  function drawIsoBlock(ctx, sx, sy, tileW, tileH, heightPx, colTop, colLeft, colRight, stroke = "#090c14", masonry = false) {
     const x = Math.round(sx);
     const y = Math.round(sy);
     const hw = Math.round(tileW * 0.5);
@@ -537,6 +608,40 @@
     ctx.closePath();
     ctx.fillStyle = colTop;
     ctx.fill();
+
+    if (masonry && h >= 14) {
+      // Recessed stone panel on top cap
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y - hh - h + 3);
+      ctx.lineTo(x + hw - 5, y - h);
+      ctx.lineTo(x, y + hh - h - 3);
+      ctx.lineTo(x - hw + 5, y - h);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Stone brick mortar lines on left and right faces
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.42)";
+      const midH = Math.round(h * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(x - hw, y - midH);
+      ctx.lineTo(x, y + hh - midH);
+      ctx.lineTo(x + hw, y - midH);
+      // Staggered vertical mortar joints
+      ctx.moveTo(x - Math.round(hw * 0.5), y + Math.round(hh * 0.5) - h);
+      ctx.lineTo(x - Math.round(hw * 0.5), y + Math.round(hh * 0.5) - midH);
+      ctx.moveTo(x + Math.round(hw * 0.5), y + Math.round(hh * 0.5) - midH);
+      ctx.lineTo(x + Math.round(hw * 0.5), y + Math.round(hh * 0.5));
+      ctx.stroke();
+
+      // Subtle rim highlight under top cap
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+      ctx.beginPath();
+      ctx.moveTo(x - hw + 1, y - h + 2);
+      ctx.lineTo(x, y + hh - h + 2);
+      ctx.stroke();
+    }
 
     if (stroke) {
       ctx.strokeStyle = stroke;
@@ -4272,6 +4377,128 @@
       this.syncTopHudOffset();
     }
 
+    renderBackdrop(ctx, w, h, pal) {
+      // 1. Deep multi-stop atmospheric sky/cavern gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+      bgGrad.addColorStop(0, pal.bgTop);
+      bgGrad.addColorStop(0.55, pal.chasm || pal.bgBottom);
+      bgGrad.addColorStop(1, pal.bgBottom);
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Soft ambient radial glow behind the playable dungeon platform
+      const glow = ctx.createRadialGradient(w * 0.5, h * 0.5, 20, w * 0.5, h * 0.5, Math.max(w, h) * 0.62);
+      glow.addColorStop(0, pal.accent + "1f");
+      glow.addColorStop(0.55, pal.tileA + "12");
+      glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      // 3. Distant parallax abyssal spires & ruined dungeon silhouettes
+      const camParallaxX = this.cam.x * 9;
+      const camParallaxY = this.cam.y * 5;
+      ctx.save();
+      for (let i = 0; i < 14; i++) {
+        const seed = (i * 97 + 31) % 100;
+        const speedLayer = i % 2 === 0 ? 0.45 : 0.8;
+        const spanW = w + 180;
+        const sx = (((i * 137 + seed * 3 - camParallaxX * speedLayer) % spanW) + spanW) % spanW - 90;
+        const baseH = 55 + (seed % 75);
+        const spireW = 24 + (i % 4) * 12;
+        const sy = Math.round(h * (0.22 + (i % 5) * 0.14) - camParallaxY * speedLayer * 0.35);
+
+        ctx.fillStyle = i % 2 === 0 ? "rgba(6, 9, 18, 0.52)" : "rgba(10, 15, 28, 0.38)";
+        ctx.beginPath();
+        ctx.moveTo(sx - spireW * 0.5, sy + baseH);
+        ctx.lineTo(sx - spireW * 0.22, sy);
+        ctx.lineTo(sx + spireW * 0.22, sy);
+        ctx.lineTo(sx + spireW * 0.5, sy + baseH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Faint crystal/torch glimmer on select distant spires
+        if (i % 3 === 0) {
+          const pulse = 0.22 + Math.sin(this.elapsed * 2.2 + i) * 0.14;
+          ctx.fillStyle = pal.accent;
+          ctx.globalAlpha = pulse;
+          ctx.fillRect(Math.round(sx - 2), sy + 8, 4, 6);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // 4. Drifting ambient dungeon motes (embers, snow, spores, dust)
+      const hType = this.mode === "dungeon" ? this.getCurrentRealm()?.hazard?.type : "hub";
+      const rising = hType === "heat" || hType === "ash" || hType === "solar" || hType === "voidcore";
+      const falling = hType === "frost" || hType === "pressure";
+
+      for (let i = 0; i < 38; i++) {
+        const s1 = (i * 53 + 17) % 100;
+        const s2 = (i * 89 + 43) % 100;
+        const driftX = Math.sin(this.elapsed * (0.6 + (s1 % 5) * 0.15) + i) * 18;
+        const speedY = 10 + (s2 % 18);
+        let py;
+        if (rising) {
+          py = h - (((s2 * 7 + this.elapsed * speedY) % (h + 20)) - 10);
+        } else if (falling) {
+          py = ((s2 * 7 + this.elapsed * speedY) % (h + 20)) - 10;
+        } else {
+          py = ((s2 * 7 + Math.sin(this.elapsed * 0.5 + i) * 24) % h + h) % h;
+        }
+        const px = (((s1 * 13 + driftX - this.cam.x * 14) % w) + w) % w;
+        const alpha = 0.18 + ((Math.sin(this.elapsed * 3 + i * 1.7) + 1) * 0.5) * 0.34;
+        const sz = i % 5 === 0 ? 3 : 2;
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = i % 3 === 0 ? "#ffffff" : pal.accent;
+        ctx.fillRect(Math.round(px), Math.round(py), sz, sz);
+      }
+      ctx.restore();
+    }
+
+    drawDungeonColumn(ctx, sx, sy, pal, seed) {
+      // Plinth base
+      drawIsoBlock(ctx, sx, sy, 34, 17, 6, pal.wallTop, pal.wallLeft, pal.wallRight, "#07090f", false);
+      // Carved stone shaft
+      drawIsoBlock(ctx, sx, sy - 6, 24, 12, 22, pal.wallTop, pal.wallLeft, pal.wallRight, "#07090f", true);
+
+      // Glowing rune band inlaid into the shaft
+      const glowPulse = 0.65 + Math.sin(this.elapsed * 3.5 + seed) * 0.25;
+      ctx.save();
+      ctx.globalAlpha = glowPulse;
+      ctx.fillStyle = pal.pillarTop || pal.accent;
+      ctx.fillRect(sx - 6, sy - 19, 3, 5);
+      ctx.fillRect(sx + 3, sy - 19, 3, 5);
+      ctx.restore();
+
+      // Ornate capital crown & glowing crystal finial
+      drawIsoBlock(ctx, sx, sy - 28, 30, 15, 5, pal.pillarTop || pal.wallTop, pal.wallLeft, pal.wallRight, "#07090f", false);
+      const bob = Math.round(Math.sin(this.elapsed * 4 + seed) * 1.5);
+      ctx.fillStyle = pal.pillarTop || pal.accent;
+      ctx.fillRect(sx - 3, sy - 38 + bob, 6, 5);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(sx - 1, sy - 37 + bob, 2, 2);
+    }
+
+    drawWallSconce(ctx, sx, sy, pal, seed) {
+      const flicker = Math.sin(this.elapsed * 15 + seed * 3.1) * 1.5;
+      const lx = sx + 8;
+      const ly = sy - 8;
+
+      // Soft light pool on the adjacent floor tile
+      ctx.save();
+      ctx.globalAlpha = 0.16 + Math.sin(this.elapsed * 11 + seed) * 0.04;
+      drawIsoGroundEllipse(ctx, sx + 10, sy + 6, 1.15, pal.accent, null);
+      ctx.restore();
+
+      // Iron bracket + glowing flame/crystal core
+      ctx.fillStyle = "#090d16";
+      ctx.fillRect(lx - 2, ly - 2, 4, 6);
+      ctx.fillStyle = pal.accent;
+      ctx.fillRect(lx - 3, ly - 6 - Math.round(flicker), 6, 5);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(lx - 1, ly - 5 - Math.round(flicker), 2, 3);
+    }
+
     render() {
       const ctx = this.ctx;
       const dpr = this.dpr || 1;
@@ -4283,11 +4510,8 @@
       ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, 0, 0);
       ctx.imageSmoothingEnabled = false;
 
-      ctx.fillStyle = pal.bgBottom;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = pal.bgTop;
-      ctx.fillRect(0, 0, w, Math.floor(h * 0.62));
+      // 0. Detailed Multi-Layered Cavern & Parallax Backdrop
+      this.renderBackdrop(ctx, w, h, pal);
 
       let shakeX = 0;
       let shakeY = 0;
@@ -4303,33 +4527,47 @@
       const sz = this.world.size;
       const grid = this.world.grid;
 
-      // 1A. Recessed Abyssal Chasm Floor
-      for (let y = 1; y < sz - 1; y++) {
-        for (let x = 1; x < sz - 1; x++) {
-          if (grid[y][x] !== -1) continue;
-          const nearFloor =
-            grid[y - 1]?.[x] >= 0 ||
-            grid[y + 1]?.[x] >= 0 ||
-            grid[y]?.[x - 1] >= 0 ||
-            grid[y]?.[x + 1] >= 0;
-          if (!nearFloor) continue;
+      // 1A. Extended Subterranean Abyssal Floor (Liquid / Void / Magma / Starfield)
+      const abyssPad = 4;
+      for (let y = -abyssPad; y < sz + abyssPad; y++) {
+        for (let x = -abyssPad; x < sz + abyssPad; x++) {
+          const inBounds = x >= 0 && y >= 0 && x < sz && y < sz;
+          if (inBounds && grid[y][x] !== -1) continue;
+
           const p = toS(x + 0.5, y + 0.5, 0);
-          drawIsoDiamond(ctx, p.x, p.y + 15, ISO.TILE_W, ISO.TILE_H, pal.chasm || "#060912", null);
-          if (((x * 19 + y * 31) & 3) === 0) {
-            const shimmer = Math.sin(this.elapsed * 2.5 + x + y) * 0.5 + 0.5;
+          if (p.x < -60 || p.x > w + 60 || p.y < -60 || p.y > h + 60) continue;
+
+          const distFromEdge = inBounds
+            ? 0
+            : Math.max(0, -x, x - (sz - 1), -y, y - (sz - 1));
+          const fadeAlpha = clamp(1 - distFromEdge * 0.22, 0.12, 1);
+
+          ctx.save();
+          ctx.globalAlpha = fadeAlpha;
+          drawIsoDiamond(ctx, p.x, p.y + 18, ISO.TILE_W, ISO.TILE_H, pal.chasm || "#060912", "rgba(0,0,0,0.35)", 1);
+
+          const hash = ((x + 17) * 29 + (y + 23) * 47) & 7;
+          if (hash === 0 || hash === 3) {
+            const shimmer = Math.sin(this.elapsed * 2.4 + x * 0.9 + y * 0.7) * 0.5 + 0.5;
             ctx.fillStyle = pal.accent;
-            ctx.globalAlpha = 0.14 + shimmer * 0.14;
-            ctx.fillRect(p.x - 4, p.y + 14, 8, 2);
-            ctx.globalAlpha = 1;
+            ctx.globalAlpha = fadeAlpha * (0.14 + shimmer * 0.2);
+            ctx.fillRect(p.x - 6, p.y + 17, 12, 2);
+            ctx.fillRect(p.x - 2, p.y + 16, 4, 4);
+          } else if (hash === 5) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+            ctx.fillRect(p.x + 3, p.y + 18, 2, 2);
           }
+          ctx.restore();
         }
       }
 
-      // 1B. Walkable Floor Tiles + Extruded 2.5D Cliff Drop-Offs
+      // 1B. Walkable Beveled Flagstone Tiles + Tiered 2.5D Cliff Drop-Offs
       for (let y = 0; y < sz; y++) {
         for (let x = 0; x < sz; x++) {
           if (grid[y][x] === -1) continue;
           const p = toS(x + 0.5, y + 0.5, 0);
+          if (p.x < -60 || p.x > w + 60 || p.y < -60 || p.y > h + 60) continue;
+
           const drawLeftCliff = y + 1 >= sz || grid[y + 1][x] === -1;
           const drawRightCliff = x + 1 >= sz || grid[y][x + 1] === -1;
 
@@ -4340,11 +4578,12 @@
               p.y,
               ISO.TILE_W,
               ISO.TILE_H,
-              15,
+              18,
               pal.wallLeft,
               pal.wallRight,
               drawLeftCliff,
-              drawRightCliff
+              drawRightCliff,
+              pal.accent
             );
           }
 
@@ -4352,14 +4591,85 @@
           drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W, ISO.TILE_H, col, pal.tileBorder, 1);
 
           if (grid[y][x] === 0) {
-            const hash = (x * 37 + y * 91) & 7;
-            if (hash === 1 || hash === 4) {
-              ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-              ctx.fillRect(p.x - 4, p.y - 1, 2, 1);
-              ctx.fillRect(p.x + 3, p.y + 2, 2, 1);
-            } else if (hash === 2) {
-              ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
-              ctx.fillRect(p.x - 2, p.y + 1, 3, 1);
+            const hw = ISO.TILE_W * 0.5;
+            const hh = ISO.TILE_H * 0.5;
+            const hash = (x * 73 + y * 137) % 16;
+
+            // Subtle per-tile stone shade variation
+            if (hash < 4) {
+              drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W - 2, ISO.TILE_H - 1, "rgba(255,255,255,0.035)", null);
+            } else if (hash > 12) {
+              drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W - 2, ISO.TILE_H - 1, "rgba(0,0,0,0.12)", null);
+            }
+
+            // 3D stone slab top-left highlight & bottom-right bevel
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.11)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p.x - hw + 2, p.y);
+            ctx.lineTo(p.x, p.y - hh + 1);
+            ctx.lineTo(p.x + hw - 2, p.y);
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.28)";
+            ctx.beginPath();
+            ctx.moveTo(p.x - hw + 2, p.y);
+            ctx.lineTo(p.x, p.y + hh - 1);
+            ctx.lineTo(p.x + hw - 2, p.y);
+            ctx.stroke();
+
+            // Flagstone cracks, recessed inlays & faint arcane runes
+            if (hash === 2 || hash === 9) {
+              // Stone crack lines
+              ctx.strokeStyle = "rgba(0, 0, 0, 0.38)";
+              ctx.beginPath();
+              ctx.moveTo(p.x - 6, p.y - 1);
+              ctx.lineTo(p.x - 1, p.y + 2);
+              ctx.lineTo(p.x + 5, p.y);
+              ctx.stroke();
+            } else if (hash === 5) {
+              // Recessed inner flagstone frame
+              drawIsoDiamond(ctx, p.x, p.y, ISO.TILE_W * 0.54, ISO.TILE_H * 0.54, null, "rgba(0,0,0,0.28)", 1);
+            } else if (hash === 11) {
+              // Faint glowing floor rune
+              ctx.fillStyle = pal.accent;
+              ctx.globalAlpha = 0.24 + Math.sin(this.elapsed * 2.5 + x + y) * 0.1;
+              ctx.fillRect(p.x - 3, p.y - 1, 2, 2);
+              ctx.fillRect(p.x + 1, p.y - 1, 2, 2);
+              ctx.fillRect(p.x - 1, p.y + 1, 2, 2);
+              ctx.globalAlpha = 1;
+            } else if (hash === 7 || hash === 14) {
+              // Scattered rubble / pebbles
+              ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+              ctx.fillRect(p.x - 5, p.y + 1, 2, 1);
+              ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+              ctx.fillRect(p.x + 4, p.y - 2, 2, 2);
+            }
+
+            // Ambient occlusion shadow cast onto floor by walls/pillars to the NW or NE
+            const wallNW = y > 0 && grid[y - 1][x] >= 1;
+            const wallNE = x > 0 && grid[y][x - 1] >= 1;
+            if (wallNW || wallNE) {
+              ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+              ctx.beginPath();
+              if (wallNW && wallNE) {
+                ctx.moveTo(p.x - hw, p.y);
+                ctx.lineTo(p.x, p.y - hh);
+                ctx.lineTo(p.x + hw, p.y);
+                ctx.lineTo(p.x, p.y + 2);
+              } else if (wallNW) {
+                ctx.moveTo(p.x - hw, p.y);
+                ctx.lineTo(p.x, p.y - hh);
+                ctx.lineTo(p.x + 6, p.y - hh + 3);
+                ctx.lineTo(p.x - hw + 6, p.y + 3);
+              } else {
+                ctx.moveTo(p.x, p.y - hh);
+                ctx.lineTo(p.x + hw, p.y);
+                ctx.lineTo(p.x + hw - 6, p.y + 3);
+                ctx.lineTo(p.x - 6, p.y - hh + 3);
+              }
+              ctx.closePath();
+              ctx.fill();
             }
           }
         }
@@ -4374,9 +4684,8 @@
       for (let y = 0; y < sz; y++) {
         for (let x = 0; x < sz; x++) {
           const cell = grid[y][x];
-          if (cell === 1 || cell === 2) {
-            const heightPx = cell === 2 ? 32 : 20;
-            const topCol = cell === 2 && pal.pillarTop ? pal.pillarTop : pal.wallTop;
+          if (cell === 1) {
+            const hasSconce = (x + y) % 3 === 0 && grid[y + 1]?.[x] === 0;
             renderables.push({
               depth: x + y + 1.0,
               draw: () => {
@@ -4387,12 +4696,24 @@
                   p.y,
                   ISO.TILE_W,
                   ISO.TILE_H,
-                  heightPx,
-                  topCol,
+                  22,
+                  pal.wallTop,
                   pal.wallLeft,
                   pal.wallRight,
-                  "#07090f"
+                  "#07090f",
+                  true
                 );
+                if (hasSconce) {
+                  this.drawWallSconce(ctx, p.x, p.y, pal, x * 13 + y * 7);
+                }
+              }
+            });
+          } else if (cell === 2) {
+            renderables.push({
+              depth: x + y + 1.0,
+              draw: () => {
+                const p = toS(x + 0.5, y + 0.5, 0);
+                this.drawDungeonColumn(ctx, p.x, p.y, pal, x * 19 + y * 11);
               }
             });
           }
@@ -4515,7 +4836,16 @@
         ctx.restore();
       }
 
-      // 6. Native HiDPI Smooth Floating Combat Numbers
+      // 6. Subtle Cinematic Dungeon Vignette
+      ctx.save();
+      const vig = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.34, w * 0.5, h * 0.5, Math.max(w, h) * 0.74);
+      vig.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vig.addColorStop(1, "rgba(2, 4, 10, 0.52)");
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+
+      // 7. Native HiDPI Smooth Floating Combat Numbers
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const ft of this.floatingTexts) {
@@ -4538,14 +4868,24 @@
       for (const v of this.world.vents) {
         const p = toS(v.x, v.y, 0);
         const pulse = 0.92 + Math.sin(this.elapsed * 3.5) * 0.08;
-        drawIsoGroundEllipse(ctx, p.x, p.y, v.radius * pulse, "rgba(56, 189, 248, 0.16)", "rgba(125, 211, 252, 0.72)", 1);
-        drawIsoBlock(ctx, p.x, p.y, 12, 6, 13, "#bae6fd", "#38bdf8", "#0284c7", "#07090f");
+        drawIsoGroundEllipse(ctx, p.x, p.y, v.radius * pulse, "rgba(56, 189, 248, 0.14)", "rgba(125, 211, 252, 0.65)", 1.5);
+        drawIsoGroundEllipse(ctx, p.x, p.y, v.radius * 0.45, "rgba(14, 165, 233, 0.25)", "#38bdf8", 1);
+
+        // Multi-crystal cluster + rising oxygen bubbles
+        drawIsoBlock(ctx, p.x - 5, p.y + 1, 7, 4, 11, "#e0f2fe", "#38bdf8", "#0284c7", "#07090f");
+        drawIsoBlock(ctx, p.x + 5, p.y + 1, 6, 3, 9, "#bae6fd", "#0ea5e9", "#0369a1", "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 1, 9, 5, 17, "#ffffff", "#7dd3fc", "#0284c7", "#07090f");
+
+        const bubY = ((this.elapsed * 18 + v.x * 7) % 18);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(p.x - 3, p.y - 14 - Math.round(bubY), 2, 2);
+        ctx.fillRect(p.x + 3, p.y - 10 - Math.round((bubY + 9) % 18), 2, 2);
       }
 
       for (const b of this.world.braziers || []) {
         const p = toS(b.x, b.y, 0);
         const pulse = 0.94 + Math.sin(this.elapsed * 4.5) * 0.06;
-        drawIsoGroundEllipse(ctx, p.x, p.y, b.radius * pulse, "rgba(249, 115, 22, 0.16)", "rgba(251, 146, 60, 0.75)", 1);
+        drawIsoGroundEllipse(ctx, p.x, p.y, b.radius * pulse, "rgba(249, 115, 22, 0.16)", "rgba(251, 146, 60, 0.75)", 1.5);
       }
 
       for (const c of this.world.conduits || []) {
@@ -4642,7 +4982,7 @@
         const prog = clamp(t.elapsed / t.duration, 0, 1);
         if (t.type === "circle") {
           const p = toS(t.x, t.y, 0);
-          drawIsoGroundEllipse(ctx, p.x, p.y, t.radius, "rgba(239, 68, 68, 0.18)", "rgba(248, 113, 113, 0.92)", 1);
+          drawIsoGroundEllipse(ctx, p.x, p.y, t.radius, "rgba(239, 68, 68, 0.18)", "rgba(248, 113, 113, 0.92)", 1.5);
           drawIsoGroundEllipse(ctx, p.x, p.y, Math.max(0.1, t.radius * prog), "rgba(239, 68, 68, 0.38)", null);
         } else if (t.type === "ring") {
           const p = toS(t.x, t.y, 0);
@@ -4674,7 +5014,7 @@
           ctx.fillStyle = `rgba(239, 68, 68, ${0.16 + prog * 0.34})`;
           ctx.fill();
           ctx.strokeStyle = "rgba(252, 165, 165, 0.95)";
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
         }
       }
@@ -4997,23 +5337,45 @@
 
     drawUrn(ctx, u, toS) {
       const p = toS(u.x, u.y, 0);
-      drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.42, "rgba(0,0,0,0.45)");
-      if (u.kind === "heal") {
-        drawIsoBlock(ctx, p.x, p.y, 12, 6, 11, "#86efac", "#16a34a", "#14532d", "#07090f");
-        ctx.fillStyle = "#ecfdf5";
-        ctx.fillRect(p.x - 1, p.y - 14, 3, 3);
-      } else {
-        drawIsoBlock(ctx, p.x, p.y, 13, 7, 11, "#fde047", "#b45309", "#78350f", "#07090f");
-      }
+      drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.42, "rgba(0,0,0,0.52)");
+
+      const isHeal = u.kind === "heal";
+      const bodyDark = isHeal ? "#14532d" : "#78350f";
+      const bodyMid = isHeal ? "#16a34a" : "#b45309";
+      const rimCol = isHeal ? "#86efac" : "#fde047";
+
+      // Sculpted amphora silhouette instead of a flat cube
+      ctx.fillStyle = "#07090f";
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 6, 7, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = bodyDark;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 6, 6, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = bodyMid;
+      ctx.beginPath();
+      ctx.ellipse(p.x - 1, p.y - 7, 4.5, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Neck & glowing rune seal
+      ctx.fillStyle = rimCol;
+      ctx.fillRect(p.x - 4, p.y - 14, 8, 2);
+      ctx.fillRect(p.x - 1, p.y - 8, 3, 4);
     }
 
     drawBrazier(ctx, b, toS) {
       const p = toS(b.x, b.y, 0);
-      drawIsoBlock(ctx, p.x, p.y, 16, 8, 12, "#475569", "#1e293b", "#0f172a", "#07090f");
+      drawIsoGroundEllipse(ctx, p.x, p.y + 1, 0.5, "rgba(0,0,0,0.55)");
+      drawIsoBlock(ctx, p.x, p.y, 16, 8, 10, "#64748b", "#334155", "#0f172a", "#07090f");
       const flicker = Math.round(Math.sin(this.elapsed * 14 + b.x) * 2);
+      ctx.fillStyle = "#ea580c";
+      ctx.fillRect(p.x - 5, p.y - 18 - flicker, 10, 8 + flicker);
       ctx.fillStyle = "#f97316";
-      ctx.fillRect(p.x - 4, p.y - 18 - flicker, 8, 7 + flicker);
-      ctx.fillStyle = "#fde047";
+      ctx.fillRect(p.x - 4, p.y - 20 - flicker, 8, 8 + flicker);
+      ctx.fillStyle = "#fef08a";
       ctx.fillRect(p.x - 2, p.y - 16 - flicker, 4, 5);
     }
 
@@ -5075,9 +5437,16 @@
 
     drawChest(ctx, ch, toS) {
       const p = toS(ch.x, ch.y, 0);
-      drawIsoGroundEllipse(ctx, p.x, p.y, 0.65, "rgba(0,0,0,0.48)");
-      const topCol = ch.opened ? "#475569" : "#f59e0b";
-      drawIsoBlock(ctx, p.x, p.y, 18, 9, ch.opened ? 7 : 13, topCol, "#78350f", "#451a03", "#07090f");
+      drawIsoGroundEllipse(ctx, p.x, p.y, 0.72, "rgba(0,0,0,0.55)");
+      if (ch.opened) {
+        drawIsoBlock(ctx, p.x, p.y, 20, 10, 7, "#334155", "#475569", "#1e293b", "#07090f");
+      } else {
+        drawIsoBlock(ctx, p.x, p.y, 20, 10, 9, "#b45309", "#78350f", "#451a03", "#07090f");
+        drawIsoBlock(ctx, p.x, p.y - 9, 20, 10, 5, "#fbbf24", "#d97706", "#92400e", "#07090f");
+        // Gold clasp
+        ctx.fillStyle = "#fef08a";
+        ctx.fillRect(p.x - 2, p.y - 8, 4, 4);
+      }
     }
 
     drawLootDrop(ctx, drop, toS) {
