@@ -3906,7 +3906,13 @@
       this.canvas.width = Math.floor(w * dpr);
       this.canvas.height = Math.floor(h * dpr);
       this.dpr = dpr;
-      this.worldZoom = 1.32;
+      this.worldZoom = w < 768 ? 1.15 : 1.32;
+
+      const topHud = document.getElementById("top-hud");
+      const container = document.getElementById("game-container");
+      if (topHud && container) {
+        container.style.setProperty("--top-hud-h", `${topHud.offsetHeight}px`);
+      }
     }
 
     render() {
