@@ -6030,6 +6030,301 @@
     /* ======================================================================
        SMART HUD, OBJECTIVE TRACKER & NOTIFICATION BADGES
        ====================================================================== */
+    /* ----------------------------------------------------------------------
+       CUSTOM ANIMATED 2.5D WEAPON MODELS (15 Distinct Silhouettes)
+       ---------------------------------------------------------------------- */
+    drawEquippedWeapon(ctx, p, f, bob, wepTpl) {
+      const style = wepTpl.weaponStyle || "sword";
+      const cast = this.player.castAnim;
+      let spinAngle = 0;
+      let raiseY = 0;
+
+      if (cast) {
+        const ct = clamp(cast.elapsed / cast.duration, 0, 1);
+        if (cast.type === "spin") spinAngle = ct * Math.PI * 4;
+        else if (cast.type === "raise") raiseY = -Math.sin(ct * Math.PI) * 9;
+        else if (cast.type === "slam") spinAngle = Math.sin(ct * Math.PI) * 1.4;
+      }
+
+      const swingAng = this.player.swingAnim > 0 ? Math.sin(this.player.swingAnim * 30) * 1.25 : 0;
+      const baseAng = Math.atan2(f.y, f.x) + swingAng + spinAngle;
+      const handX = Math.round(p.x + f.x * 7 - f.y * 4);
+      const handY = Math.round(p.y - 12 - bob + f.y * 3 + raiseY);
+
+      ctx.save();
+
+      if (style === "grimoire") {
+        const hover = Math.sin(this.elapsed * 6) * 3;
+        const bx = Math.round(p.x + f.x * 11 + 4);
+        const by = Math.round(p.y - 19 - bob + hover + raiseY);
+        ctx.fillStyle = "#3b0764";
+        ctx.fillRect(bx - 6, by - 5, 12, 9);
+        ctx.fillStyle = "#f5d0fe";
+        ctx.fillRect(bx - 4, by - 4, 3, 7);
+        ctx.fillRect(bx + 1, by - 4, 3, 7);
+        ctx.strokeStyle = wepTpl.weaponColor;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx - 6, by - 5, 12, 9);
+        const ra = this.elapsed * 5;
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(bx + Math.round(Math.cos(ra) * 9) - 1, by + Math.round(Math.sin(ra) * 5) - 1, 2, 2);
+        ctx.restore();
+        return;
+      }
+
+      if (style === "chakram") {
+        const ringSpin = this.elapsed * 14;
+        for (const side of [-1, 1]) {
+          const rx = Math.round(p.x + side * 12 + f.x * 3);
+          const ry = Math.round(p.y - 13 - bob + raiseY);
+          ctx.strokeStyle = "#07090f";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = wepTpl.weaponColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(
+            rx + Math.round(Math.cos(ringSpin * side) * 6) - 1,
+            ry + Math.round(Math.sin(ringSpin * side) * 6) - 1,
+            3,
+            3
+          );
+        }
+        ctx.restore();
+        return;
+      }
+
+      if (style === "twinblades" || style === "pistols") {
+        for (const side of [-1, 1]) {
+          const hx = Math.round(p.x + side * 8 + f.x * 4);
+          const hy = Math.round(p.y - 12 - bob + raiseY);
+          const ang = baseAng + side * 0.45;
+          const tx = Math.round(hx + Math.cos(ang) * 14);
+          const ty = Math.round(hy + Math.sin(ang) * 10 - 3);
+          ctx.strokeStyle = "#07090f";
+          ctx.lineWidth = style === "pistols" ? 5 : 4;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          ctx.strokeStyle = side > 0 ? wepTpl.weaponColor : wepTpl.trailColor;
+          ctx.lineWidth = style === "pistols" ? 3 : 2;
+          ctx.stroke();
+          if (style === "pistols") {
+            ctx.fillStyle = "#fde047";
+            ctx.fillRect(tx - 2, ty - 2, 4, 4);
+          }
+        }
+        ctx.restore();
+        return;
+      }
+
+      const len =
+        style === "greatsword" || style === "cannon"
+          ? 22
+          : style === "halberd" || style === "scythe" || style === "staff" || style === "katana" || style === "spear_shield"
+          ? 20
+          : 15;
+      const tipX = Math.round(handX + Math.cos(baseAng) * len);
+      const tipY = Math.round(handY + Math.sin(baseAng) * (len * 0.72) - 5);
+
+      ctx.strokeStyle = "#07090f";
+      ctx.lineWidth = style === "greatsword" || style === "cannon" ? 7 : 5;
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = style === "staff" ? "#78350f" : wepTpl.weaponColor;
+      ctx.lineWidth = style === "greatsword" || style === "cannon" ? 4.5 : 2.6;
+      ctx.stroke();
+
+      if (style === "hammer") {
+        ctx.fillStyle = "#07090f";
+        ctx.fillRect(tipX - 6, tipY - 5, 12, 10);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.fillRect(tipX - 5, tipY - 4, 10, 8);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(tipX - 3, tipY - 2, 6, 4);
+      } else if (style === "staff" || style === "censer") {
+        const pulse = 3 + Math.sin(this.elapsed * 8);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, pulse + 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = style === "censer" ? "#bef264" : "#ffffff";
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (style === "cannon") {
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(tipX - 5, tipY - 4, 10, 8);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.fillRect(tipX - 3, tipY - 2, 6, 4);
+      } else if (style === "spear_shield") {
+        const shX = Math.round(p.x - f.x * 6 - 9);
+        const shY = Math.round(p.y - 12 - bob);
+        ctx.fillStyle = "#07090f";
+        ctx.fillRect(shX - 5, shY - 8, 10, 16);
+        ctx.fillStyle = wepTpl.weaponColor;
+        ctx.fillRect(shX - 4, shY - 7, 8, 14);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(shX - 2, shY - 4, 4, 8);
+      } else if (style === "katana") {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(handX - 4, handY - 2, 8, 3);
+      } else if (style === "halberd") {
+        ctx.fillStyle = wepTpl.trailColor || "#e0f2fe";
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY - 5);
+        ctx.lineTo(tipX + 9, tipY);
+        ctx.lineTo(tipX + 4, tipY + 7);
+        ctx.lineTo(tipX - 3, tipY + 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = wepTpl.weaponColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else if (style === "scythe") {
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY + 4, 9, baseAng - 1.4, baseAng + 0.7);
+        ctx.stroke();
+        ctx.strokeStyle = wepTpl.weaponColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      } else if (style === "greatsword") {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(handX - 5, handY - 2, 10, 4);
+      } else {
+        ctx.fillStyle = "#fde047";
+        ctx.fillRect(handX - 3, handY - 2, 6, 3);
+        ctx.fillStyle = wepTpl.trailColor;
+        ctx.fillRect(tipX - 2, tipY - 2, 4, 4);
+      }
+
+      ctx.restore();
+    }
+
+    drawHero(ctx, toS) {
+      const armorTpl = GearSystem.getTemplate(this.save.equipped.armor.templateId);
+      const wepTpl = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
+      const cls = this.getActiveClass();
+      const vis = armorTpl.visuals || { body: "#334155", cloak: "#2563eb", trim: "#e2e8f0", aura: null };
+
+      const ground = toS(this.player.x, this.player.y, 0);
+      const p = toS(this.player.x, this.player.y, this.player.z || 0);
+      const moving = Math.hypot(this.player.vx, this.player.vy) > 0.2;
+      const bob = moving ? Math.round(Math.abs(Math.sin(this.elapsed * 14)) * 3) : Math.round(Math.sin(this.elapsed * 3));
+
+      const f = ISO.worldDirToScreen(this.player.facing.x, this.player.facing.y);
+      const facingAway = f.y < -0.35;
+
+      drawSoftGlow(ctx, ground.x, ground.y, 34, 17, cls.color || "#38bdf8", 0.2);
+      drawIsoGroundEllipse(ctx, ground.x, ground.y + 1, 0.55, "rgba(0, 0, 0, 0.58)");
+      if (vis.aura) {
+        drawIsoGroundEllipse(ctx, ground.x, ground.y, 0.72, vis.aura, vis.trim, 1);
+      }
+
+      if (cls.tier === "advanced") {
+        drawIsoGroundEllipse(ctx, p.x, p.y - 28 - bob, 0.42, null, cls.color, 1.5);
+      }
+
+      if (this.player.shield > 0) {
+        drawIsoGroundEllipse(ctx, p.x, p.y - 11, 0.75, "rgba(56, 189, 248, 0.16)", "#7dd3fc", 1);
+      }
+
+      const bodyCol = this.player.hurtFlash > 0 ? "#ffffff" : vis.body;
+      const cloakCol = this.player.hurtFlash > 0 ? "#fecaca" : vis.cloak;
+      const trimCol = this.player.iframeTimer > 0 ? "#7dd3fc" : vis.trim;
+
+      if (!facingAway) {
+        const capeX = Math.round(p.x - f.x * 5);
+        const capeY = Math.round(p.y - 14 - bob - f.y * 2);
+        ctx.fillStyle = cloakCol;
+        ctx.fillRect(capeX - 5, capeY, 10, 12);
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(capeX - 5, capeY, 10, 12);
+      }
+
+      drawIsoBlock(ctx, p.x, p.y - bob, 18, 9, 18, trimCol, cloakCol, bodyCol, "#07090f");
+
+      if (facingAway) {
+        ctx.fillStyle = cloakCol;
+        ctx.fillRect(p.x - 6, p.y - 17 - bob, 12, 13);
+        ctx.strokeStyle = "#07090f";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x - 6, p.y - 17 - bob, 12, 13);
+      }
+
+      const headY = p.y - 18 - bob;
+      drawIsoBlock(ctx, p.x, headY, 14, 7, 10, trimCol, bodyCol, "#0f172a", "#07090f");
+
+      ctx.fillStyle = cls.color;
+      if (cls.crest.includes("horns") || cls.crest.includes("antlers")) {
+        ctx.fillRect(p.x - 7, headY - 14, 2, 5);
+        ctx.fillRect(p.x + 5, headY - 14, 2, 5);
+      } else if (cls.crest.includes("crown")) {
+        ctx.fillRect(p.x - 4, headY - 13, 2, 3);
+        ctx.fillRect(p.x - 1, headY - 14, 2, 4);
+        ctx.fillRect(p.x + 2, headY - 13, 2, 3);
+      }
+
+      const eyeY = headY - 6;
+      if (f.y > -0.62) {
+        const shiftX = Math.round(f.x * 3);
+        if (f.y >= -0.22) {
+          ctx.fillStyle = "#fde68a";
+          ctx.fillRect(p.x - 4 + shiftX, eyeY - 1, 8, 3);
+
+          const leftEyeX = p.x - 3 + shiftX;
+          const rightEyeX = p.x + 2 + shiftX;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(leftEyeX, eyeY - 1, 2, 2);
+          ctx.fillRect(rightEyeX, eyeY - 1, 2, 2);
+
+          const pupilShift = f.x > 0.25 ? 1 : 0;
+          ctx.fillStyle = "#07090f";
+          ctx.fillRect(leftEyeX + pupilShift, eyeY - 1, 1, 2);
+          ctx.fillRect(rightEyeX + pupilShift, eyeY - 1, 1, 2);
+        } else {
+          const sideSign = f.x >= 0 ? 1 : -1;
+          const peekX = p.x + sideSign * 4;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(peekX, eyeY - 1, 2, 2);
+          ctx.fillStyle = "#07090f";
+          ctx.fillRect(peekX + (sideSign > 0 ? 1 : 0), eyeY - 1, 1, 2);
+        }
+      } else {
+        ctx.fillStyle = trimCol;
+        ctx.fillRect(p.x - 1, headY - 11, 2, 5);
+      }
+
+      this.drawEquippedWeapon(ctx, p, f, bob, wepTpl);
+    }
+
+    /* ======================================================================
+       SMART HUD, OBJECTIVE TRACKER & NOTIFICATION BADGES
+       ====================================================================== */
     hasGearUpgradeInBag() {
       const myBaseClass = this.getBaseClassId();
       for (const item of this.save.inventory) {
@@ -7555,4 +7850,3 @@
     window.riftfall = new RiftfallGame();
   });
 })();
-    
