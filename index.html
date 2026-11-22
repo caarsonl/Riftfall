@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#07080d" />
   <title>Riftfall</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -37,7 +40,7 @@
             <span id="difficulty-badge" class="difficulty-badge hidden">Normal</span>
           </div>
           <div class="zone-meta">
-            <span id="room-indicator" class="room-indicator">Walk to stations or press 1-5</span>
+            <span id="room-indicator" class="room-indicator">Walk to stations or tap 1-5</span>
             <span id="mutator-badges" class="mutator-badges"></span>
           </div>
         </div>
@@ -97,26 +100,26 @@
 
       <div id="dungeon-actions" class="dungeon-actions hidden">
         <button id="btn-retreat" class="btn btn-danger btn-sm" title="Abort run and return to Sanctuary">
-          &#8617; Retreat to Sanctuary
+          &#8617; Retreat
         </button>
       </div>
 
       <!-- Right: Active Currencies & Audio/Settings -->
       <div class="hud-group hud-right">
         <div class="currency-strip">
-          <div class="currency-pill currency-gold" title="Gold Coins (Earned in combat, chests, bounties & gear sales)">
+          <div class="currency-pill currency-gold" title="Gold Coins">
             <span class="currency-dot gold-dot"></span>
             <div class="currency-vals">
               <span id="hud-gold" class="currency-amount">0</span>
             </div>
           </div>
-          <div class="currency-pill currency-shards" title="Rift Shards (Earned from bosses, elites, bounties & salvaging)">
+          <div class="currency-pill currency-shards" title="Rift Shards">
             <span class="currency-dot shard-dot"></span>
             <div class="currency-vals">
               <span id="hud-shards" class="currency-amount">0</span>
             </div>
           </div>
-          <div class="currency-pill currency-renown" title="Guild Renown (Earned from Boss clears & Bounties)">
+          <div class="currency-pill currency-renown" title="Guild Renown">
             <span class="currency-dot renown-dot"></span>
             <div class="currency-vals">
               <span id="hud-renown" class="currency-amount">0</span>
@@ -186,10 +189,19 @@
     </section>
 
     <!-- =========================================================
-         INTERACTIVE WORLD PROMPT
+         INTERACTIVE WORLD PROMPT (Tappable on Mobile & [F] on Desktop)
          ========================================================= -->
-    <div id="interact-prompt" class="interact-prompt hidden">
+    <button type="button" id="interact-prompt" class="interact-prompt hidden">
       <kbd>F</kbd> <span id="interact-prompt-text">Open Rift Gate</span>
+    </button>
+
+    <!-- =========================================================
+         MOBILE VIRTUAL ANALOG JOYSTICK (Left Thumb)
+         ========================================================= -->
+    <div id="touch-joystick-zone" class="touch-joystick-zone hidden" aria-label="Virtual Movement Joystick">
+      <div id="touch-joystick-base" class="touch-joystick-base">
+        <div id="touch-joystick-knob" class="touch-joystick-knob"></div>
+      </div>
     </div>
 
     <!-- =========================================================
@@ -337,7 +349,7 @@
         <header class="modal-header">
           <div>
             <h2 id="armory-modal-title">&#128737; Sanctuary Armory &amp; Gear</h2>
-            <p class="modal-subtitle">Hover items to compare stats &amp; Set Bonuses side-by-side. Double-click or hit Equip Best to gear up fast.</p>
+            <p class="modal-subtitle">Tap or hover items to compare stats &amp; Set Bonuses. Double-tap or hit Equip Best to gear up fast.</p>
           </div>
           <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
         </header>
@@ -389,7 +401,7 @@
                 <button class="filter-btn" data-filter="relic">Relics</button>
               </div>
               <div class="inv-meta-actions">
-                <span id="inv-count" class="inv-count">0 / 48</span>
+                <span id="inv-count" class="inv-count">0 / 60</span>
                 <select id="inv-sort" class="rpg-select" aria-label="Sort inventory">
                   <option value="power">Sort: Power</option>
                   <option value="rarity">Sort: Rarity</option>
@@ -411,7 +423,7 @@
 
             <div class="inv-footer">
               <div id="selected-item-bar" class="selected-item-bar">
-                <span class="muted-text">Click an item to inspect, equip, sell, or salvage.</span>
+                <span class="muted-text">Tap an item to inspect, equip, sell, or salvage.</span>
               </div>
               <div class="bulk-actions">
                 <button id="btn-equip-best" class="btn btn-primary btn-sm" title="Automatically equip the highest Power gear for every slot">
@@ -619,7 +631,15 @@
 
         <div class="modal-body settings-body">
           <div class="settings-section">
-            <h3 class="section-title">Audio &amp; Visual Feedback</h3>
+            <h3 class="section-title">Audio, Controls &amp; Visual Feedback</h3>
+            <div class="setting-row">
+              <label for="setting-touch-controls">Mobile Touch Joystick</label>
+              <select id="setting-touch-controls" class="rpg-select">
+                <option value="auto">Auto (Touch Devices)</option>
+                <option value="on">Always On</option>
+                <option value="off">Off (Keyboard Only)</option>
+              </select>
+            </div>
             <div class="setting-row">
               <label for="setting-volume">Synthesizer Volume</label>
               <input id="setting-volume" type="range" min="0" max="100" value="45" />
@@ -652,12 +672,12 @@
           <div class="settings-section">
             <h3 class="section-title">Controls Legend</h3>
             <div class="controls-legend">
-              <div><kbd>W A S D</kbd> / <kbd>Arrows</kbd> Move (Isometric 8-Way)</div>
-              <div><kbd>Spacebar</kbd> Dash &amp; Invulnerability Dodge</div>
+              <div><kbd>WASD</kbd> / <strong>Left Stick</strong> Move</div>
+              <div><kbd>SPACE</kbd> / <strong>Dash</strong> Dodge Roll</div>
               <div><kbd>Q</kbd> Cast Weapon Skill</div>
               <div><kbd>E</kbd> Cast Relic Skill</div>
               <div><kbd>R</kbd> Drink Survival Flask</div>
-              <div><kbd>F</kbd> Interact with Camp Station</div>
+              <div><kbd>F</kbd> / <strong>Tap Prompt</strong> Interact</div>
               <div><kbd>1 - 5</kbd> Open Sanctuary Panels</div>
               <div><kbd>M</kbd> Mute Audio</div>
             </div>

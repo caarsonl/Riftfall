@@ -1,7 +1,7 @@
 /* ==========================================================================
    RIFTFALL — CLASSIC RPG INTERFACE (style.css)
-   14 Realm Hazard Themes, 5 Difficulty Tiers, Set Bonus UI, Class Filters,
-   Bounty Progress Bars, Beveled Dark-Fantasy Frames & Responsive Layout.
+   Desktop + Full Mobile Touch Compatibility (Virtual Analog Joystick,
+   Ergonomic Thumb Skill Cluster, Safe-Area Insets & Vertical Mobile Tooltips).
    ========================================================================== */
 
 :root {
@@ -51,6 +51,7 @@
   margin: 0;
   padding: 0;
   border-radius: 0 !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -64,6 +65,9 @@ html, body {
   line-height: 1.4;
   letter-spacing: 0.015em;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -72,6 +76,11 @@ html, body {
 button, input, select, textarea {
   font-family: inherit;
   color: inherit;
+}
+
+textarea, input {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .hidden { display: none !important; }
@@ -112,8 +121,10 @@ kbd {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #06080f;
+  touch-action: none;
 }
 
 #game-canvas {
@@ -121,6 +132,7 @@ kbd {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .hazard-overlay {
@@ -163,22 +175,23 @@ kbd {
   border-top: 3px solid #ef4444;
   border-bottom: 3px solid #ef4444;
   box-shadow: 0 8px 0 #000;
+  max-width: 92vw;
 }
 
-.boss-banner-line { height: 2px; width: 320px; margin: 6px auto; background: #f59e0b; }
+.boss-banner-line { height: 2px; width: min(320px, 75vw); margin: 6px auto; background: #f59e0b; }
 .boss-banner-sub { font-size: 11px; letter-spacing: 0.22em; color: #fca5a5; font-weight: 700; text-shadow: 2px 2px 0 #000; }
 .boss-banner-title { font-family: var(--font-display); font-size: 1.85rem; font-weight: 900; letter-spacing: 0.08em; color: #ffd447; text-shadow: 3px 3px 0 #7f1d1d, 4px 4px 0 #000; }
 
 .toast-container {
   position: absolute;
-  top: 78px;
-  right: 16px;
+  top: calc(78px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 60;
   pointer-events: none;
-  max-width: 340px;
+  max-width: min(340px, 84vw);
 }
 
 .toast {
@@ -208,7 +221,7 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 14px;
+  padding: calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left));
   background: linear-gradient(180deg, rgba(6, 8, 15, 0.94) 0%, rgba(6, 8, 15, 0.52) 85%, transparent 100%);
   pointer-events: none;
 }
@@ -335,7 +348,7 @@ kbd {
   background: var(--bg-panel);
   border: 2px solid var(--border-light);
   box-shadow: var(--pixel-frame);
-  min-width: 82px;
+  min-width: 78px;
 }
 .currency-dot { width: 10px; height: 10px; flex-shrink: 0; border: 1px solid #000; }
 .gold-dot { background: #ffd447; }
@@ -346,7 +359,6 @@ kbd {
 .currency-gold .currency-amount { color: var(--gold); }
 .currency-shards .currency-amount { color: var(--shard); }
 .currency-renown .currency-amount { color: var(--renown); }
-.currency-rate { font-size: 10px; color: #4ade80; font-family: var(--font-mono); }
 
 .utility-btns { display: flex; gap: 6px; }
 .icon-btn {
@@ -369,8 +381,8 @@ kbd {
    ========================================================================== */
 .left-hud-stack {
   position: absolute;
-  top: 78px;
-  left: 14px;
+  top: calc(78px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
   z-index: 14;
   display: flex;
   flex-direction: column;
@@ -443,8 +455,8 @@ kbd {
    ========================================================================== */
 .combo-hud {
   position: absolute;
-  top: 132px;
-  right: 18px;
+  top: calc(132px + env(safe-area-inset-top));
+  right: calc(18px + env(safe-area-inset-right));
   z-index: 14;
   text-align: right;
   pointer-events: none;
@@ -467,7 +479,7 @@ kbd {
 
 .boss-hud {
   position: absolute;
-  top: 76px;
+  top: calc(76px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   width: min(520px, 76vw);
@@ -534,28 +546,85 @@ kbd {
 }
 
 /* ==========================================================================
-   INTERACTIVE PROMPT & BOTTOM HUD
+   INTERACTIVE PROMPT (TAPPABLE ON MOBILE) & VIRTUAL JOYSTICK
    ========================================================================== */
 .interact-prompt {
   position: absolute;
-  bottom: 134px;
+  bottom: calc(136px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 16;
+  z-index: 18;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 9px 16px;
   background: #121729;
   border: 2px solid var(--border-gold);
   box-shadow: var(--pixel-frame);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 900;
   text-transform: uppercase;
   color: #ffd447;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.interact-prompt:active {
+  background: #272216;
+  transform: translateX(-50%) scale(0.97);
+}
+
+.touch-joystick-zone {
+  position: absolute;
+  left: calc(12px + env(safe-area-inset-left));
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  width: 152px;
+  height: 152px;
+  z-index: 17;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.touch-joystick-base {
+  position: relative;
+  width: 114px;
+  height: 114px;
+  border: 2px solid rgba(143, 160, 189, 0.65);
+  background: rgba(14, 18, 32, 0.56);
+  box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.2), 3px 3px 0 rgba(0, 0, 0, 0.75);
+  border-radius: 50% !important;
+  pointer-events: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.touch-joystick-zone.active .touch-joystick-base {
+  border-color: var(--gold);
+  background: rgba(25, 32, 54, 0.78);
+}
+
+.touch-joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  margin-top: -23px;
+  background: radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7);
+  border: 2px solid #f8fafc;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.85);
+  border-radius: 50% !important;
   pointer-events: none;
 }
 
+.touch-joystick-zone.active .touch-joystick-knob {
+  background: radial-gradient(circle at 35% 35%, #fef08a, #d97706);
+}
+
+/* ==========================================================================
+   BOTTOM HUD: VITALS, SKILL HOTBAR, MINIMAP
+   ========================================================================== */
 .bottom-hud {
   position: absolute;
   bottom: 0;
@@ -566,7 +635,7 @@ kbd {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 12px calc(14px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
   background: linear-gradient(0deg, rgba(6, 8, 15, 0.92) 0%, rgba(6, 8, 15, 0.45) 82%, transparent 100%);
   pointer-events: none;
 }
@@ -599,6 +668,7 @@ kbd {
   box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.16), 3px 3px 0 #000;
   cursor: pointer;
   overflow: hidden;
+  touch-action: manipulation;
 }
 .flask-btn:hover { background: #143d2a; border-color: #bbf7d0; }
 .flask-icon { font-size: 17px; color: #4ade80; }
@@ -630,6 +700,7 @@ kbd {
   gap: 3px;
   overflow: hidden;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .skill-slot.skill-passive { cursor: default; border-color: #475569; opacity: 0.9; }
 .skill-slot.skill-active:hover, .skill-slot.skill-dash:hover { border-color: var(--gold); background: #232f4f; }
@@ -667,7 +738,7 @@ kbd {
 .controls-hint { display: flex; gap: 8px; font-size: 10px; color: var(--text-muted); }
 
 /* ==========================================================================
-   BUTTONS & MODALS
+   BUTTONS & MODALS (Scrollable on Touchscreens)
    ========================================================================== */
 .btn {
   display: inline-flex;
@@ -681,6 +752,7 @@ kbd {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   cursor: pointer;
+  touch-action: manipulation;
   box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.55), 3px 3px 0 #000;
 }
 .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
@@ -693,7 +765,7 @@ kbd {
 .btn-accent:hover:not(:disabled) { background: #9333ea; }
 .btn-danger { background: #9f1239; color: #ffe4e6; border-color: #fda4af; }
 .btn-danger:hover:not(:disabled) { background: #be123c; }
-.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-sm { padding: 6px 10px; font-size: 11px; }
 .btn-lg { padding: 11px 18px; font-size: 13px; }
 .btn-block { width: 100%; }
 
@@ -703,11 +775,11 @@ kbd {
   position: absolute;
   inset: 0;
   z-index: 40;
-  background: rgba(3, 5, 10, 0.82);
+  background: rgba(3, 5, 10, 0.84);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px;
+  padding: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
 }
 
 .rpg-modal {
@@ -717,26 +789,38 @@ kbd {
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow: hidden;
 }
-.modal-wide { width: min(1120px, 95vw); }
-.modal-medium { width: min(680px, 94vw); }
+.modal-wide { width: min(1120px, 96vw); }
+.modal-medium { width: min(680px, 95vw); }
 
-.modal-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 20px; border-bottom: 2px solid var(--border-subtle); background: #171e33; }
-.modal-header h2 { font-family: var(--font-display); font-size: 1.25rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #ffd447; text-shadow: 2px 2px 0 #000; }
+.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 18px; border-bottom: 2px solid var(--border-subtle); background: #171e33; }
+.modal-header h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #ffd447; text-shadow: 2px 2px 0 #000; }
 .modal-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 
-.modal-close { width: 30px; height: 30px; border: 2px solid #fca5a5; background: #7f1d1d; box-shadow: 2px 2px 0 #000; color: #fff; font-size: 18px; font-weight: 900; line-height: 1; cursor: pointer; }
+.modal-close { width: 34px; height: 34px; flex-shrink: 0; border: 2px solid #fca5a5; background: #7f1d1d; box-shadow: 2px 2px 0 #000; color: #fff; font-size: 20px; font-weight: 900; line-height: 1; cursor: pointer; }
 .modal-close:hover { background: #b91c1c; }
 
-.modal-body { padding: 16px 20px; overflow-y: auto; }
+.modal-body,
+.dungeon-grid,
+.inventory-grid,
+.craft-list,
+.mutator-list,
+.summary-loot-grid {
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-body { padding: 14px 18px; }
 .section-title { font-family: var(--font-display); font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: #ffd447; text-shadow: 1px 1px 0 #000; margin-bottom: 10px; }
 
 /* ==========================================================================
    1. DUNGEON GATE MODAL (14 DUNGEONS & 5 DIFFICULTIES)
    ========================================================================== */
 .dungeon-layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
-.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; max-height: 68vh; overflow-y: auto; padding-right: 6px; }
+.dungeon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; max-height: 68vh; padding-right: 6px; }
 
 .dungeon-card {
   background: var(--bg-surface);
@@ -774,7 +858,6 @@ kbd {
 .config-label-row .config-label { margin-bottom: 0; }
 .reward-mult-pill { font-size: 11px; font-weight: 900; padding: 2px 8px; background: #2e2009; color: var(--gold); border: 1px solid var(--gold); }
 
-/* 5-Tier Difficulty Selector Grid */
 .difficulty-selector {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -802,7 +885,7 @@ kbd {
 
 .rec-power-note { margin-top: 7px; font-size: 12px; color: var(--text-muted); }
 
-.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 155px; overflow-y: auto; }
+.mutator-list { display: flex; flex-direction: column; gap: 6px; max-height: 155px; }
 .mutator-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px; border: 2px solid var(--border-subtle); background: var(--bg-surface); cursor: pointer; }
 .mutator-row.active { border-color: var(--gold); background: #2b210e; }
 .mutator-info { display: flex; flex-direction: column; }
@@ -892,12 +975,12 @@ kbd {
 
 .armory-inventory { display: flex; flex-direction: column; background: #0c101d; border: 2px solid var(--border-subtle); box-shadow: var(--pixel-bevel); padding: 12px; min-height: 495px; }
 .inv-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-.filter-group { display: flex; gap: 4px; }
+.filter-group { display: flex; gap: 4px; flex-wrap: wrap; }
 .filter-btn { padding: 5px 9px; border: 2px solid var(--border-subtle); background: var(--bg-surface); font-size: 11px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
 .filter-btn.active { background: #102a45; border-color: var(--renown); color: #fff; }
 .inv-meta-actions { display: flex; align-items: center; gap: 8px; }
 .inv-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
-.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; flex: 1; align-content: start; overflow-y: auto; max-height: 350px; padding: 3px; }
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; flex: 1; align-content: start; max-height: 350px; padding: 3px; }
 .inv-footer { margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px; }
 .selected-item-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 34px; }
 .bulk-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
@@ -924,7 +1007,7 @@ kbd {
 .craft-section { background: #0c101d; border: 2px solid var(--border-subtle); padding: 12px; flex: 1; display: flex; flex-direction: column; }
 .craft-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .craft-header .section-title { margin-bottom: 0; }
-.craft-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
+.craft-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; padding-right: 4px; }
 .craft-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; background: var(--bg-surface); border: 2px solid var(--border-subtle); }
 .craft-row-info h5 { font-size: 12px; text-transform: uppercase; color: #f8fafc; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .craft-row-info p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
@@ -961,7 +1044,7 @@ kbd {
 .class-stat-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .class-stat-chip { font-size: 10px; padding: 2px 5px; background: #0b0e18; border: 1px solid #334155; color: #86efac; }
 .evolution-section { background: #0c101d; border: 2px solid var(--border-subtle); padding: 14px; }
-.evolution-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.evolution-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
 .evolution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .evo-card { background: var(--bg-surface); border: 2px solid var(--border-subtle); box-shadow: var(--pixel-frame); padding: 13px; display: flex; flex-direction: column; justify-content: space-between; gap: 9px; }
 .evo-card.evolved { border-color: #c084fc; background: #221538; }
@@ -992,12 +1075,12 @@ kbd {
 .summary-stat-card { background: var(--bg-surface); border: 2px solid var(--border-subtle); box-shadow: 3px 3px 0 #000; padding: 10px; text-align: center; }
 .summary-stat-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); }
 .summary-stat-val { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900; margin-top: 3px; }
-.summary-loot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; max-height: 185px; overflow-y: auto; }
+.summary-loot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; max-height: 185px; }
 .summary-actions { display: flex; justify-content: center; gap: 12px; }
 
 .settings-body { display: flex; flex-direction: column; gap: 16px; }
 .settings-section { background: #0c101d; border: 2px solid var(--border-subtle); padding: 13px; display: flex; flex-direction: column; gap: 10px; }
-.setting-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; gap: 10px; }
 .save-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .save-textarea { width: 100%; background: #06080f; border: 2px solid var(--border-subtle); padding: 8px; font-family: var(--font-mono); font-size: 11px; color: #cbd5e1; resize: vertical; }
 .controls-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: var(--text-muted); }
@@ -1027,7 +1110,7 @@ kbd {
 }
 
 .class-filter-btn {
-  padding: 4px 8px;
+  padding: 5px 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   font-size: 10px;
@@ -1065,7 +1148,7 @@ kbd {
 .tooltip-set-line.set-active { color: #4ade80; font-weight: 700; }
 
 /* ==========================================================================
-   RESPONSIVE BREAKPOINTS
+   MOBILE & TOUCH RESPONSIVE LAYOUT (Landscape & Portrait)
    ========================================================================== */
 @media (max-width: 1024px) {
   .dungeon-layout, .armory-layout, .forge-layout, .guild-columns { grid-template-columns: 1fr; }
@@ -1074,11 +1157,122 @@ kbd {
   .tab-label, .camp-tabs kbd { display: none; }
 }
 
-@media (max-width: 768px) {
-  .hud-bar { flex-wrap: wrap; padding: 8px 10px; }
-  .player-badge, .minimap-panel { display: none; }
-  .vitals-panel { width: 210px; }
-  .skill-slot { width: 62px; height: 62px; }
+@media (max-width: 960px), (pointer: coarse) {
+  .hud-bar {
+    flex-wrap: wrap;
+    padding: calc(6px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left));
+    gap: 6px;
+  }
+  .hud-group { gap: 6px; }
+  .zone-card { min-width: 145px; padding: 4px 8px; }
+  .location-badge { font-size: 12px; }
+  .zone-meta { font-size: 10px; }
+  .player-badge { padding: 4px 7px; gap: 6px; }
+  .level-crest { width: 30px; height: 30px; }
+  .xp-wrap { width: 112px; }
+  .xp-subrow { display: none; }
+
+  .camp-tabs { padding: 3px; gap: 4px; }
+  .hud-tab { padding: 7px 10px; font-size: 14px; }
+  .tab-label, .camp-tabs kbd { display: none; }
+
+  .currency-pill { min-width: 58px; padding: 4px 7px; gap: 5px; }
+  .currency-amount { font-size: 11px; }
+  .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+
+  .left-hud-stack {
+    top: calc(58px + env(safe-area-inset-top));
+    left: calc(8px + env(safe-area-inset-left));
+    width: min(230px, 52vw);
+    gap: 5px;
+  }
+  .objective-pill { padding: 5px 8px; font-size: 11px; }
+  .survival-hud { padding: 6px 8px; }
+  .hazard-tip { display: none; }
+
+  .boss-hud {
+    top: calc(56px + env(safe-area-inset-top));
+    width: min(380px, 66vw);
+    padding: 6px 10px;
+  }
+  .boss-name { font-size: 13px; }
+  .boss-subtitle { display: none; }
+
+  /* Compact Top-Right Minimap on Mobile so it stays useful without blocking thumbs */
+  .minimap-panel {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    padding: 3px;
+    z-index: 14;
+  }
+  #minimap-canvas { width: 108px; height: 70px; }
+  .controls-hint { display: none; }
+
+  .combo-hud {
+    top: calc(142px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+    padding: 5px 9px;
+  }
+  .combo-num { font-size: 1.35rem; }
+
+  .bottom-hud {
+    padding: 8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    align-items: flex-end;
+  }
+
+  .vitals-panel {
+    width: 188px;
+    padding: 7px 9px;
+    gap: 6px;
+  }
+  .flask-btn { padding: 6px 8px; }
+  .flask-btn kbd { display: none; }
+
+  /* Right-Thumb Skill Pad */
+  .skill-hotbar {
+    padding: 6px;
+    gap: 6px;
+  }
+  .skill-slot {
+    width: 62px;
+    height: 62px;
+  }
+  .skill-icon { font-size: 20px; margin-top: 6px; }
+  .skill-name { font-size: 9px; max-width: 56px; }
+
+  .interact-prompt {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  /* Stack Side-by-Side Tooltips Vertically on Narrow Screens */
+  .item-tooltip {
+    flex-direction: column;
+    max-width: calc(100vw - 16px);
+    gap: 6px;
+  }
+  .tooltip-card {
+    width: min(290px, calc(100vw - 16px));
+    padding: 9px 10px;
+  }
+}
+
+@media (max-width: 640px) {
   .dungeon-grid { grid-template-columns: 1fr; }
   .difficulty-selector { grid-template-columns: repeat(3, 1fr); }
+  .summary-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .controls-legend { grid-template-columns: 1fr; }
+  .vitals-panel { width: 158px; }
+  .skill-slot { width: 54px; height: 54px; }
+  .skill-key { display: none; }
+  .touch-joystick-zone {
+    left: calc(6px + env(safe-area-inset-left));
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: 136px;
+    height: 136px;
+  }
+  .touch-joystick-base { width: 102px; height: 102px; }
+  .touch-joystick-knob { width: 42px; height: 42px; margin-left: -21px; margin-top: -21px; }
 }

@@ -603,7 +603,14 @@
       this.forgeSlot = "weapon";
 
       this.keys = new Set();
-
+      this.joystick = {
+        active: false,
+        touchId: null,
+        originX: 0,
+        originY: 0,
+        dx: 0,
+        dy: 0
+      };
       this.world = null;
       this.cam = { x: 8.5, y: 8.5, shakeTime: 0, shakeMag: 0 };
       this.elapsed = 0;
@@ -661,6 +668,7 @@
       this.nearbyStation = null;
 
       this.bindDOM();
+      this.updateTouchControlsVisibility();
       this.enterSanctuary();
       this.resizeCanvas();
       this.syncAllHUD();
@@ -708,7 +716,8 @@
           volume: 45,
           muted: false,
           showDmgNums: true,
-          screenShake: true
+          screenShake: true,
+          touchControls: "auto"
         },
         lastTimestamp: Date.now()
       };
@@ -1784,6 +1793,22 @@
       this.updateParticlesAndText(dt);
     }
 
+    isTouchDevice() {
+      return (
+        "ontouchstart" in window ||
+        navigator.maxTouchPoints > 0 ||
+        window.matchMedia("(pointer: coarse)").matches
+      );
+    }
+
+    updateTouchControlsVisibility() {
+      const zone = document.getElementById("touch-joystick-zone");
+      if (!zone) return;
+      const mode = this.save?.settings?.touchControls || "auto";
+      const show = mode === "on" || (mode === "auto" && this.isTouchDevice());
+      zone.classList.toggle("hidden", !show);
+    }
+
     updatePlayerMovement(dt, stats) {
       let screenX = 0;
       let screenY = 0;
@@ -1792,14 +1817,33 @@
       if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) screenX -= 1;
       if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) screenX += 1;
 
+      // Blend Virtual Analog Joystick Input
+      if (this.joystick && this.joystick.active) {
+        screenX += this.joystick.dx;
+        screenY += this.joystick.dy;
+      }
+
+      // Clamp diagonal / combined magnitude to 1.0 while preserving analog tilt speed
+      const mag = Math.hypot(screenX, screenY);
+      if (mag > 1) {
+        screenX /= mag;
+        screenY /= mag;
+      }
+
       let wx = screenX + screenY;
       let wy = screenY - screenX;
       const len = Math.hypot(wx, wy);
-      if (len > 0) {
-        wx /= len;
-        wy /= len;
-        this.player.facing.x = wx;
-        this.player.facing.y = wy;
+      if (len > 0.001) {
+        const moveRatio = Math.min(1, mag);
+        const nx = wx / len;
+        const ny = wy / len;
+        this.player.facing.x = nx;
+        this.player.facing.y = ny;
+        wx = nx * moveRatio;
+        wy = ny * moveRatio;
+      } else {
+        wx = 0;
+        wy = 0;
       }
 
       if (this.player.dashTimer > 0) {
@@ -5924,6 +5968,10 @@
         container.onmouseenter = (ev) => this.showTooltip(item, ev, false);
         container.onmousemove = (ev) => this.moveTooltip(ev);
         container.onmouseleave = () => this.hideTooltip();
+        container.onclick = (ev) => {
+          ev.stopPropagation();
+          this.showTooltip(item, ev, false);
+        };
       }
 
       const wep = GearSystem.getTemplate(this.save.equipped.weapon.templateId);
@@ -6071,7 +6119,13 @@
       card.onmouseenter = (ev) => this.showTooltip(item, ev, compareEquipped);
       card.onmousemove = (ev) => this.moveTooltip(ev);
       card.onmouseleave = () => this.hideTooltip();
+      card.addEventListener("click", (ev) => {
+        if (this.isTouchDevice()) {
+          this.showTooltip(item, ev, compareEquipped);
+        }
+      });
       return card;
+
     }
 
     equipBestGear() {
@@ -6529,6 +6583,8 @@
       document.getElementById("setting-mute").checked = this.save.settings.muted;
       document.getElementById("setting-dmg-nums").checked = this.save.settings.showDmgNums;
       document.getElementById("setting-shake").checked = this.save.settings.screenShake;
+      const tcEl = document.getElementById("setting-touch-controls");
+      if (tcEl) tcEl.value = this.save.settings.touchControls || "auto";
     }
 
     /* --- FLOATING GEAR COMPARISON TOOLTIP (WITH 2PC / 3PC SET BONUSES) --- */
@@ -6681,7 +6737,155 @@
           if (e.code === "Digit5") this.openModal("class");
         }
       });
+      // Unlock Web Audio on first mobile touch gesture
+      const unlockAudio = () => {
+        this.sfx.init();
+        window.removeEventListener("touchstart", unlockAudio);
+        window.removeEventListener("pointerdown", unlockAudio);
+      };
+      window.addEventListener("touchstart", unlockAudio, { passive: true });
+      window.addEventListener("pointerdown", unlockAudio, { passive: true });
 
+      // Tappable Interact Prompt for Mobile & Mouse
+      document.getElementById("interact-prompt")?.addEventListener("click", () => {
+        if (!this.activeModal && this.mode === "hub" && this.nearbyStation) {
+          this.openModal(this.nearbyStation.id);
+        }
+      });
+
+      // Zero-delay touchstart + click binding for combat skills
+      // Zero-delay touchstart + click binding for combat skills
+      const bindFastAction = (id, fn) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        let lastTouchTime = 0;
+        el.addEventListener(
+          "touchstart",
+          (e) => {
+            e.preventDefault();
+            lastTouchTime = performance.now();
+            this.sfx.init();
+            fn();
+          },
+          { passive: false }
+        );
+        el.addEventListener("click", () => {
+          if (performance.now() - lastTouchTime < 500) return;
+          fn();
+        });
+      };
+      // Dismiss mobile gear tooltip when tapping empty space inside Armory
+      document.getElementById("modal-armory")?.addEventListener("click", (e) => {
+        if (this.isTouchDevice() && !e.target.closest(".gear-card")) {
+          this.hideTooltip();
+        }
+      });
+
+      bindFastAction("skill-q", () => this.castSkillQ());
+      bindFastAction("skill-e", () => this.castSkillE());
+      bindFastAction("skill-dash", () => this.triggerDash());
+      bindFastAction("btn-flask", () => this.useFlask());
+
+      // Multi-Touch Virtual Analog Joystick
+      const joyZone = document.getElementById("touch-joystick-zone");
+      const joyBase = document.getElementById("touch-joystick-base");
+      const joyKnob = document.getElementById("touch-joystick-knob");
+      const maxRadius = 42;
+
+      const resetJoystick = () => {
+        this.joystick.active = false;
+        this.joystick.touchId = null;
+        this.joystick.dx = 0;
+        this.joystick.dy = 0;
+        if (joyZone) joyZone.classList.remove("active");
+        if (joyBase) joyBase.style.transform = "";
+        if (joyKnob) joyKnob.style.transform = "translate3d(0px, 0px, 0px)";
+      };
+
+      if (joyZone && joyBase && joyKnob) {
+        joyZone.addEventListener(
+          "touchstart",
+          (e) => {
+            if (this.activeModal || this.joystick.active) return;
+            const touch = e.changedTouches[0];
+            if (!touch) return;
+            e.preventDefault();
+            this.sfx.init();
+
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width * 0.5;
+            const centerY = rect.top + rect.height * 0.5;
+            const offsetX = clamp(touch.clientX - centerX, -22, 22);
+            const offsetY = clamp(touch.clientY - centerY, -22, 22);
+
+            this.joystick.active = true;
+            this.joystick.touchId = touch.identifier;
+            this.joystick.originX = centerX + offsetX;
+            this.joystick.originY = centerY + offsetY;
+            this.joystick.dx = 0;
+            this.joystick.dy = 0;
+
+            joyZone.classList.add("active");
+            joyBase.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0px)`;
+            joyKnob.style.transform = "translate3d(0px, 0px, 0px)";
+          },
+          { passive: false }
+        );
+
+        joyZone.addEventListener(
+          "touchmove",
+          (e) => {
+            if (!this.joystick.active) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const t = e.changedTouches[i];
+              if (t.identifier !== this.joystick.touchId) continue;
+              e.preventDefault();
+
+              const rawX = t.clientX - this.joystick.originX;
+              const rawY = t.clientY - this.joystick.originY;
+              const distPx = Math.hypot(rawX, rawY);
+              const clampedDist = Math.min(maxRadius, distPx);
+              const ang = Math.atan2(rawY, rawX);
+              const kx = distPx > 0 ? Math.cos(ang) * clampedDist : 0;
+              const ky = distPx > 0 ? Math.sin(ang) * clampedDist : 0;
+
+              const norm = clampedDist / maxRadius;
+              if (norm < 0.14) {
+                this.joystick.dx = 0;
+                this.joystick.dy = 0;
+              } else {
+                const scaled = (norm - 0.14) / 0.86;
+                this.joystick.dx = Math.cos(ang) * scaled;
+                this.joystick.dy = Math.sin(ang) * scaled;
+              }
+
+              joyKnob.style.transform = `translate3d(${Math.round(kx)}px, ${Math.round(ky)}px, 0px)`;
+              break;
+            }
+          },
+          { passive: false }
+        );
+
+        const endJoyTouch = (e) => {
+          if (!this.joystick.active) return;
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === this.joystick.touchId) {
+              resetJoystick();
+              break;
+            }
+          }
+        };
+
+        joyZone.addEventListener("touchend", endJoyTouch, { passive: true });
+        joyZone.addEventListener("touchcancel", endJoyTouch, { passive: true });
+        window.addEventListener("blur", resetJoystick);
+      }
+
+      document.getElementById("setting-touch-controls")?.addEventListener("change", (e) => {
+        this.save.settings.touchControls = e.target.value;
+        this.updateTouchControlsVisibility();
+        this.saveGame(false);
+      });
       window.addEventListener("keyup", (e) => this.keys.delete(e.code));
       window.addEventListener("blur", () => this.keys.clear());
 
@@ -6696,11 +6900,6 @@
         this.enterSanctuary();
         this.toast("Retreated safely to Sanctuary.", "info");
       });
-
-      document.getElementById("skill-q")?.addEventListener("click", () => this.castSkillQ());
-      document.getElementById("skill-e")?.addEventListener("click", () => this.castSkillE());
-      document.getElementById("skill-dash")?.addEventListener("click", () => this.triggerDash());
-      document.getElementById("btn-flask")?.addEventListener("click", () => this.useFlask());
 
       document.getElementById("btn-mute")?.addEventListener("click", () => this.toggleMute());
       document.getElementById("btn-settings")?.addEventListener("click", () => this.openModal("settings"));
