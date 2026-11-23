@@ -4,7 +4,6 @@
    14 2pc/3pc Set Bonuses, Detailed 2.5D Dungeon Graphics, Custom Weapons,
    4 Base + 8 Advanced Classes, Slower XP Curve, and Crash-Proof Loop.
    ========================================================================== */
-
 (() => {
   "use strict";
 
@@ -282,7 +281,7 @@
     },
 
     getDungeonTierIndex(dungeonId) {
-      const realDungeons = DATA.DUNGEONS.filter((d) => !d.isEndless);
+      const realDungeons = DATA.DUNGEONS.filter((d) => !d.isSpecial && !d.isEndless);
       const idx = realDungeons.findIndex((d) => d.id === dungeonId);
       return idx >= 0 ? idx + 1 : 1;
     },
@@ -297,8 +296,8 @@
         const def = pool.splice(idx, 1)[0];
         let val = randRange(def.min, def.max);
         if (def.scalesWithTier) {
-          val *= 1 + (tierIndex - 1) * 0.48;
-          val *= rar.statMult * 0.82;
+          val *= 1 + (tierIndex - 1) * 0.56;
+          val *= rar.statMult * 0.85;
           val = Math.round(val);
         } else {
           val = Number((val * (0.85 + rar.order * 0.12)).toFixed(3));
@@ -747,6 +746,7 @@
       this.mode = "hub";
       this.activeModal = null;
       this.selectedInvUid = null;
+      this.dungeonCategory = "all";
       this.invFilter = "all";
       this.invClassFilter = "all";
       this.craftClassFilter = "all";
@@ -1159,13 +1159,25 @@
         if (m.atkSpeedMult) s.atkSpeedMult += m.atkSpeedMult;
       }
 
-      // Apply 3-piece stat passives
-      if (setInfo.active3pc.has("forgelord_crit")) s.critMult += 0.30;
-      if (setInfo.active3pc.has("ashwalker_frenzy")) s.critMult += 0.35;
+      // Apply 3-piece stat passives (all 20 sets)
+      if (setInfo.active3pc.has("forgelord_crit")) {
+        s.critMult += 0.30;
+      }
+      if (
+        setInfo.active3pc.has("ashwalker_frenzy") ||
+        setInfo.active3pc.has("dragonscale_fury") ||
+        setInfo.active3pc.has("godslayer_wrath") ||
+        setInfo.active3pc.has("oblivion_dominion")
+      ) {
+        s.critMult += 0.35;
+      }
       if (
         setInfo.active3pc.has("stormcaller_arc") ||
         setInfo.active3pc.has("prism_refract") ||
-        setInfo.active3pc.has("primordial_apex")
+        setInfo.active3pc.has("primordial_apex") ||
+        setInfo.active3pc.has("chaos_overload") ||
+        setInfo.active3pc.has("godslayer_wrath") ||
+        setInfo.active3pc.has("oblivion_dominion")
       ) {
         s.chainLightning += 1;
       }
@@ -1204,17 +1216,25 @@
             s.speed *= 1 - h.dilationSpeedPenalty;
             s.dmgOutMult *= 1 + h.dilationDmgBonus;
           }
+        } else if (h.type === "entropy") {
+          if (this.run.hazardState.phase === "surge") {
+            s.crit += h.surgeCritBonus;
+            s.speed *= 1 + h.surgeSpeedBonus;
+          } else {
+            s.speed *= 1 - h.collapseSpeedPenalty;
+            s.dmgOutMult *= 1 + h.collapseDmgBonus;
+          }
         } else if (h.type === "frost") {
           const chillRatio = clamp(this.run.hazardState.value / 100, 0, 1);
           s.speed *= 1 - chillRatio * 0.35;
         }
       }
 
-      s.crit = clamp(s.crit, 0.05, 0.92);
-      s.cdr = clamp(s.cdr, 0, 0.60);
+      s.crit = clamp(s.crit, 0.05, 0.94);
+      s.cdr = clamp(s.cdr, 0, 0.62);
       s.hazardResist = clamp(s.hazardResist, 0, 0.80);
       s.lifesteal = clamp(s.lifesteal, 0, 0.45);
-      s.speed = clamp(s.speed, 2.4, 11.5);
+      s.speed = clamp(s.speed, 2.4, 12.0);
       return s;
     }
 
@@ -1358,7 +1378,7 @@
     }
 
     getRealDungeons() {
-      return DATA.DUNGEONS.filter((d) => !d.isEndless);
+      return DATA.DUNGEONS.filter((d) => !d.isSpecial && !d.isEndless);
     }
 
     startDungeon(dungeonId, diffId, mutatorIds) {
@@ -1381,6 +1401,7 @@
       }
 
       const isEndless = !!dungeon.isEndless;
+      const specialMode = dungeon.specialMode || null;
       const initialRealm = isEndless ? pick(this.getRealDungeons()) : dungeon;
       const hType = initialRealm.hazard.type;
 
@@ -1388,6 +1409,7 @@
         dungeon,
         activeRealm: initialRealm,
         isEndless,
+        specialMode,
         diff,
         mutators: safeMutators,
         rewardMult,
@@ -1408,7 +1430,7 @@
         finished: false,
         hazardState: {
           value: hType === "oxygen" ? 100 : 0,
-          phase: hType === "chrono" ? "overdrive" : "low",
+          phase: hType === "chrono" ? "overdrive" : hType === "entropy" ? "surge" : "low",
           phaseTimer: initialRealm.hazard.cycleSeconds || 14,
           poolSpawnTimer: 2.5,
           orbSpawnTimer: 3.5,
@@ -1662,9 +1684,21 @@
         this.applyRealmHazardHUD(nextRealm);
       }
 
+      const specialMode = this.run.specialMode;
+      if (specialMode === "boss_rush") {
+        const pantheonBosses = ["valkyr_frost_warden", "malakor_sovereign", "raijin_tempest", "solarius_architect", "kronos_horologist", "omega_rift_origin"];
+        this.run.activeRealm = { ...this.run.dungeon, bossId: pantheonBosses[roomIndex % pantheonBosses.length] };
+      }
       const realm = this.getCurrentRealm();
-      const isBossRoom = isEndless ? (roomIndex + 1) % 5 === 0 : roomIndex === totalRooms - 1;
-      const { size, grid, layoutName, spawn, portalPos } = this.buildRoomLayout(isBossRoom);
+      const isBossRoom =
+        specialMode === "boss_rush"
+          ? true
+          : specialMode === "horde"
+          ? false
+          : isEndless
+          ? (roomIndex + 1) % 5 === 0
+          : roomIndex === totalRooms - 1;
+      const { size, grid, layoutName, spawn, portalPos } = this.buildRoomLayout(isBossRoom || specialMode === "horde");
 
       this.player.x = spawn.x;
       this.player.y = spawn.y;
@@ -1701,14 +1735,14 @@
       const vents = spawnZones(hType === "oxygen", 4, 5, 2.2);
       const braziers = spawnZones(hType === "frost", 4, 5, 2.3);
       const conduits = spawnZones(hType === "storm", 4, 5, 2.2);
-      const umbralWards = spawnZones(hType === "solar", 3, 4, 2.35);
-      const bloodFonts = spawnZones(hType === "blood", 3, 4, 2.2);
+      const umbralWards = spawnZones(hType === "solar" || hType === "divine", 3, 4, 2.35);
+      const bloodFonts = spawnZones(hType === "blood" || hType === "necrotic", 3, 4, 2.2);
       const windVents = spawnZones(hType === "ash", 4, 5, 2.2);
-      const airDomes = spawnZones(hType === "pressure", 4, 5, 2.3);
-      const realityAnchors = spawnZones(hType === "voidcore", 3, 4, 2.4);
+      const airDomes = spawnZones(hType === "pressure" || hType === "dragon", 4, 5, 2.3);
+      const realityAnchors = spawnZones(hType === "voidcore" || hType === "oblivion", 3, 4, 2.4);
 
       const lightOrbs = [];
-      if (hType === "shadow") {
+      if (hType === "shadow" || hType === "madness") {
         for (let i = 0; i < 3; i++) {
           const pos = pickReachable(3.2, size - 3.5, lightOrbs);
           lightOrbs.push({ x: pos.x, y: pos.y, life: 18 });
@@ -1742,7 +1776,22 @@
       }
 
       let specialEvent = null;
-      if (!isBossRoom && roomIndex >= 1) {
+      if (specialMode === "horde") {
+        specialEvent = { type: "horde_siege", timer: 90.0, spawnTick: 0.5, bossSpawned: false };
+      } else if (specialMode === "cursed_vault" && !isBossRoom) {
+        const vaultEvents = ["goblin", "cursed_shrine", "champion_duel"];
+        const chosenEv = vaultEvents[roomIndex % vaultEvents.length];
+        if (chosenEv === "goblin") {
+          specialEvent = { type: "goblin", timer: 16.0 };
+        } else if (chosenEv === "cursed_shrine") {
+          const cx = Math.floor(size / 2) + 0.5;
+          const shrineSpot =
+            reachable.find((t) => dist(t.x, t.y, cx, cx) < 2.2) || pickReachable(3.5, size - 4, allProps);
+          specialEvent = { type: "cursed_shrine", x: shrineSpot.x, y: shrineSpot.y, activated: false, timer: 22.0, spawnTick: 0 };
+        } else {
+          specialEvent = { type: "champion_duel" };
+        }
+      } else if (!isBossRoom && roomIndex >= 1) {
         const roll = Math.random();
         if (roll < 0.22) {
           specialEvent = { type: "goblin", timer: 16.0 };
@@ -2308,8 +2357,8 @@
       if (!sets) return 1.0;
       let mult = 1.0;
       if (sets.has("chrono_ascend")) mult *= 1.28;
-      if (sets.has("horologium_surge")) mult *= 1.25;
-      if (sets.has("primordial_apex")) mult *= 1.30;
+      if (sets.has("horologium_surge") || sets.has("eldritch_ascend")) mult *= 1.25;
+      if (sets.has("primordial_apex") || sets.has("godslayer_wrath") || sets.has("oblivion_dominion")) mult *= 1.30;
       return mult;
     }
 
@@ -2325,7 +2374,7 @@
           }
         }
       }
-      if (sets.has("horologium_surge")) {
+      if (sets.has("horologium_surge") || sets.has("eldritch_ascend")) {
         this.spawnSkillAnim("chrono_clock", this.player.x, this.player.y, 0, 4.0, "#facc15", 0.48);
         for (const e of [...this.world.enemies]) {
           if (dist(this.player.x, this.player.y, e.x, e.y) <= 4.0 + e.radius) {
@@ -2357,17 +2406,21 @@
         hType === "blood" ||
         hType === "ash" ||
         hType === "pressure" ||
-        hType === "prism"
+        hType === "prism" ||
+        hType === "necrotic" ||
+        hType === "madness" ||
+        hType === "dragon"
       ) {
         this.run.hazardState.value = Math.max(0, this.run.hazardState.value - amount);
-      } else if (hType === "solar" || hType === "voidcore") {
-        const cycle = h.cycleSeconds || 14;
+      } else if (hType === "solar" || hType === "voidcore" || hType === "divine" || hType === "oblivion") {
+        const cycle = h.cycleSeconds || 12;
         this.run.hazardState.phaseTimer = Math.min(cycle, this.run.hazardState.phaseTimer + (amount / 100) * 6.0);
       }
     }
 
     grantShield(amount, duration = 5.0) {
-      const val = Math.round(amount);
+      const vaultMult = this.run?.specialMode === "cursed_vault" ? 0.5 : 1.0;
+      const val = Math.round(amount * vaultMult);
       if (val <= 0) return;
       this.player.shield = Math.max(this.player.shield, val);
       this.player.shieldTimer = Math.max(this.player.shieldTimer, duration);
@@ -2409,15 +2462,20 @@
       this.sfx.dash();
       this.spawnBurst(this.player.x, this.player.y, cls.color || "#38bdf8", 10, 2.4);
 
-      if (cls.id === "shadowblade" || cls.id === "assassin" || stats.active3pc?.has("ashwalker_frenzy")) {
+      if (
+        cls.id === "shadowblade" ||
+        cls.id === "assassin" ||
+        stats.active3pc?.has("ashwalker_frenzy") ||
+        stats.active3pc?.has("chaos_overload")
+      ) {
         this.player.phantomCritTimer = 2.5;
         this.spawnFloatingText(this.player.x, this.player.y, 1.2, "PHANTOM CRIT!", "#f59e0b");
       }
 
       if (this.mode === "dungeon" && this.run) {
         const h = this.getCurrentRealm().hazard;
-        if (h.type === "heat") {
-          this.purgeHazard(h.dashCoolBurst);
+        if (h.type === "heat" || h.type === "dragon") {
+          this.purgeHazard(h.dashCoolBurst || h.dashCool || 32);
           this.spawnFloatingText(this.player.x, this.player.y, 1.1, "VENTED!", "#7dd3fc");
         } else if (h.type === "storm") {
           this.purgeHazard(h.dashDischarge);
@@ -2425,7 +2483,7 @@
         } else if (h.type === "ash") {
           this.purgeHazard(h.dashClear || 30);
           this.spawnFloatingText(this.player.x, this.player.y, 1.1, "SOOT CLEARED!", "#fed7aa");
-        } else if (h.type === "prism") {
+        } else if (h.type === "prism" || h.type === "madness") {
           this.purgeHazard(h.dashClear || 22);
           this.spawnFloatingText(this.player.x, this.player.y, 1.1, "DISPERSED!", "#fbcfe8");
         }
@@ -2770,6 +2828,77 @@
           this.damageEnemy(tgt, calcSkillDmg() * 0.56, true, stats, 0.22, true);
         }
         this.spawnSkillAnim("thunder_web", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.62, strikeTargets);
+      } else if (sk.type === "judgment_cut") {
+        const targets = this.world.enemies
+          .filter((e) => e.hp > 0 && dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius)
+          .slice(0, sk.count || 8);
+        for (const tgt of targets) {
+          this.slashArcs.push({
+            x: tgt.x, y: tgt.y, angle: Math.random() * Math.PI * 2,
+            radius: 1.6, span: 2.2, color: sk.color, weaponColor: "#ffffff",
+            heavy: true, life: 0.25, maxLife: 0.25
+          });
+          this.damageEnemy(tgt, calcSkillDmg() * 0.55, true, stats, 0.2);
+        }
+      } else if (sk.type === "hyperbeam") {
+        const len = sk.length || 12.5;
+        const hw = (sk.width || 1.8) * 0.5;
+        this.telegraphs.push({
+          type: "line", x: this.player.x, y: this.player.y, angle: baseAngle,
+          length: len, width: sk.width || 1.8, elapsed: 0.14, duration: 0.15,
+          damage: 0, color: sk.color
+        });
+        for (const e of [...this.world.enemies]) {
+          const px = e.x - this.player.x;
+          const py = e.y - this.player.y;
+          const lx = px * Math.cos(-baseAngle) - py * Math.sin(-baseAngle);
+          const ly = px * Math.sin(-baseAngle) + py * Math.cos(-baseAngle);
+          if (lx >= 0 && lx <= len && Math.abs(ly) <= hw + e.radius) {
+            this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats, 0.4);
+          }
+        }
+      } else if (sk.type === "phalanx_charge") {
+        if (sk.shieldPctHp) this.grantShield(stats.hp * sk.shieldPctHp, 5.5);
+        this.spawnSkillAnim("sky_greatsword", this.player.x, this.player.y, baseAngle, sk.radius, sk.color, 0.55);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
+            this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats, 0.45);
+            if (sk.stunDuration) this.applyEnemyStun(e, sk.stunDuration);
+          }
+        }
+        for (let i = 0; i < 6; i++) {
+          const a = baseAngle + (i - 2.5) * 0.22;
+          this.projectiles.push({
+            friendly: true, x: this.player.x, y: this.player.y,
+            vx: Math.cos(a) * 13.5, vy: Math.sin(a) * 13.5, radius: 0.34,
+            damage: calcSkillDmg() * 0.35, guaranteedCrit: phantomCrit,
+            pierce: 2, hitIds: new Set(), projStyle: "bolt",
+            color: sk.color, trailColor: "#ffffff", life: 0.75
+          });
+        }
+      } else if (sk.type === "bullet_hell") {
+        const count = sk.count || 24;
+        for (let i = 0; i < count; i++) {
+          const a = baseAngle + (i / count) * Math.PI * 4;
+          this.projectiles.push({
+            friendly: true, x: this.player.x, y: this.player.y,
+            vx: Math.cos(a) * 15.0, vy: Math.sin(a) * 15.0, radius: 0.28,
+            damage: calcSkillDmg() * 0.32, guaranteedCrit: phantomCrit,
+            pierce: 2, hitIds: new Set(), projStyle: "bullet",
+            color: sk.color, trailColor: "#fde047", life: 0.72
+          });
+        }
+      } else if (sk.type === "supernova") {
+        this.spawnSkillAnim("black_hole", this.player.x, this.player.y, 0, sk.radius, sk.color, 0.75);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= sk.radius + e.radius) {
+            this.damageEnemy(e, calcSkillDmg(), phantomCrit, stats, 0.5);
+          }
+        }
+      }
+
+      if (sk.hazardPurge && this.run) {
+        this.purgeHazard(sk.hazardPurge);
       }
 
       if (this.run && !this.run.finished && this.world.enemies.length > 0) {
@@ -2959,8 +3088,8 @@
       }
 
       let setDmgMult = 1.0;
-      if (sets.has("venom_melt")) setDmgMult *= 1.22;
-      if (sets.has("prism_refract")) setDmgMult *= 1.24;
+      if (sets.has("venom_melt") || sets.has("soulforged_reap")) setDmgMult *= 1.22;
+      if (sets.has("prism_refract") || sets.has("chaos_overload")) setDmgMult *= 1.24;
       if (sets.has("glacier_shatter") || sets.has("leviathan_undertow")) {
         if (enemy.slowTimer > 0) setDmgMult *= 1.25;
         enemy.slowTimer = Math.max(enemy.slowTimer, 2.5);
@@ -2994,7 +3123,7 @@
         if (cls.id === "berserker") {
           this.healPlayer(Math.max(1, Math.round(st.hp * 0.04)));
         }
-        if (sets.has("forgelord_crit")) this.purgeHazard(8);
+        if (sets.has("forgelord_crit") || sets.has("dragonscale_fury")) this.purgeHazard(8);
         if (sets.has("leviathan_undertow")) this.purgeHazard(6);
         if (st.chainLightning > 0 && !fromChain) {
           this.triggerChainLightning(enemy, st, st.chainLightning);
@@ -3035,8 +3164,9 @@
       if (enemy.isElite) this.incrementBounty("eliteKills", 1);
       if (enemy.isBoss) this.incrementBounty("bossKills", 1);
 
-      if (this.run && this.getCurrentRealm().hazard.type === "blood") {
-        this.purgeHazard(this.getCurrentRealm().hazard.killPurgeAmount || 24);
+      const curHType = this.run?.getCurrentRealm?.()?.hazard?.type || this.getCurrentRealm()?.hazard?.type;
+      if (this.run && (curHType === "blood" || curHType === "necrotic")) {
+        this.purgeHazard(this.getCurrentRealm().hazard.killPurgeAmount || 22);
       }
 
       if (cls.id === "warden") {
@@ -3084,7 +3214,8 @@
       const totalLuck = this.run.rarityLuck + bn.rarityLuck;
 
       if (enemy.isBoss) {
-        const shardGain = Math.round((enemy.template.shards || 12) * currencyMult);
+        const vaultShardMult = this.run.specialMode === "cursed_vault" ? 3.0 : 1.0;
+        const shardGain = Math.round((enemy.template.shards || 12) * currencyMult * vaultShardMult);
         this.save.shards += shardGain;
         this.run.shardsEarned += shardGain;
         this.addScreenShake(0.4, 12);
@@ -3234,6 +3365,30 @@
           this.toast("Cursed Shrine Cleansed! Bonus Epic+ Chest Unlocked!", "mythic");
           this.onRoomCleared();
         }
+      } else if (ev.type === "horde_siege") {
+        ev.timer -= dt;
+        ev.spawnTick -= dt;
+        document.getElementById("room-indicator").textContent = `ABYSSAL HORDE • ${Math.ceil(Math.max(0, ev.timer))}s`;
+
+        if (ev.spawnTick <= 0 && this.world.enemies.length < 14) {
+          ev.spawnTick = 3.0;
+          const realm = this.getCurrentRealm();
+          for (let k = 0; k < 3; k++) {
+            const spot = this.findOpenSpot(4.8);
+            this.world.enemies.push(this.createEnemy(pick(realm.enemies), spot.x, spot.y, this.run.roomIndex, k === 0));
+          }
+        }
+
+        if (ev.timer <= 15 && !ev.bossSpawned) {
+          ev.bossSpawned = true;
+          this.spawnBossEncounter();
+        }
+
+        if (ev.timer <= 0) {
+          this.world.specialEvent = null;
+          this.world.enemies = [];
+          this.completeDungeonVictory();
+        }
       }
     }
 
@@ -3352,7 +3507,7 @@
       }
     }
 
-    damagePlayer(rawAmount, isHazard = false) {
+    damagePlayer(rawAmount, isHazard = false, armorPen = 0) {
       if (!isHazard && this.player.iframeTimer > 0) return;
       if (this.run && this.run.finished) return;
 
@@ -3361,11 +3516,13 @@
       let dmg = rawAmount;
 
       if (!isHazard) {
-        const mitigation = stats.armor / (stats.armor + 180);
+        const diffPen = this.run?.diff?.armorPenBonus || 0;
+        const effectiveArmor = stats.armor * (1 - clamp(armorPen + diffPen, 0, 0.85));
+        const mitigation = effectiveArmor / (effectiveArmor + 180);
         dmg = Math.max(1, Math.round(rawAmount * (1 - mitigation)));
       } else {
         const resistMult =
-          hType === "solar" || hType === "voidcore"
+          hType === "solar" || hType === "voidcore" || hType === "divine" || hType === "oblivion"
             ? Math.max(0.35, 1 - stats.hazardResist)
             : 1 - stats.hazardResist;
         dmg = Math.max(1, Math.round(rawAmount * resistMult));
@@ -3397,7 +3554,7 @@
       }
 
       if (!isHazard && (this.player.setPulseCd || 0) <= 0 && this.player.hp > 0) {
-        if (stats.active3pc?.has("earthshaker_pulse")) {
+        if (stats.active3pc?.has("earthshaker_pulse") || stats.active3pc?.has("dragonscale_fury")) {
           this.player.setPulseCd = 3.0;
           this.spawnSkillAnim("seismic_pillars", this.player.x, this.player.y, 0, 3.0, "#38bdf8", 0.45);
           for (const e of [...this.world.enemies]) {
@@ -3422,7 +3579,8 @@
     }
 
     healPlayer(amount) {
-      const healAmt = Math.round(amount);
+      const vaultMult = this.run?.specialMode === "cursed_vault" ? 0.5 : 1.0;
+      const healAmt = Math.round(amount * vaultMult);
       if (healAmt <= 0) return;
       const missing = Math.max(0, this.player.maxHp - this.player.hp);
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmt);
@@ -3430,7 +3588,12 @@
 
       if (overflow > 0) {
         const sets = this.getActiveSetInfo().active3pc;
-        if (sets.has("eclipse_overheal") || sets.has("bloodlord_pact") || sets.has("primordial_apex")) {
+        if (
+          sets.has("eclipse_overheal") ||
+          sets.has("bloodlord_pact") ||
+          sets.has("primordial_apex") ||
+          sets.has("soulforged_reap")
+        ) {
           const cap = Math.round(this.player.maxHp * 0.35);
           this.player.shield = Math.min(cap, this.player.shield + overflow);
           this.player.shieldTimer = Math.max(this.player.shieldTimer, 5.0);
@@ -3746,6 +3909,99 @@
             this.damagePlayer(this.player.maxHp * h.collapseDmgPct, true);
           }
         }
+      } else if (h.type === "necrotic") {
+        const inLantern = (this.world.bloodFonts || []).some(
+          (f) => dist(this.player.x, this.player.y, f.x, f.y) <= f.radius
+        );
+        if (inLantern) hs.value = Math.max(0, hs.value - h.lanternPurgePerSec * dt);
+        else if (hasEnemies) hs.value = Math.min(100, hs.value + h.rotPerSec * hMult * dt);
+        inDanger = hs.value >= 72;
+        if (hs.value >= 85) {
+          hs.dpsTick += dt;
+          if (hs.dpsTick >= 0.72) {
+            hs.dpsTick = 0;
+            this.damagePlayer(this.player.maxHp * h.rotDpsPct, true);
+          }
+        }
+      } else if (h.type === "madness") {
+        if (hasEnemies) hs.value = Math.min(100, hs.value + h.madnessPerSec * hMult * dt);
+        hs.orbSpawnTimer -= dt;
+        if (hs.orbSpawnTimer <= 0 && this.world.lightOrbs.length < 4) {
+          hs.orbSpawnTimer = 4.6;
+          const pos = this.findOpenSpot(2.8);
+          this.world.lightOrbs.push({ x: pos.x, y: pos.y, life: 16 });
+        }
+        for (let i = this.world.lightOrbs.length - 1; i >= 0; i--) {
+          const orb = this.world.lightOrbs[i];
+          orb.life -= dt;
+          if (dist(this.player.x, this.player.y, orb.x, orb.y) <= 1.05) {
+            hs.value = Math.max(0, hs.value - h.orbClearAmount);
+            this.sfx.flask();
+            this.spawnBurst(orb.x, orb.y, "#e879f9", 14, 3.0);
+            this.spawnFloatingText(orb.x, orb.y, 1.3, "LUCID!", "#f5d0fe", true);
+            this.world.lightOrbs.splice(i, 1);
+          } else if (orb.life <= 0) {
+            this.world.lightOrbs.splice(i, 1);
+          }
+        }
+        inDanger = hs.value >= 75;
+        if (hs.value >= 100) {
+          hs.value = 15;
+          this.sfx.bossSlam();
+          this.addScreenShake(0.25, 9);
+          this.damagePlayer(this.player.maxHp * h.shatterDmgPct, true);
+        }
+      } else if (h.type === "dragon") {
+        const moving = Math.hypot(this.player.vx, this.player.vy) > 0.4;
+        const inWard = (this.world.airDomes || []).some(
+          (d) => dist(this.player.x, this.player.y, d.x, d.y) <= d.radius
+        );
+        if (inWard) hs.value = Math.max(0, hs.value - h.wardCoolPerSec * dt);
+        else if (moving) hs.value = Math.max(0, hs.value - h.moveCoolPerSec * dt);
+        else if (hasEnemies) hs.value = Math.min(100, hs.value + h.heatPerSec * hMult * dt);
+        inDanger = hs.value >= 74;
+        if (hs.value >= 90) {
+          hs.dpsTick += dt;
+          if (hs.dpsTick >= 0.7) {
+            hs.dpsTick = 0;
+            this.damagePlayer(this.player.maxHp * h.scorchDpsPct, true);
+          }
+        }
+      } else if (h.type === "entropy") {
+        hs.phaseTimer -= dt;
+        if (hs.phaseTimer <= 0) {
+          hs.phase = hs.phase === "surge" ? "collapse" : "surge";
+          hs.phaseTimer = h.cycleSeconds;
+          this.spawnFloatingText(
+            this.player.x,
+            this.player.y,
+            1.6,
+            hs.phase === "surge" ? "SURGE (+CRIT/SPD)" : "COLLAPSE (+55% DMG)",
+            hs.phase === "surge" ? "#38bdf8" : "#f43f5e",
+            true
+          );
+          this.sfx.portal();
+        }
+        hs.value = (hs.phaseTimer / h.cycleSeconds) * 100;
+        inDanger = hs.phase === "collapse";
+      } else if (h.type === "divine" || h.type === "oblivion") {
+        if (hasEnemies) hs.phaseTimer -= dt * Math.sqrt(this.run.diff.hazardMult);
+        const cycle = h.cycleSeconds || 12;
+        hs.value = clamp((1 - hs.phaseTimer / cycle) * 100, 0, 100);
+        const safeZones = h.type === "divine" ? this.world.umbralWards : this.world.realityAnchors;
+        const sheltered = (safeZones || []).some((z) => dist(this.player.x, this.player.y, z.x, z.y) <= z.radius);
+        inDanger = hs.value >= 74 && !sheltered;
+        if (hs.phaseTimer <= 0) {
+          hs.phaseTimer = cycle;
+          this.sfx.solarFlare();
+          this.addScreenShake(0.35, 11);
+          this.spawnSkillAnim("solar_flare", this.player.x, this.player.y, 0, 6.0, "#fde047", 0.55);
+          if (sheltered) {
+            this.spawnFloatingText(this.player.x, this.player.y, 1.6, "SHELTERED!", "#fde047", true);
+          } else {
+            this.damagePlayer(this.player.maxHp * (h.wrathDmgPct || h.oblivionDmgPct || 0.38), true);
+          }
+        }
       }
 
       survHud.classList.toggle("danger-pulse", inDanger);
@@ -3784,7 +4040,7 @@
 
     getDungeonOrder() {
       if (!this.run) return 0;
-      if (this.run.isEndless) return Math.min(13, Math.floor(this.run.roomIndex / 2));
+      if (this.run.isEndless) return Math.min(19, Math.floor(this.run.roomIndex / 2));
       const idx = this.getRealDungeons().findIndex((d) => d.id === this.run.dungeon.id);
       return Math.max(0, idx);
     }
@@ -3865,6 +4121,7 @@
               vy: Math.sin(ang) * (tpl.projSpeed || 6.6),
               radius: 0.26,
               damage: e.atk,
+              armorPen: tpl.armorPen || 0,
               projStyle: "orb",
               color: tpl.projColor || "#f43f5e",
               trailColor: "#fca5a5",
@@ -3900,7 +4157,7 @@
 
           if (d <= e.range + 0.15 && e.attackTimer <= 0) {
             e.attackTimer = e.attackCd;
-            this.damagePlayer(e.atk, false);
+            this.damagePlayer(e.atk, false, tpl.armorPen || 0);
             this.spawnBurst(this.player.x, this.player.y, "#f43f5e", 6, 2.0);
           }
         }
@@ -4152,7 +4409,7 @@
           if (remove) this.projectiles.splice(i, 1);
         } else {
           if (dist(p.x, p.y, this.player.x, this.player.y) <= p.radius + 0.34) {
-            this.damagePlayer(p.damage, false);
+            this.damagePlayer(p.damage, false, p.armorPen || 0);
             this.projectiles.splice(i, 1);
           }
         }
@@ -6324,6 +6581,16 @@
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1.5;
         ctx.stroke();
+      } else if (style === "bullet") {
+        const f = ISO.worldDirToScreen(pr.vx, pr.vy);
+        ctx.strokeStyle = pr.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(p.x - f.x * 7, p.y - f.y * 7);
+        ctx.lineTo(p.x + f.x * 7, p.y + f.y * 7);
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(p.x + Math.round(f.x * 5) - 1, p.y + Math.round(f.y * 5) - 1, 3, 3);
       } else if (style === "star") {
         ctx.fillStyle = pr.color;
         ctx.fillRect(p.x - 6, p.y - 2, 12, 4);
@@ -6570,9 +6837,11 @@
           statusEl.textContent = `${hs.phase === "low" ? "LOW-G" : "HEAVY-G"} ${Math.ceil(hs.phaseTimer)}s`;
         } else if (hType === "chrono") {
           statusEl.textContent = `${hs.phase === "overdrive" ? "OVERDRIVE" : "DILATION"} ${Math.ceil(hs.phaseTimer)}s`;
-        } else if (hType === "solar") {
-          statusEl.textContent = `FLARE IN ${Math.ceil(hs.phaseTimer)}s`;
-        } else if (hType === "voidcore") {
+        } else if (hType === "entropy") {
+          statusEl.textContent = `${hs.phase === "surge" ? "SURGE" : "COLLAPSE"} ${Math.ceil(hs.phaseTimer)}s`;
+        } else if (hType === "solar" || hType === "divine") {
+          statusEl.textContent = `BLAST IN ${Math.ceil(hs.phaseTimer)}s`;
+        } else if (hType === "voidcore" || hType === "oblivion") {
           statusEl.textContent = `COLLAPSE IN ${Math.ceil(hs.phaseTimer)}s`;
         } else {
           statusEl.textContent = `${Math.round(hs.value)}%`;
@@ -6662,9 +6931,15 @@
       const selId = this.save.selectedDungeonId;
       const myBaseClass = this.getBaseClassId();
 
-      for (const d of DATA.DUNGEONS) {
+      const filteredDungeons = DATA.DUNGEONS.filter((d) => {
+        if (this.dungeonCategory === "special") return !!d.isSpecial;
+        if (this.dungeonCategory === "campaign") return !d.isSpecial;
+        return true;
+      });
+
+      for (const d of filteredDungeons) {
         const card = document.createElement("div");
-        card.className = "dungeon-card" + (d.id === selId ? " selected" : "");
+        card.className = "dungeon-card" + (d.isSpecial ? " special-card" : "") + (d.id === selId ? " selected" : "");
         const clr = this.save.cleared[d.id] || {};
         const cMeta = GearSystem.getClassMeta(d.dropClass);
         const isMyClass = d.dropClass === myBaseClass || d.dropClass === "all";
@@ -6677,6 +6952,7 @@
             <span class="clear-pip ${clr.abyssal ? "cleared" : ""}">Abyss</span>
             <span class="clear-pip ${clr.torment ? "cleared" : ""}">Torm</span>
             <span class="clear-pip ${clr.cataclysm ? "cleared" : ""}">Cata</span>
+            <span class="clear-pip ${clr.apocalypse ? "cleared" : ""}">Apoc</span>
           `;
 
         card.innerHTML = `
@@ -7718,6 +7994,15 @@
 
       document.querySelectorAll("[data-close-modal]").forEach((btn) => {
         btn.addEventListener("click", () => this.closeAllModals());
+      });
+
+      document.querySelectorAll("[data-dungeon-cat]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this.dungeonCategory = btn.dataset.dungeonCat;
+          document.querySelectorAll("[data-dungeon-cat]").forEach((b) => b.classList.toggle("active", b === btn));
+          this.sfx.uiClick();
+          this.renderDungeonModal();
+        });
       });
 
       document.querySelectorAll(".diff-btn").forEach((btn) => {
