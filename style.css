@@ -1390,3 +1390,61 @@ kbd {
   .summary-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .controls-legend { grid-template-columns: 1fr; }
 }
+/* ==========================================================================
+   GUI POLISH OVERHAUL — LAYERED RPG FRAMES, GLOW ACCENTS & REBIRTH UI
+   ========================================================================== */
+.currency-dot.essence-dot { background: #34d399; box-shadow: 0 0 6px #34d399; }
+.currency-essence .currency-amount { color: #34d399; }
+
+.zone-card,
+.player-badge,
+.camp-tabs,
+.currency-pill,
+.vitals-panel,
+.skill-hotbar,
+.minimap-panel {
+  background: linear-gradient(180deg, rgba(24, 31, 52, 0.96) 0%, rgba(12, 16, 28, 0.96) 100%);
+  border-color: #64748b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 4px 12px rgba(0, 0, 0, 0.65);
+}
+
+.rpg-modal {
+  background: linear-gradient(180deg, #13192b 0%, #0b0f1c 100%);
+  border: 2px solid var(--border-gold);
+  box-shadow: inset 0 0 0 1px rgba(255, 212, 71, 0.25), 0 16px 42px rgba(0, 0, 0, 0.88);
+}
+
+.modal-header {
+  background: linear-gradient(90deg, #1c2540 0%, #141b30 100%);
+  border-bottom: 2px solid #334155;
+}
+
+.hud-tab {
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.1s ease;
+}
+.hud-tab:hover {
+  transform: translateY(-1px);
+}
+
+.skill-slot {
+  transition: border-color 0.12s ease, transform 0.1s ease, background 0.12s ease;
+}
+.skill-slot.skill-active:active:not(.on-cooldown),
+.skill-slot.skill-dash:active:not(.on-cooldown) {
+  transform: scale(0.95);
+}
+
+.rebirth-panel {
+  border-color: #34d399;
+  background: linear-gradient(180deg, #0d211c 0%, #0b101d 100%);
+}
+
+.awakening-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  background: rgba(5, 8, 15, 0.85);
+}

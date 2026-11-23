@@ -301,7 +301,7 @@ window.GAME_DATA = {
       },
       enemies: ["dread_knight", "radiant_warden"],
       bossId: "malakor_sovereign",
-      lootPool: ["muramasa_katana", "valkyrie_spear_shield", "soulreaver_scythe", "volt_twinblades", "dawnstar_greatsword"],
+      lootPool: ["muramasa_katana", "valkyrie_spear_shield", "storm_caller_longbow", "void_chain_whipblade", "solaris_greatshield_mace"],
       lootSummary: ["6 Consecutive Bosses", "Muramasa & Valkyrie", "Massive Shards"]
     },
     {
@@ -337,7 +337,7 @@ window.GAME_DATA = {
       },
       enemies: ["sanguine_executioner", "basalt_behemoth", "abyssal_crab", "pendulum_titan"],
       bossId: "pyrax_ash_wyrm",
-      lootPool: ["plague_censer", "aether_railcannon", "obsidian_daggers", "abyssal_trident", "chronos_scepter"],
+      lootPool: ["plague_censer", "aether_railcannon", "chrono_twin_revolvers", "nether_frost_staff", "chronos_scepter"],
       lootSummary: ["90s Non-Stop Siege", "Censer & Rail-Cannon", "Elite Loot Rain"]
     },
     {
@@ -910,6 +910,11 @@ window.GAME_DATA = {
     pandemonium_miasma:  { id: "pandemonium_miasma",  name: "Plague Pandemic",   icon: "☣", cooldown: 5.0,  type: "drain_nova",     animType: "spore_geysers",   heroAnim: "raise", radius: 5.4, atkMult: 1.4,  spellMult: 4.2,  healPctDmg: 0.32, hazardPurge: 55, color: "#84cc16", desc: "Erupt a massive plague cloud for 140% ATK + 420% Spell, heal 32% dealt & purge 55% hazards!" },
     bullet_hell_waltz:   { id: "bullet_hell_waltz",   name: "Bullet Hell Waltz", icon: "🔫", cooldown: 4.8,  type: "bullet_hell",    animType: "flame_nova",      heroAnim: "spin",  count: 24, range: 10.0, atkMult: 1.65, spellMult: 1.35, color: "#fb923c", desc: "Spin and fire 24 piercing Rift bullets in a double spiral for 165% ATK + 135% Spell each!" },
     supernova_apocalypse:{ id: "supernova_apocalypse",name: "Apocalypse Nova",   icon: "☄", cooldown: 5.8,  type: "supernova",      animType: "black_hole",      heroAnim: "raise", radius: 6.2, count: 6, atkMult: 2.5, spellMult: 4.6, color: "#ffae19", desc: "Detonate a 6.2-tile cosmic Supernova + 6 astral meteors for 250% ATK + 460% Spell!" },
+    storm_arrow_rain:    { id: "storm_arrow_rain",    name: "Tempest Arrow Rain",icon: "🏹", cooldown: 5.0,  type: "arrow_rain",     animType: "thunder_web",     heroAnim: "raise", count: 14, radius: 4.2, atkMult: 2.35, spellMult: 1.45, color: "#38bdf8", desc: "Call down 14 piercing sky-arrows in a 4.2-tile storm zone for 235% ATK + 145% Spell!" },
+    abyssal_whip_lash:   { id: "abyssal_whip_lash",   name: "Abyssal Lash",      icon: "⛓", cooldown: 4.8,  type: "whip_lash",      animType: "shadow_scythes",  heroAnim: "spin",  radius: 5.4, atkMult: 2.1,  spellMult: 3.15, healPctDmg: 0.24, color: "#c084fc", desc: "Crack 4 crossing void-whips across 5.4 tiles, pulling foes inward for 210% ATK + 315% Spell & 24% drain!" },
+    bastion_reflect:     { id: "bastion_reflect",     name: "Bastion Aegis Slam",icon: "🛡", cooldown: 5.4,  type: "bastion_slam",   animType: "aegis_dome",      heroAnim: "slam",  radius: 4.4, shieldPctHp: 0.36, atkMult: 3.1, spellMult: 2.2, stunDuration: 1.7, color: "#fde047", desc: "Gain a 36% Max HP Shield, stun nearby foes for 1.7s, and convert enemy projectiles into 300% counter-bolts!" },
+    desperado_barrage:   { id: "desperado_barrage",   name: "Desperado Barrage", icon: "🔫", cooldown: 4.7,  type: "desperado",      animType: "lightning_surge", heroAnim: "spin",  count: 18, radius: 7.5, atkMult: 2.25, spellMult: 1.85, guaranteedCrit: true, color: "#facc15", desc: "Blink rapidly and fire 18 guaranteed-Crit homing chrono-rounds for 225% ATK + 185% Spell!" },
+    absolute_zero:       { id: "absolute_zero",       name: "Absolute Zero",     icon: "❄", cooldown: 5.6,  type: "absolute_zero",  animType: "ice_spikes",      heroAnim: "raise", radius: 6.4, atkMult: 1.4,  spellMult: 4.4,  stunDuration: 2.2, color: "#7dd3fc", desc: "Encase all foes within 6.4 tiles in glacial ice (2.2s Freeze) and shatter them for 140% ATK + 440% Spell!" },
 
     // --- T1–T14 RELIC [E] SKILLS ---
     sanctuary_aegis:     { id: "sanctuary_aegis",     name: "Gate Aegis",        icon: "🛡", cooldown: 9.0,  type: "shield_buff",    animType: "aegis_dome",      heroAnim: "raise", shieldPctHp: 0.30, duration: 5.0, color: "#60a5fa", desc: "Weave a protective barrier equal to 30% of your Max HP for 5s." },
@@ -953,6 +958,11 @@ window.GAME_DATA = {
     aether_railcannon:        { id: "aether_railcannon",        name: "Aether Rail-Cannon",      slot: "weapon", classReq: "arcanist",    setTag: "Special",         weaponStyle: "cannon",       dungeonId: "shattered_clockwork",    craftCost: 2400, icon: "🔦", attackType: "ranged_nova", range: 8.2,  attackRate: 1.75, projSpeed: 15.5, projStyle: "bolt",     weaponColor: "#c084fc", trailColor: "#f5d0fe", skillId: "orbital_hyperbeam",   baseStats: { atk: 620, spell: 980, crit: 0.18, cdr: 0.16 }, desc: "Signature Cannon: Fires hyper-velocity bolts and a 12.5-tile Orbital Hyperbeam." },
     riftlord_pistols:         { id: "riftlord_pistols",         name: "Rift-Lord's Twin Pistols", slot: "weapon", classReq: "all",         setTag: "Special",         weaponStyle: "pistols",      dungeonId: "primordial_singularity", craftCost: 4200, icon: "🔫", attackType: "ranged_proj", range: 7.8,  attackRate: 2.65, projSpeed: 16.0, projStyle: "bullet",   weaponColor: "#fb923c", trailColor: "#fde047", skillId: "bullet_hell_waltz",   baseStats: { atk: 1380, spell: 1180, crit: 0.22, speed: 0.70 }, desc: "Signature Firearms: Blistering fire rate + 24-bullet Bullet Hell Waltz." },
     apocalypse_grimoire:      { id: "apocalypse_grimoire",      name: "Apocalypse Grimoire",     slot: "weapon", classReq: "all",         setTag: "Special",         weaponStyle: "grimoire",     dungeonId: "dragons_apex",           craftCost: 7800, icon: "☄", attackType: "ranged_nova", range: 8.6,  attackRate: 2.10, projSpeed: 15.0, projStyle: "star",     weaponColor: "#ffae19", trailColor: "#ff3b5c", skillId: "supernova_apocalypse",baseStats: { atk: 1950, spell: 2450, crit: 0.24, cdr: 0.18, lifesteal: 0.08 }, desc: "Signature Tome: Unleashes cosmic Supernovas and astral meteor storms." },
+    storm_caller_longbow:     { id: "storm_caller_longbow",     name: "Storm-Caller Longbow",    slot: "weapon", classReq: "shadowblade", setTag: "Special",         weaponStyle: "bow",          dungeonId: "stormspire_citadel",     craftCost: 520,  icon: "🏹", attackType: "ranged_bow",  range: 8.4,  attackRate: 1.95, projSpeed: 16.5, projStyle: "bolt",     weaponColor: "#38bdf8", trailColor: "#fde047", skillId: "storm_arrow_rain",    baseStats: { atk: 240, spell: 165, crit: 0.18, speed: 0.55 }, desc: "Signature Longbow: Fires piercing storm-arrows (3-arrow fan every 3rd shot) + Tempest Arrow Rain." },
+    void_chain_whipblade:     { id: "void_chain_whipblade",     name: "Void-Chain Whipblade",    slot: "weapon", classReq: "warden",      setTag: "Special",         weaponStyle: "whip",         dungeonId: "abyssal_throne",         craftCost: 720,  icon: "⛓", attackType: "melee_whip",  range: 4.4,  attackRate: 1.85, weaponColor: "#c084fc", trailColor: "#f0abfc", skillId: "abyssal_whip_lash",   baseStats: { atk: 310, spell: 340, lifesteal: 0.08, crit: 0.15 }, desc: "Signature Whipblade: Long-reach 4.4-tile void lashes that pull enemies inward + Abyssal Lash." },
+    solaris_greatshield_mace: { id: "solaris_greatshield_mace", name: "Solaris Greatshield & Mace",slot:"weapon", classReq: "vanguard",    setTag: "Special",         weaponStyle: "spear_shield", dungeonId: "celestial_crucible",     craftCost: 1100, icon: "🛡", attackType: "melee_shield",range: 3.1,  attackRate: 1.70, weaponColor: "#fde047", trailColor: "#ffffff", skillId: "bastion_reflect",     baseStats: { atk: 430, spell: 320, hp: 1150, armor: 55 }, desc: "Signature Greatshield: Every swing grants a 3% HP Barrier; [Q] converts enemy shots into 300% counter-bolts." },
+    chrono_twin_revolvers:    { id: "chrono_twin_revolvers",    name: "Chrono-Twin Revolvers",   slot: "weapon", classReq: "shadowblade", setTag: "Special",         weaponStyle: "pistols",      dungeonId: "shattered_clockwork",    craftCost: 2600, icon: "🔫", attackType: "ranged_burst",range: 7.6,  attackRate: 2.35, projSpeed: 16.5, projStyle: "bullet",   weaponColor: "#facc15", trailColor: "#38bdf8", skillId: "desperado_barrage",   baseStats: { atk: 880, spell: 720, crit: 0.21, cdr: 0.14, speed: 0.65 }, desc: "Signature Revolvers: Fires rapid 2-round bursts that build double Combo + Desperado Barrage." },
+    nether_frost_staff:       { id: "nether_frost_staff",       name: "Nether-Frost Staff",      slot: "weapon", classReq: "arcanist",    setTag: "Special",         weaponStyle: "staff",        dungeonId: "frostbite_sanctum",      craftCost: 3400, icon: "❄", attackType: "ranged_beam", range: 8.2,  attackRate: 2.15, projSpeed: 17.0, projStyle: "bolt",     weaponColor: "#7dd3fc", trailColor: "#e0f2fe", skillId: "absolute_zero",       baseStats: { atk: 780, spell: 1180, crit: 0.19, cdr: 0.16 }, desc: "Signature Staff: Fires piercing frost-beams that chill enemies + Absolute Zero screen freeze." },
 
     // --- T1: SUNKEN QUARRY (Warrior / Vanguard) ---
     seismic_hammer:           { id: "seismic_hammer",           name: "Seismic Hammer",          slot: "weapon", classReq: "vanguard",    setTag: "Earthshaker",     weaponStyle: "hammer",       dungeonId: "sunken_quarry",          craftCost: 30,   icon: "🔨", attackType: "melee_heavy", range: 2.4,  attackRate: 1.2,  weaponColor: "#38bdf8", trailColor: "#7dd3fc", skillId: "seismic_shatter",     baseStats: { atk: 34, hp: 70, crit: 0.04 }, desc: "Massive crystal-bound maul that cleaves wide arcs and crushes armor." },
@@ -1144,5 +1154,23 @@ window.GAME_DATA = {
         { id: "m_key_nova",  name: "KEYSTONE: Astral Conduit", icon: "🌟", maxRank: 1, reqBranchPts: 6, isKeystone: true, desc: "Dashing triggers a shockwave for 120% Spell Power and restores 8% Max HP." }
       ]
     }
+  ],
+
+  /* ------------------------------------------------------------------------
+     RIFT REBIRTH (PRESTIGE AT LV. 30+) & WEAPON SOUL-AWAKENING
+     ------------------------------------------------------------------------ */
+  REBIRTH_REQ_LEVEL: 30,
+  REBIRTH_PERKS: [
+    { id: "rb_essence_power", name: "Transcendent Might",  icon: "⚔", desc: "+15% Base ATK & Spell Power per rank.",               stat: "powerPct",    perRank: 0.15, maxRank: 20, cost: 1 },
+    { id: "rb_essence_hp",    name: "Eternal Vessel",      icon: "❤", desc: "+18% Base Max HP per rank.",                          stat: "hpPct",       perRank: 0.18, maxRank: 20, cost: 1 },
+    { id: "rb_start_boon",    name: "Astral Inheritance",  icon: "✦", desc: "Start every dungeon expedition with +1 free Boon.",    stat: "startBoons",  perRank: 1,    maxRank: 3,  cost: 2 },
+    { id: "rb_mythic_luck",   name: "Primordial Fortune",  icon: "◈", desc: "+0.25 Rarity Luck & +25% Gold/Shards per rank.",      stat: "luckAndGold", perRank: 0.25, maxRank: 10, cost: 1 }
+  ],
+
+  WEAPON_AWAKENING_TIERS: [
+    { tier: 0, name: "Unawakened",   kills: 0,   powerMult: 1.00, atkSpdBonus: 0.00, auraColor: null },
+    { tier: 1, name: "Soul-Bound I", kills: 60,  powerMult: 1.12, atkSpdBonus: 0.06, auraColor: "#38bdf8" },
+    { tier: 2, name: "Awakened II",  kills: 200, powerMult: 1.26, atkSpdBonus: 0.12, auraColor: "#c084fc" },
+    { tier: 3, name: "Ascended III", kills: 500, powerMult: 1.45, atkSpdBonus: 0.20, auraColor: "#ffd447" }
   ]
 };

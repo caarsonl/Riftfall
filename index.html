@@ -125,6 +125,12 @@
               <span id="hud-renown" class="currency-amount">0</span>
             </div>
           </div>
+          <div class="currency-pill currency-essence" title="Astral Essence (Earned from Rift Rebirth at Lv. 30)">
+            <span class="currency-dot essence-dot"></span>
+            <div class="currency-vals">
+              <span id="hud-essence" class="currency-amount">0</span>
+            </div>
+          </div>
         </div>
 
         <div class="utility-btns">
@@ -606,6 +612,22 @@
               </div>
             </div>
             <div id="mastery-tree-grid" class="mastery-tree-grid"></div>
+          </div>
+
+          <div id="rebirth-section" class="evolution-section rebirth-panel">
+            <div class="evolution-header">
+              <div>
+                <h3 class="section-title">4. Astral Rift Rebirth (Prestige at Hero Lv. 30)</h3>
+                <p class="muted-text">Reset Hero Level to 1 (keeping all Gear, Classes, Shards &amp; Blessings) to gain permanent Astral Essence.</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span id="rebirth-count-badge" class="reward-mult-pill">Rebirths: 0 • Essence: 0</span>
+                <button id="btn-trigger-rebirth" class="btn btn-primary btn-sm" disabled>
+                  Rebirth (Req. Lv. 30)
+                </button>
+              </div>
+            </div>
+            <div id="rebirth-perks-grid" class="evolution-grid"></div>
           </div>
         </div>
       </section>
