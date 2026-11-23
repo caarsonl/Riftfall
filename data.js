@@ -265,8 +265,8 @@ window.GAME_DATA = {
       },
       enemies: ["crystal_crawler", "clockwork_hound", "spore_stalker", "void_wraith"],
       bossId: "obsidian_colossus",
-      lootPool: ["muramasa_katana", "aether_railcannon", "valkyrie_spear_shield", "plague_censer", "riftlord_pistols", "apocalypse_grimoire"],
-      lootSummary: ["All 20 Realm Sets", "6 Signature Weapons", "Best Floor Record"]
+      lootPool: ["seismic_hammer", "blaze_chakrams", "sporeburst_staff", "nova_grimoire", "permafrost_halberd"],
+      lootSummary: ["Floor-Scaled Realm Sets", "Progressive Drops", "Best Floor Record"]
     },
     {
       id: "boss_rush_pantheon",
@@ -301,8 +301,8 @@ window.GAME_DATA = {
       },
       enemies: ["dread_knight", "radiant_warden"],
       bossId: "malakor_sovereign",
-      lootPool: ["valkyrie_spear_shield", "muramasa_katana", "aether_railcannon", "plague_censer", "riftlord_pistols", "apocalypse_grimoire"],
-      lootSummary: ["6 Consecutive Bosses", "Signature Weapons", "Massive Shards"]
+      lootPool: ["muramasa_katana", "valkyrie_spear_shield", "soulreaver_scythe", "volt_twinblades", "dawnstar_greatsword"],
+      lootSummary: ["6 Consecutive Bosses", "Muramasa & Valkyrie", "Massive Shards"]
     },
     {
       id: "abyssal_horde",
@@ -337,8 +337,8 @@ window.GAME_DATA = {
       },
       enemies: ["sanguine_executioner", "basalt_behemoth", "abyssal_crab", "pendulum_titan"],
       bossId: "pyrax_ash_wyrm",
-      lootPool: ["plague_censer", "riftlord_pistols", "muramasa_katana", "valkyrie_spear_shield", "aether_railcannon", "apocalypse_grimoire"],
-      lootSummary: ["90s Non-Stop Siege", "Elite Loot Rain", "Signature Weapons"]
+      lootPool: ["plague_censer", "aether_railcannon", "obsidian_daggers", "abyssal_trident", "chronos_scepter"],
+      lootSummary: ["90s Non-Stop Siege", "Censer & Rail-Cannon", "Elite Loot Rain"]
     },
     {
       id: "cursed_vault_trials",
@@ -371,8 +371,8 @@ window.GAME_DATA = {
       },
       enemies: ["mirror_phantom", "prism_golem", "rift_harbinger", "singularity_titan"],
       bossId: "omega_rift_origin",
-      lootPool: ["apocalypse_grimoire", "riftlord_pistols", "aether_railcannon", "muramasa_katana", "valkyrie_spear_shield", "plague_censer"],
-      lootSummary: ["3x Rift Shards", "Guaranteed Events", "Mythic Signature Gear"]
+      lootPool: ["riftlord_pistols", "apocalypse_grimoire", "omega_riftblade", "primordial_carapace", "genesis_core_relic"],
+      lootSummary: ["3x Rift Shards", "Pistols & Apocalypse Tome", "Mythic Signature Gear"]
     },
 
     /* --- T1 – T14 CAMPAIGN DUNGEONS --- */
@@ -1099,5 +1099,50 @@ window.GAME_DATA = {
     { id: "bless_survival",  name: "Aegis of Adaptation", desc: "+8% Environmental Hazard Resistance per rank.",            stat: "hazardResist", perRank: 0.08, maxRank: 12, baseCost: 2, costStep: 1 },
     { id: "bless_swiftness", name: "Chrono Stride",       desc: "+5% Move Speed & +3% Cooldown Reduction per rank.",        stat: "swiftness",    perRank: 0.05, cdrPerRank: 0.03, maxRank: 12, baseCost: 2, costStep: 1 },
     { id: "bless_luck",      name: "Artisan's Fortune",   desc: "+0.12 Rarity Drop Luck on all loot per rank.",             stat: "rarityLuck",   perRank: 0.12, maxRank: 10, baseCost: 2, costStep: 2 }
+  ],
+
+  /* ------------------------------------------------------------------------
+     3-BRANCH HERO MASTERY TREE (1 Point per Hero Level above Lv. 1)
+     ------------------------------------------------------------------------ */
+  MASTERY_TREE: [
+    {
+      id: "warlord",
+      name: "Warlord Path",
+      icon: "⚔",
+      color: "#ef4444",
+      subtitle: "Raw Damage, Crit & Attack Speed",
+      nodes: [
+        { id: "m_brutality", name: "Relentless Force", icon: "⚔", maxRank: 10, reqBranchPts: 0, stat: "powerPct", perRank: 0.04, desc: "+4% ATK & Spell Power per rank." },
+        { id: "m_precision", name: "Lethal Precision", icon: "🎯", maxRank: 8,  reqBranchPts: 0, stat: "crit",     perRank: 0.015, desc: "+1.5% Crit Chance per rank." },
+        { id: "m_zeal",      name: "Blade Tempo",      icon: "⚡", maxRank: 6,  reqBranchPts: 3, stat: "atkSpeedMult", perRank: 0.04, desc: "+4% Attack Speed per rank (Req. 3 Warlord pts)." },
+        { id: "m_key_carnage", name: "KEYSTONE: Overwhelming Carnage", icon: "🔥", maxRank: 1, reqBranchPts: 6, isKeystone: true, desc: "Critical hits deal +35% bonus Crit Damage and reduce [Q] cooldown by 0.25s." }
+      ]
+    },
+    {
+      id: "bastion",
+      name: "Bastion Path",
+      icon: "🛡",
+      color: "#38bdf8",
+      subtitle: "Vitality, Armor & Siphon",
+      nodes: [
+        { id: "m_fortitude", name: "Titan Heart",      icon: "❤", maxRank: 10, reqBranchPts: 0, stat: "hpPct",    perRank: 0.05, desc: "+5% Max HP per rank." },
+        { id: "m_bulwark",   name: "Runed Plating",    icon: "🛡", maxRank: 8,  reqBranchPts: 0, stat: "armor",    perRank: 6,    desc: "+6 Armor per rank." },
+        { id: "m_siphon",    name: "Crimson Hunger",   icon: "🩸", maxRank: 6,  reqBranchPts: 3, stat: "lifesteal",perRank: 0.01, desc: "+1% Lifesteal per rank (Req. 3 Bastion pts)." },
+        { id: "m_key_aegis", name: "KEYSTONE: Immortal Sentinel", icon: "💠", maxRank: 1, reqBranchPts: 6, isKeystone: true, desc: "Entering any dungeon room grants a 25% Max HP Shield and +15% Hazard Resistance." }
+      ]
+    },
+    {
+      id: "riftwalker",
+      name: "Riftwalker Path",
+      icon: "✦",
+      color: "#c084fc",
+      subtitle: "Cooldowns, Mobility & Fortune",
+      nodes: [
+        { id: "m_haste",     name: "Temporal Flow",    icon: "⌛", maxRank: 8,  reqBranchPts: 0, stat: "cdr",      perRank: 0.02, desc: "+2% Cooldown Reduction per rank." },
+        { id: "m_stride",    name: "Windrunner",       icon: "👟", maxRank: 8,  reqBranchPts: 0, stat: "speedPct", perRank: 0.025, desc: "+2.5% Move Speed per rank." },
+        { id: "m_warding",   name: "Rift Attunement",  icon: "◈", maxRank: 6,  reqBranchPts: 3, stat: "hazardResist", perRank: 0.03, desc: "+3% Hazard Resistance per rank (Req. 3 Riftwalker pts)." },
+        { id: "m_key_nova",  name: "KEYSTONE: Astral Conduit", icon: "🌟", maxRank: 1, reqBranchPts: 6, isKeystone: true, desc: "Dashing triggers a shockwave for 120% Spell Power and restores 8% Max HP." }
+      ]
+    }
   ]
 };

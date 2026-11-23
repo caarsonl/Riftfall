@@ -865,6 +865,7 @@
         bounties: this.createDefaultBounties(),
         bountiesClaimed: 0,
         blessings: {},
+        mastery: {},
         selectedDungeonId: "sunken_quarry",
         selectedDiff: "normal",
         selectedMutators: [],
@@ -906,6 +907,7 @@
       }
 
       if (!s.blessings || typeof s.blessings !== "object" || Array.isArray(s.blessings)) s.blessings = {};
+      if (!s.mastery || typeof s.mastery !== "object" || Array.isArray(s.mastery)) s.mastery = {};
       if (!s.cleared || typeof s.cleared !== "object" || Array.isArray(s.cleared)) s.cleared = {};
       if (!Array.isArray(s.selectedMutators)) s.selectedMutators = [];
       if (!s.unlockedEvolutions || typeof s.unlockedEvolutions !== "object" || Array.isArray(s.unlockedEvolutions)) {
@@ -1071,6 +1073,41 @@
       return total;
     }
 
+    getTotalMasteryPoints() {
+      return Math.max(0, (this.save.level || 1) - 1);
+    }
+
+    getSpentMasteryPoints() {
+      return Object.values(this.save.mastery || {}).reduce((sum, r) => sum + (Number(r) || 0), 0);
+    }
+
+    getAvailableMasteryPoints() {
+      return Math.max(0, this.getTotalMasteryPoints() - this.getSpentMasteryPoints());
+    }
+
+    getBranchMasteryPoints(branch) {
+      return branch.nodes.reduce((sum, n) => sum + (this.save.mastery[n.id] || 0), 0);
+    }
+
+    hasMasteryKeystone(nodeId) {
+      return (this.save.mastery?.[nodeId] || 0) >= 1;
+    }
+
+    getMasteryBonus(statKey) {
+      let total = 0;
+      for (const branch of DATA.MASTERY_TREE || []) {
+        for (const node of branch.nodes) {
+          if (node.isKeystone || node.stat !== statKey) continue;
+          const rank = this.save.mastery?.[node.id] || 0;
+          if (rank > 0) total += rank * node.perRank;
+        }
+      }
+      if (statKey === "hazardResist" && this.hasMasteryKeystone("m_key_aegis")) {
+        total += 0.15;
+      }
+      return total;
+    }
+
     getRunBoonTotals() {
       const t = {
         hpPct: 0,
@@ -1116,14 +1153,19 @@
         hp: base.hp + lvl * 30,
         atk: base.atk + lvl * 4.5,
         spell: base.spell + lvl * 4.5,
-        crit: base.crit + (cb.crit || 0) + bn.crit,
-        critMult: base.critMult + (cls.id === "berserker" ? 0.35 : 0) + bn.critMult + comboCritDmg,
+        crit: base.crit + (cb.crit || 0) + bn.crit + this.getMasteryBonus("crit"),
+        critMult:
+          base.critMult +
+          (cls.id === "berserker" ? 0.35 : 0) +
+          (this.hasMasteryKeystone("m_key_carnage") ? 0.35 : 0) +
+          bn.critMult +
+          comboCritDmg,
         speed: base.speed,
-        hazardResist: base.hazardResist + (cb.hazardResist || 0) + bn.hazardResist,
-        lifesteal: base.lifesteal + (cb.lifesteal || 0) + bn.lifesteal,
-        cdr: base.cdr + (cb.cdr || 0) + bn.cdr,
-        armor: base.armor + lvl * 1.6 + (cb.armor || 0) + bn.armor,
-        atkSpeedMult: 1.0 + bn.atkSpeedMult,
+        hazardResist: base.hazardResist + (cb.hazardResist || 0) + bn.hazardResist + this.getMasteryBonus("hazardResist"),
+        lifesteal: base.lifesteal + (cb.lifesteal || 0) + bn.lifesteal + this.getMasteryBonus("lifesteal"),
+        cdr: base.cdr + (cb.cdr || 0) + bn.cdr + this.getMasteryBonus("cdr"),
+        armor: base.armor + lvl * 1.6 + (cb.armor || 0) + bn.armor + this.getMasteryBonus("armor"),
+        atkSpeedMult: 1.0 + bn.atkSpeedMult + this.getMasteryBonus("atkSpeedMult"),
         dmgOutMult: 1.0,
         chainLightning: bn.chainLightning,
         active3pc: setInfo.active3pc
@@ -1182,13 +1224,22 @@
         s.chainLightning += 1;
       }
 
-      s.hp = Math.round(s.hp * (1 + this.getBlessingBonus("hpPct") + (cb.hpPct || 0) + bn.hpPct + setHpPct));
-      const blessingPower = this.getBlessingBonus("powerPct") + bn.powerPct;
+      s.hp = Math.round(
+        s.hp * (1 + this.getBlessingBonus("hpPct") + this.getMasteryBonus("hpPct") + (cb.hpPct || 0) + bn.hpPct + setHpPct)
+      );
+      const blessingPower = this.getBlessingBonus("powerPct") + this.getMasteryBonus("powerPct") + bn.powerPct;
       s.atk = Math.round(s.atk * (1 + blessingPower + (cb.atkPct || 0) + setAtkPct));
       s.spell = Math.round(s.spell * (1 + blessingPower + (cb.spellPct || 0) + setSpellPct));
       s.hazardResist += this.getBlessingBonus("hazardResist");
       s.cdr += this.getBlessingBonus("cdr");
-      s.speed *= 1 + this.getBlessingBonus("speedPct") + (cb.speedPct || 0) + bn.speedPct + setSpeedPct + comboSpeed;
+      s.speed *=
+        1 +
+        this.getBlessingBonus("speedPct") +
+        this.getMasteryBonus("speedPct") +
+        (cb.speedPct || 0) +
+        bn.speedPct +
+        setSpeedPct +
+        comboSpeed;
 
       if (this.player.hasteTimer > 0 && this.player.hasteData) {
         s.speed *= 1 + (this.player.hasteData.speedBonus || 0);
@@ -1252,7 +1303,7 @@
     }
 
     getXpNeeded(level) {
-      return Math.round(C.XP_BASE * 2.8 * Math.pow(1.28, level - 1));
+      return Math.round(C.XP_BASE * 6.5 * Math.pow(1.45, level - 1));
     }
 
     grantXp(amount) {
@@ -1271,7 +1322,7 @@
         this.sfx.levelUp();
         this.spawnFloatingText(this.player.x, this.player.y, 1.5, `LEVEL ${this.save.level}!`, "#fde047", true);
         this.spawnBurst(this.player.x, this.player.y, "#fde047", 24, 3.8);
-        this.toast(`Level Up! Reached Hero Level ${this.save.level}.`, "success");
+        this.toast(`Level Up! Lv. ${this.save.level} (+1 Mastery Point in Class Shrine [5])`, "success");
         if (prevLv < C.EVOLUTION_LEVEL_REQ && this.save.level >= C.EVOLUTION_LEVEL_REQ) {
           this.toast("Advanced Class Evolution unlocked at the Class Shrine [5]!", "mythic");
         }
@@ -1381,6 +1432,13 @@
       return DATA.DUNGEONS.filter((d) => !d.isSpecial && !d.isEndless);
     }
 
+    getEndlessRealmPool(floorIndex) {
+      const allRealms = this.getRealDungeons();
+      // Floor 1 unlocks T1-T4; every 2 floors unlocks +2 higher tiers up to T20
+      const maxTierCount = Math.min(allRealms.length, 4 + Math.floor(floorIndex / 2) * 2);
+      return allRealms.slice(0, maxTierCount);
+    }
+
     startDungeon(dungeonId, diffId, mutatorIds) {
       const dungeon = DATA.DUNGEONS.find((d) => d.id === dungeonId) || DATA.DUNGEONS[0];
       const diff = DATA.DIFFICULTIES[diffId] || DATA.DIFFICULTIES.normal;
@@ -1402,7 +1460,7 @@
 
       const isEndless = !!dungeon.isEndless;
       const specialMode = dungeon.specialMode || null;
-      const initialRealm = isEndless ? pick(this.getRealDungeons()) : dungeon;
+      const initialRealm = isEndless ? pick(this.getEndlessRealmPool(0)) : dungeon;
       const hType = initialRealm.hazard.type;
 
       this.run = {
@@ -1676,9 +1734,9 @@
       this.clearCombatFX();
       const { diff, totalRooms, isEndless } = this.run;
 
-      // In Endless Gauntlet, shift to a random realm every floor
+      // In Endless Gauntlet, scale available realms gradually by floor depth
       if (isEndless) {
-        const nextRealm = pick(this.getRealDungeons());
+        const nextRealm = pick(this.getEndlessRealmPool(roomIndex));
         this.run.activeRealm = nextRealm;
         document.getElementById("location-badge").textContent = `Gauntlet F${roomIndex + 1} • ${nextRealm.name}`;
         this.applyRealmHazardHUD(nextRealm);
@@ -1860,9 +1918,10 @@
       document.getElementById("game-container").classList.toggle("boss-active", isBossRoom);
 
       const bn = this.getRunBoonTotals();
-      if (bn.roomShieldPct > 0) {
+      const keystoneShield = this.hasMasteryKeystone("m_key_aegis") ? 0.25 : 0;
+      if (bn.roomShieldPct + keystoneShield > 0) {
         const stats = this.getHeroStats();
-        this.grantShield(stats.hp * bn.roomShieldPct, 8.0);
+        this.grantShield(stats.hp * (bn.roomShieldPct + keystoneShield), 8.0);
       }
 
       const floorPrefix = isEndless ? `Floor ${roomIndex + 1}` : `Room ${roomIndex + 1}/${totalRooms}`;
@@ -1957,32 +2016,46 @@
       const diff = this.run.diff;
       const speedMult = this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0;
       const dmgMut = this.run.mutators.includes("glass_cannon") ? 1.5 : 1.0;
-      const scale = this.run.isEndless ? Math.pow(1.14, roomIndex) : 1 + roomIndex * 0.12;
-      const eliteHp = isElite ? 2.1 : 1.0;
-      const eliteAtk = isElite ? 1.3 : 1.0;
-      const maxHp = Math.round(tpl.hp * diff.hpMult * scale * eliteHp);
+      const scale = this.run.isEndless ? Math.pow(1.18, roomIndex) : 1 + roomIndex * 0.18;
+      const eliteHp = isElite ? 2.45 : 1.0;
+      const eliteAtk = isElite ? 1.42 : 1.0;
+      const maxHp = Math.round(tpl.hp * 1.35 * diff.hpMult * scale * eliteHp);
+
+      const eliteAffixes = [
+        { id: "vampiric",   tag: "Vampiric",   trim: "#f43f5e", hpMult: 1.12, atkMult: 1.10, spdMult: 1.05 },
+        { id: "teleporter", tag: "Phase",      trim: "#c084fc", hpMult: 1.00, atkMult: 1.15, spdMult: 1.18 },
+        { id: "mortar",     tag: "Mortar",     trim: "#fb923c", hpMult: 1.10, atkMult: 1.12, spdMult: 0.96 },
+        { id: "hasted",     tag: "Hasted",     trim: "#38bdf8", hpMult: 0.95, atkMult: 1.08, spdMult: 1.38 },
+        { id: "berserk",    tag: "Berserk",    trim: "#ef4444", hpMult: 1.15, atkMult: 1.25, spdMult: 1.12 },
+        { id: "arcane",     tag: "Arcane",     trim: "#fde047", hpMult: 1.05, atkMult: 1.18, spdMult: 1.05 }
+      ];
+      const affix = isElite ? pick(eliteAffixes) : null;
+      const finalMaxHp = affix ? Math.round(maxHp * affix.hpMult) : maxHp;
+      const finalAtk = Math.round(tpl.atk * 1.25 * diff.dmgMult * scale * dmgMut * eliteAtk * (affix ? affix.atkMult : 1.0));
 
       return {
         id: uid(),
         isBoss: false,
         isElite,
+        affix: affix ? affix.id : null,
+        affixCd: randRange(1.8, 3.0),
         template: tpl,
-        name: isElite ? `Elite ${tpl.name}` : tpl.name,
+        name: affix ? `${affix.tag} ${tpl.name}` : tpl.name,
         x,
         y,
         z: 0,
-        hp: maxHp,
-        maxHp,
-        atk: Math.round(tpl.atk * diff.dmgMult * scale * dmgMut * eliteAtk),
-        speed: tpl.speed * speedMult * (isElite ? 1.08 : 1.0),
+        hp: finalMaxHp,
+        maxHp: finalMaxHp,
+        atk: finalAtk,
+        speed: tpl.speed * speedMult * (affix ? affix.spdMult : 1.0),
         range: tpl.range,
-        attackCd: tpl.attackCd / speedMult,
+        attackCd: (tpl.attackCd / speedMult) * (affix?.id === "hasted" ? 0.78 : 1.0),
         attackTimer: randRange(0.4, 1.2),
         slamCd: 3.2,
         radius: tpl.radius * (isElite ? 1.18 : 1.0),
         height: tpl.height * (isElite ? 1.15 : 1.0),
         color: tpl.color,
-        trim: isElite ? "#ffd447" : tpl.trim,
+        trim: affix ? affix.trim : tpl.trim,
         stunTimer: 0,
         ccImmuneTimer: 0,
         slowTimer: 0,
@@ -2017,7 +2090,7 @@
 
       for (let i = 0; i < count; i++) {
         const hpScale = isTwin ? 0.65 : 1.0;
-        const maxHp = Math.round(bossTpl.hp * diff.hpMult * endlessBossScale * hpScale);
+        const maxHp = Math.round(bossTpl.hp * 1.45 * diff.hpMult * endlessBossScale * hpScale);
         const northAll = this.world.reachable.filter((t) => t.y <= 8.5 && t.y >= 3.0);
         const northOpen = northAll.filter(isOpenSpot);
         const pool = northOpen.length > 0 ? northOpen : northAll;
@@ -2038,12 +2111,13 @@
           z: 0,
           hp: maxHp,
           maxHp,
-          atk: Math.round(bossTpl.atk * diff.dmgMult * endlessBossScale * dmgMut),
+          atk: Math.round(bossTpl.atk * 1.28 * diff.dmgMult * endlessBossScale * dmgMut),
           speed: bossTpl.speed * speedMult,
           radius: bossTpl.radius,
           height: bossTpl.height,
           color: bossTpl.color,
           trim: bossTpl.trim,
+          enraged: false,
           stunTimer: 0,
           ccImmuneTimer: 0,
           slowTimer: 0,
@@ -2461,6 +2535,16 @@
       this.player.dashDir = { x: this.player.facing.x, y: this.player.facing.y };
       this.sfx.dash();
       this.spawnBurst(this.player.x, this.player.y, cls.color || "#38bdf8", 10, 2.4);
+
+      if (this.mode === "dungeon" && this.hasMasteryKeystone("m_key_nova")) {
+        this.healPlayer(stats.hp * 0.08);
+        this.spawnSkillAnim("black_hole", this.player.x, this.player.y, 0, 2.8, "#c084fc", 0.38);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 2.8 + e.radius) {
+            this.damageEnemy(e, stats.spell * 1.2 * stats.dmgOutMult, false, stats, 0.3, true);
+          }
+        }
+      }
 
       if (
         cls.id === "shadowblade" ||
@@ -3120,6 +3204,9 @@
       if (isCrit) {
         this.sfx.crit();
         this.spawnFloatingText(enemy.x, enemy.y, enemy.height + 0.35, `${finalDmg}!`, "#fde047", true);
+        if (this.hasMasteryKeystone("m_key_carnage")) {
+          this.player.qCd = Math.max(0, this.player.qCd - 0.25);
+        }
         if (cls.id === "berserker") {
           this.healPlayer(Math.max(1, Math.round(st.hp * 0.04)));
         }
@@ -4079,6 +4166,57 @@
           continue;
         }
 
+        // Elite Affix Active Abilities
+        if (e.isElite && e.affix) {
+          e.affixCd = (e.affixCd || 2.5) - dt * slowMult;
+          if (e.affix === "teleporter" && e.affixCd <= 0 && d > 2.2 && d < 8.5) {
+            e.affixCd = 4.2;
+            const blinkAng = Math.atan2(this.player.y - e.y, this.player.x - e.x) + randRange(-0.8, 0.8);
+            const tx = this.player.x + Math.cos(blinkAng) * 1.45;
+            const ty = this.player.y + Math.sin(blinkAng) * 1.45;
+            if (this.isWalkableTile(tx, ty)) {
+              this.spawnBurst(e.x, e.y, "#c084fc", 10, 2.5);
+              e.x = tx;
+              e.y = ty;
+              this.spawnBurst(e.x, e.y, "#c084fc", 12, 2.8);
+              this.spawnFloatingText(e.x, e.y, e.height + 0.4, "BLINK!", "#e9d5ff");
+            }
+          } else if (e.affix === "mortar" && e.affixCd <= 0 && d <= 8.5) {
+            e.affixCd = 3.4;
+            this.telegraphs.push({
+              type: "circle",
+              sourceId: e.id,
+              x: clamp(this.player.x + randRange(-0.8, 0.8), 1.5, this.world.size - 1.5),
+              y: clamp(this.player.y + randRange(-0.8, 0.8), 1.5, this.world.size - 1.5),
+              radius: 1.45,
+              elapsed: 0,
+              duration: 1.0,
+              damage: Math.round(e.atk * 1.15),
+              color: "#fb923c"
+            });
+          } else if (e.affix === "arcane" && e.affixCd <= 0 && d <= 7.5) {
+            e.affixCd = 3.6;
+            const baseA = Math.atan2(dy, dx);
+            for (const spread of [-0.32, 0, 0.32]) {
+              const a = baseA + spread;
+              this.projectiles.push({
+                friendly: false,
+                x: e.x,
+                y: e.y,
+                vx: Math.cos(a) * 7.6,
+                vy: Math.sin(a) * 7.6,
+                radius: 0.24,
+                damage: Math.round(e.atk * 0.85),
+                armorPen: tpl.armorPen || 0,
+                projStyle: "star",
+                color: "#fde047",
+                trailColor: "#fef08a",
+                life: 1.9
+              });
+            }
+          }
+        }
+
         let sepX = 0;
         let sepY = 0;
         for (let j = 0; j < enemies.length; j++) {
@@ -4158,6 +4296,11 @@
           if (d <= e.range + 0.15 && e.attackTimer <= 0) {
             e.attackTimer = e.attackCd;
             this.damagePlayer(e.atk, false, tpl.armorPen || 0);
+            if (e.affix === "vampiric" && e.hp < e.maxHp) {
+              const siphon = Math.round(e.maxHp * 0.08);
+              e.hp = Math.min(e.maxHp, e.hp + siphon);
+              this.spawnFloatingText(e.x, e.y, e.height + 0.4, `+${siphon}`, "#f43f5e");
+            }
             this.spawnBurst(this.player.x, this.player.y, "#f43f5e", 6, 2.0);
           }
         }
@@ -4165,6 +4308,46 @@
     }
 
     updateBossAI(boss, dt, dx, dy, d, slowMult = 1.0) {
+      // Phase 2 Enrage at 50% HP
+      if (!boss.enraged && boss.hp > 0 && boss.hp <= boss.maxHp * 0.5) {
+        boss.enraged = true;
+        boss.speed *= 1.24;
+        boss.atk = Math.round(boss.atk * 1.25);
+        boss.trim = "#ff3b5c";
+        boss.patternTimer = Math.min(boss.patternTimer, 0.6);
+
+        this.sfx.bossWarn();
+        this.addScreenShake(0.45, 13);
+        this.spawnBurst(boss.x, boss.y, "#ff3b5c", 36, 5.2);
+        this.spawnSkillAnim("solar_flare", boss.x, boss.y, 0, 4.5, "#ff3b5c", 0.55);
+        this.spawnFloatingText(boss.x, boss.y, boss.height + 0.85, "PHASE 2: ENRAGED!", "#ff3b5c", true);
+        this.toast(`${boss.name} has entered PHASE 2 ENRAGE!`, "danger");
+
+        // Fire an immediate radial warning volley
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          this.projectiles.push({
+            friendly: false,
+            x: boss.x,
+            y: boss.y,
+            vx: Math.cos(a) * 7.2,
+            vy: Math.sin(a) * 7.2,
+            radius: 0.28,
+            damage: Math.round(boss.atk * 0.9),
+            armorPen: boss.template.armorPen || 0,
+            projStyle: "star",
+            color: "#ff3b5c",
+            trailColor: "#fde047",
+            life: 2.4
+          });
+        }
+
+        const tagsEl = document.getElementById("boss-tags");
+        if (tagsEl && !tagsEl.querySelector(".enraged")) {
+          tagsEl.insertAdjacentHTML("beforeend", `<span class="boss-tag enraged">ENRAGED</span>`);
+        }
+      }
+
       if (boss.chargeTimer > 0 && boss.chargeVel) {
         boss.chargeTimer -= dt;
         this.moveEntityWithCollision(boss, boss.chargeVel.x * dt, boss.chargeVel.y * dt, boss.radius);
@@ -4196,7 +4379,8 @@
       const patterns = boss.template.patterns;
       const pat = patterns[boss.patternIdx % patterns.length];
       boss.patternIdx++;
-      const speedMult = this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0;
+      const enrageMult = boss.enraged ? 1.28 : 1.0;
+      const speedMult = (this.run.mutators.includes("hyper_speed") ? 1.35 : 1.0) * enrageMult;
       boss.patternTimer = pat.cooldown / speedMult;
       const teleDur = pat.telegraph / Math.sqrt(speedMult);
       const dmg = Math.round(boss.atk * pat.dmgMult);
@@ -6685,6 +6869,7 @@
     }
 
     canAffordEvolution() {
+      if (this.getAvailableMasteryPoints() > 0) return true;
       if (this.save.level < C.EVOLUTION_LEVEL_REQ) return false;
       const cls = this.getActiveClass();
       if (cls.tier === "advanced") return false;
@@ -7647,6 +7832,85 @@
         }
 
         evoGrid.appendChild(card);
+      }
+
+      // 3. Render 3-Branch Hero Mastery Skill Tree
+      const availPts = this.getAvailableMasteryPoints();
+      const ptsBadge = document.getElementById("mastery-points-badge");
+      if (ptsBadge) {
+        ptsBadge.textContent = `Available Points: ${availPts} / ${this.getTotalMasteryPoints()}`;
+      }
+
+      const respecBtn = document.getElementById("btn-reset-mastery");
+      if (respecBtn) {
+        respecBtn.disabled = this.getSpentMasteryPoints() === 0 || this.save.gold < 250;
+        respecBtn.onclick = () => {
+          if (this.getSpentMasteryPoints() === 0 || this.save.gold < 250) return;
+          this.save.gold -= 250;
+          this.save.mastery = {};
+          this.refreshHeroVitals(true);
+          this.sfx.uiClick();
+          this.syncAllHUD();
+          this.renderClassModal();
+          this.saveGame(false);
+          this.toast("Mastery points refunded!", "info");
+        };
+      }
+
+      const treeGrid = document.getElementById("mastery-tree-grid");
+      if (treeGrid) {
+        treeGrid.innerHTML = "";
+        for (const branch of DATA.MASTERY_TREE || []) {
+          const branchPts = this.getBranchMasteryPoints(branch);
+          const col = document.createElement("div");
+          col.className = "mastery-branch";
+          col.innerHTML = `
+            <div class="mastery-branch-head">
+              <span class="mastery-branch-title" style="color:${branch.color}">${branch.icon} ${branch.name}</span>
+              <span class="muted-text">${branchPts} pts</span>
+            </div>
+            <div class="muted-text" style="margin-bottom:2px">${branch.subtitle}</div>
+          `;
+
+          for (const node of branch.nodes) {
+            const rank = this.save.mastery[node.id] || 0;
+            const isMax = rank >= node.maxRank;
+            const reqMet = branchPts >= (node.reqBranchPts || 0);
+            const canLearn = availPts > 0 && reqMet && !isMax;
+
+            const nodeEl = document.createElement("div");
+            nodeEl.className =
+              "mastery-node" +
+              (node.isKeystone ? " keystone" : "") +
+              (isMax ? " maxed" : rank > 0 ? " unlocked" : !reqMet ? " locked" : "");
+
+            nodeEl.innerHTML = `
+              <div class="mastery-node-top">
+                <span>${node.icon} ${node.name}</span>
+                <span class="gold-text" style="font-family:var(--font-mono)">${rank}/${node.maxRank}</span>
+              </div>
+              <div class="mastery-node-desc">${node.desc}</div>
+              <button class="btn ${canLearn ? "btn-primary" : "btn-secondary"} btn-sm btn-block" ${canLearn ? "" : "disabled"}>
+                ${isMax ? "MAXED" : !reqMet ? `Requires ${node.reqBranchPts} Branch Pts` : "+1 Rank"}
+              </button>
+            `;
+
+            const btn = nodeEl.querySelector("button");
+            btn.onclick = () => {
+              if (!canLearn) return;
+              this.save.mastery[node.id] = rank + 1;
+              this.refreshHeroVitals(true);
+              this.sfx.upgrade();
+              this.syncAllHUD();
+              this.renderClassModal();
+              this.saveGame(false);
+            };
+
+            col.appendChild(nodeEl);
+          }
+
+          treeGrid.appendChild(col);
+        }
       }
     }
 
