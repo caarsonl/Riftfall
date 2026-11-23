@@ -2300,8 +2300,12 @@
       if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) screenX += 1;
 
       if (this.joystick && this.joystick.active) {
-        screenX += this.joystick.dx;
-        screenY += this.joystick.dy;
+        if (this.activeModal) {
+          if (this.resetJoystick) this.resetJoystick();
+        } else {
+          screenX += this.joystick.dx;
+          screenY += this.joystick.dy;
+        }
       }
 
       const mag = Math.hypot(screenX, screenY);
@@ -7078,6 +7082,7 @@
        MODALS & RPG UI RENDERING
        ====================================================================== */
     openModal(name) {
+      this.keys.clear();
       if (this.resetJoystick) this.resetJoystick();
       this.sfx.uiClick();
       this.hideTooltip();
@@ -8071,6 +8076,9 @@
 
         if (e.code === "Space") {
           e.preventDefault();
+          if (document.activeElement && document.activeElement.tagName === "BUTTON") {
+            document.activeElement.blur();
+          }
           this.triggerDash();
         } else if (e.code === "KeyQ") {
           this.castSkillQ();
@@ -8238,7 +8246,16 @@
         this.saveGame(false);
       });
       window.addEventListener("keyup", (e) => this.keys.delete(e.code));
-      window.addEventListener("blur", () => this.keys.clear());
+      window.addEventListener("blur", () => {
+        this.keys.clear();
+        resetJoystick();
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          this.keys.clear();
+          resetJoystick();
+        }
+      });
 
       document.querySelectorAll(".hud-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
