@@ -259,7 +259,8 @@ kbd {
 .difficulty-badge.diff-torment    { border-color: #f97316; background: #3b1908; color: #fed7aa; }
 .difficulty-badge.diff-cataclysm  { border-color: #fde047; background: #3b0712; color: #fef08a; box-shadow: 0 0 6px rgba(244, 63, 94, 0.55); }
 .difficulty-badge.diff-apocalypse { border-color: #ff3b5c; background: #240414; color: #ffae19; box-shadow: 0 0 8px rgba(255, 59, 92, 0.75); }
-
+.difficulty-badge.diff-inferno    { border-color: #ffae19; background: #1c030a; color: #ff3b5c; box-shadow: 0 0 10px rgba(255, 59, 92, 0.9); }
+.diff-btn.active[data-diff="inferno"]    { border-color: #ffae19; background: #1c030a; color: #ff3b5c; box-shadow: inset 0 0 0 1px #ff3b5c, 2px 2px 0 #000; }
 .zone-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
 .mutator-badges { display: inline-flex; gap: 4px; }
 .mutator-chip { font-size: 10px; padding: 1px 5px; background: #2e1d08; color: #ffd447; border: 1px solid #f59e0b; }

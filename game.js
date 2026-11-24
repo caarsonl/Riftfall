@@ -769,6 +769,9 @@
       this.dpr = 1;
       this.worldZoom = 1.32;
 
+      this.hitstopTimer = 0;
+      this.groundScars = [];
+
       this.player = {
         x: 8.5,
         y: 8.5,
@@ -784,6 +787,7 @@
         attackCounter: 0,
         qCd: 0,
         eCd: 0,
+        ultCd: 0,
         dashCd: 0,
         dashTimer: 0,
         dashDir: { x: 0, y: 1 },
@@ -1331,10 +1335,10 @@
         }
       }
 
-      s.crit = clamp(s.crit, 0.05, 0.94);
-      s.cdr = clamp(s.cdr, 0, 0.62);
-      s.hazardResist = clamp(s.hazardResist, 0, 0.80);
-      s.lifesteal = clamp(s.lifesteal, 0, 0.45);
+      s.crit = clamp(s.crit, 0.05, 0.92);
+      s.cdr = clamp(s.cdr, 0, 0.58);
+      s.hazardResist = clamp(s.hazardResist, 0, 0.78);
+      s.lifesteal = clamp(s.lifesteal, 0, 0.18);
       s.speed = clamp(s.speed, 2.4, 12.0);
       return s;
     }
@@ -2302,6 +2306,10 @@
     }
 
     updateWorld(dt) {
+      if (this.hitstopTimer > 0) {
+        this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
+        return;
+      }
       const stats = this.getHeroStats();
       this.player.maxHp = stats.hp;
       if (this.player.hp > stats.hp) this.player.hp = stats.hp;
@@ -2317,6 +2325,7 @@
 
       this.player.qCd = Math.max(0, this.player.qCd - dt);
       this.player.eCd = Math.max(0, this.player.eCd - dt);
+      this.player.ultCd = Math.max(0, (this.player.ultCd || 0) - dt);
       this.player.dashCd = Math.max(0, this.player.dashCd - dt);
       this.player.flaskCd = Math.max(0, this.player.flaskCd - dt);
       this.player.iframeTimer = Math.max(0, this.player.iframeTimer - dt);
@@ -2536,8 +2545,8 @@
           this.spawnFloatingText(enemy.x, enemy.y, enemy.height + 0.5, "UNSTOPPABLE", "#cbd5e1");
           return;
         }
-        enemy.stunTimer = Math.max(enemy.stunTimer, duration * 0.5);
-        enemy.ccImmuneTimer = 4.5;
+        enemy.stunTimer = Math.max(enemy.stunTimer, duration * 0.35);
+        enemy.ccImmuneTimer = 8.0;
       } else {
         enemy.stunTimer = Math.max(enemy.stunTimer, duration);
       }
@@ -2613,7 +2622,8 @@
       const vaultMult = this.run?.specialMode === "cursed_vault" ? 0.5 : 1.0;
       const val = Math.round(amount * vaultMult);
       if (val <= 0) return;
-      this.player.shield = Math.max(this.player.shield, val);
+      const maxCap = Math.round(this.player.maxHp * 0.65);
+      this.player.shield = Math.min(maxCap, Math.max(this.player.shield, val));
       this.player.shieldTimer = Math.max(this.player.shieldTimer, duration);
     }
 
@@ -2651,7 +2661,26 @@
       this.player.iframeTimer = C.DASH_IFRAMES;
       this.player.dashDir = { x: this.player.facing.x, y: this.player.facing.y };
       this.sfx.dash();
-      this.spawnBurst(this.player.x, this.player.y, cls.color || "#38bdf8", 10, 2.4);
+      this.spawnBurst(this.player.x, this.player.y, cls.color || "#38bdf8", 12, 2.6);
+
+      // Perfect Dodge ("Rift Riposte") if dodging an incoming projectile or active telegraph
+      if (this.mode === "dungeon" && this.run && !this.run.finished) {
+        const nearProj = this.projectiles.some((pr) => !pr.friendly && dist(this.player.x, this.player.y, pr.x, pr.y) <= 1.65);
+        const nearTele = this.telegraphs.some((t) => t.elapsed / t.duration >= 0.68 && dist(this.player.x, this.player.y, t.x, t.y) <= (t.radius || 2.2) + 0.5);
+        if (nearProj || nearTele) {
+          this.player.dashCd = 0.25;
+          this.player.iframeTimer = 1.1;
+          this.hitstopTimer = 0.045;
+          this.sfx.crit();
+          this.spawnSkillAnim("dimension_rift", this.player.x, this.player.y, Math.atan2(this.player.facing.y, this.player.facing.x), 3.4, "#fde047", 0.45);
+          this.spawnFloatingText(this.player.x, this.player.y, 1.5, "RIFT RIPOSTE!", "#fde047", true);
+          for (const e of [...this.world.enemies]) {
+            if (dist(this.player.x, this.player.y, e.x, e.y) <= 3.6 + e.radius) {
+              this.damageEnemy(e, (stats.atk * 1.6 + stats.spell * 1.6) * stats.dmgOutMult, true, stats, 0.4);
+            }
+          }
+        }
+      }
 
       if (this.mode === "dungeon" && this.hasMasteryKeystone("m_key_nova")) {
         this.healPlayer(stats.hp * 0.08);
@@ -2746,7 +2775,24 @@
       const angle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
       this.player.facing.x = Math.cos(angle);
       this.player.facing.y = Math.sin(angle);
-      this.player.swingAnim = 0.2;
+      this.player.swingAnim = 0.24;
+
+      // 3rd-Hit Weapon Finisher Signature Visual & Bonus Burst
+      const isFinisher = this.player.attackCounter % 3 === 0;
+      if (isFinisher) {
+        this.slashArcs.push({
+          x: this.player.x,
+          y: this.player.y,
+          angle,
+          radius: wep.range * 1.18,
+          span: 2.35,
+          color: "#ffffff",
+          weaponColor: wep.weaponColor,
+          heavy: true,
+          life: 0.26,
+          maxLife: 0.26
+        });
+      }
 
       const cls = this.getActiveClass();
       const guaranteedCrit = this.consumePhantomCrit();
@@ -3398,7 +3444,73 @@
         this.triggerSkillCastSetProcs(stats);
       }
     }
+    castSkillC() {
+      if (this.mode !== "dungeon" || this.activeModal || !this.run || this.run.finished) return;
+      if ((this.player.ultCd || 0) > 0) {
+        this.toast(`Class Ultimate recharging (${this.player.ultCd.toFixed(1)}s)`, "info");
+        return;
+      }
 
+      const stats = this.getHeroStats();
+      const baseClass = this.getBaseClassId();
+      this.player.ultCd = 22.0 * (1 - stats.cdr * 0.5);
+      this.triggerHeroCastAnim("raise", 0.5);
+      this.sfx.evolve();
+      this.addScreenShake(0.38, 12);
+      this.hitstopTimer = 0.05;
+
+      if (baseClass === "vanguard") {
+        // Immortal Bastion: 65% HP Shield + Seismic Shockwave
+        this.grantShield(stats.hp * 0.65, 8.0);
+        this.spawnSkillAnim("sky_greatsword", this.player.x, this.player.y, 0, 6.2, "#fde047", 0.75);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.6, "ULTIMATE: AEGIS BASTION!", "#fde047", true);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 6.2 + e.radius) {
+            this.applyEnemyStun(e, 2.0);
+            this.damageEnemy(e, (stats.atk * 4.5 + stats.spell * 2.5) * stats.dmgOutMult, true, stats, 0.6);
+          }
+        }
+      } else if (baseClass === "arcanist") {
+        // Astral Cataclysm: 10 Homing Star-Beams + Cooldown Reset
+        this.player.qCd = 0;
+        this.player.eCd = 0;
+        const living = this.world.enemies.filter((e) => e.hp > 0);
+        const targets = [];
+        for (let i = 0; i < 10; i++) {
+          const tgt = living.length > 0 ? living[i % living.length] : { x: this.player.x + randRange(-3, 3), y: this.player.y + randRange(-3, 3) };
+          targets.push({ x: tgt.x, y: tgt.y });
+          for (const e of [...this.world.enemies]) {
+            if (dist(tgt.x, tgt.y, e.x, e.y) <= 2.5 + e.radius) {
+              this.damageEnemy(e, stats.spell * 3.4 * stats.dmgOutMult, i === 0, stats, 0.25);
+            }
+          }
+        }
+        this.spawnSkillAnim("armageddon_rain", this.player.x, this.player.y, 0, 2.5, "#c084fc", 0.85, targets);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.6, "ULTIMATE: ASTRAL NOVA!", "#e879f9", true);
+      } else if (baseClass === "shadowblade") {
+        // Thousand-Cut Mirage: 14 Guaranteed-Crit Spatial Slashes + Haste
+        this.player.hasteTimer = 6.0;
+        this.player.hasteData = { speedBonus: 0.45, atkSpeedBonus: 0.65, critBonus: 0.35 };
+        this.spawnSkillAnim("dimension_rift", this.player.x, this.player.y, 0, 7.5, "#38bdf8", 0.8);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.6, "ULTIMATE: PHANTOM TEMPEST!", "#38bdf8", true);
+        const targets = this.world.enemies.filter((e) => e.hp > 0);
+        for (let i = 0; i < 14 && targets.length > 0; i++) {
+          const tgt = targets[i % targets.length];
+          this.damageEnemy(tgt, (stats.atk * 2.2 + stats.spell * 1.4) * stats.dmgOutMult, true, stats, 0.15);
+        }
+      } else {
+        // Verdant Apocalypse: Full Hazard Purge + 50% Heal + Plague Singularity
+        this.purgeHazard(100);
+        this.healPlayer(stats.hp * 0.50);
+        this.spawnSkillAnim("singularity_well", this.player.x, this.player.y, 0, 6.8, "#34d399", 0.85);
+        this.spawnFloatingText(this.player.x, this.player.y, 1.6, "ULTIMATE: GAIA REBIRTH!", "#34d399", true);
+        for (const e of [...this.world.enemies]) {
+          if (dist(this.player.x, this.player.y, e.x, e.y) <= 6.8 + e.radius) {
+            this.damageEnemy(e, (stats.spell * 4.8 + stats.atk * 2.4) * stats.dmgOutMult, true, stats, 0.4);
+          }
+        }
+      }
+    }
     triggerChainLightning(sourceEnemy, stats, stacks) {
       let cur = sourceEnemy;
       const visited = new Set([sourceEnemy.id]);
@@ -3937,7 +4049,7 @@
 
       if (!isHazard) {
         const diffPen = this.run?.diff?.armorPenBonus || 0;
-        const effectiveArmor = stats.armor * (1 - clamp(armorPen + diffPen, 0, 0.85));
+        const effectiveArmor = stats.armor * (1 - clamp(armorPen + diffPen, 0, 0.65));
         const mitigation = effectiveArmor / (effectiveArmor + 180);
         dmg = Math.max(1, Math.round(rawAmount * (1 - mitigation)));
       } else {
@@ -4648,6 +4760,15 @@
     }
 
     updateBossAI(boss, dt, dx, dy, d, slowMult = 1.0) {
+      boss.fightTimer = (boss.fightTimer || 0) + dt;
+      if (!boss.hardEnraged && boss.fightTimer >= 35.0) {
+        boss.hardEnraged = true;
+        boss.atk = Math.round(boss.atk * 1.45);
+        boss.speed *= 1.25;
+        this.sfx.bossWarn();
+        this.spawnFloatingText(boss.x, boss.y, boss.height + 1.0, "35s BERSERK ENRAGE!", "#ff3b5c", true);
+        this.toast(`${boss.name} entered CATACLYSMIC BERSERK!`, "danger");
+      }
       // Phase 2 Enrage at 50% HP
       if (!boss.enraged && boss.hp > 0 && boss.hp <= boss.maxHp * 0.5) {
         boss.enraged = true;
@@ -6114,6 +6235,81 @@
           ctx.fillRect(center.x - Math.floor(colW * 0.5), center.y - 110, colW, 110);
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(center.x - Math.max(2, Math.floor(colW * 0.25)), center.y - 110, Math.max(2, Math.floor(colW * 0.5)), 110);
+        } else if (anim.animType === "dimension_rift") {
+          const r = anim.radius * (0.4 + t * 0.65);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(255, 59, 92, 0.16)", anim.color || "#ff3b5c", 2.5);
+          for (let s = 0; s < 3; s++) {
+            const ang = anim.angle + (s - 1) * 0.95 + t * 0.45;
+            const len = r * 24 * Math.sin(Math.min(1, t * 2.2) * Math.PI * 0.5);
+            const x1 = center.x - Math.cos(ang) * len;
+            const y1 = center.y - 12 - Math.sin(ang) * (len * 0.55);
+            const x2 = center.x + Math.cos(ang) * len;
+            const y2 = center.y - 12 + Math.sin(ang) * (len * 0.55);
+
+            ctx.strokeStyle = anim.color || "#e879f9";
+            ctx.lineWidth = Math.max(3, invT * 12);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = Math.max(1.5, invT * 4.5);
+            ctx.stroke();
+          }
+        } else if (anim.animType === "armageddon_rain") {
+          const list = anim.targets && anim.targets.length > 0 ? anim.targets : [{ x: anim.x, y: anim.y }];
+          for (let idx = 0; idx < list.length; idx++) {
+            const tgt = list[idx];
+            const tp = toS(tgt.x, tgt.y, 0);
+            const localT = clamp(t * 1.45 - (idx % 4) * 0.1, 0, 1);
+            if (localT < 0.45) {
+              const dropProg = localT / 0.45;
+              const mx = lerp(tp.x + 55, tp.x, dropProg);
+              const my = lerp(tp.y - 145, tp.y, dropProg);
+              ctx.strokeStyle = "#fb923c";
+              ctx.lineWidth = 6;
+              ctx.beginPath();
+              ctx.moveTo(mx + 18, my - 42);
+              ctx.lineTo(mx, my);
+              ctx.stroke();
+              ctx.fillStyle = "#fde047";
+              ctx.beginPath();
+              ctx.arc(mx, my, 7, 0, Math.PI * 2);
+              ctx.fill();
+            } else {
+              const blastT = (localT - 0.45) / 0.55;
+              drawIsoGroundEllipse(ctx, tp.x, tp.y, anim.radius * (0.3 + blastT * 0.75), "rgba(255, 59, 92, 0.28)", "#fde047", 2.5);
+              drawIsoGroundEllipse(ctx, tp.x, tp.y, anim.radius * 0.45 * (1 - blastT), "rgba(253, 224, 71, 0.55)", null);
+            }
+          }
+        } else if (anim.animType === "dragon_coil") {
+          for (let arm = 0; arm < 2; arm++) {
+            ctx.strokeStyle = arm === 0 ? "#fb923c" : "#fde047";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for (let step = 0; step <= 14; step++) {
+              const frac = step / 14;
+              const spiralA = anim.angle + arm * Math.PI + frac * Math.PI * 3.5 + t * 6;
+              const spiralR = frac * anim.radius * (0.4 + t * 0.7);
+              const sp = toS(anim.x + Math.cos(spiralA) * spiralR, anim.y + Math.sin(spiralA) * spiralR, 0.35 + frac * 0.4);
+              if (step === 0) ctx.moveTo(sp.x, sp.y);
+              else ctx.lineTo(sp.x, sp.y);
+            }
+            ctx.stroke();
+          }
+        } else if (anim.animType === "singularity_well") {
+          const r = anim.radius * (1.05 - t * 0.65);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r, "rgba(88, 28, 135, 0.34)", anim.color || "#e879f9", 3);
+          drawIsoGroundEllipse(ctx, center.x, center.y, r * 0.62, "rgba(15, 5, 28, 0.92)", "#38bdf8", 2);
+          for (let k = 0; k < 10; k++) {
+            const a = t * 9 + (k / 10) * Math.PI * 2;
+            const orbitR = r * 0.85;
+            const ox = center.x + Math.cos(a) * orbitR * 22;
+            const oy = center.y + Math.sin(a) * orbitR * 11;
+            ctx.fillStyle = k % 2 === 0 ? "#fde047" : "#c084fc";
+            ctx.fillRect(Math.round(ox) - 2, Math.round(oy) - 2, 4, 4);
+          }
         }
 
         ctx.restore();
@@ -6495,10 +6691,21 @@
         ctx.fillRect(shX - 2, shY - 4, 4, 8);
       }
 
-      const len = style === "greatsword" || style === "spear_shield" ? 21 : style === "halberd" || style === "scythe" || style === "staff" || style === "katana" ? 19 : 15;
+      const len = style === "greatsword" || style === "spear_shield" ? 23 : style === "halberd" || style === "scythe" || style === "staff" || style === "katana" ? 21 : 16;
       const tipX = Math.round(handX + Math.cos(baseAng) * len);
       const tipY = Math.round(handY + Math.sin(baseAng) * (len * 0.72) - 5);
 
+      // Outer Energy Aura Stroke around Weapon
+      ctx.strokeStyle = wepTpl.trailColor || wepTpl.weaponColor;
+      ctx.globalAlpha = 0.45 + Math.sin(this.elapsed * 10) * 0.15;
+      ctx.lineWidth = style === "greatsword" ? 10 : 7;
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Dark Pixel Outline
       ctx.strokeStyle = "#07090f";
       ctx.lineWidth = style === "greatsword" ? 7 : 5;
       ctx.beginPath();
@@ -6506,33 +6713,42 @@
       ctx.lineTo(tipX, tipY);
       ctx.stroke();
 
+      // Core Blade / Shaft
       ctx.strokeStyle = style === "staff" ? "#78350f" : wepTpl.weaponColor;
-      ctx.lineWidth = style === "greatsword" ? 4.5 : 2.6;
+      ctx.lineWidth = style === "greatsword" ? 4.5 : 2.8;
+      ctx.stroke();
+
+      // White-Hot Edge Fuller
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(handX + Math.cos(baseAng) * 3, handY + Math.sin(baseAng) * 2);
+      ctx.lineTo(tipX, tipY);
       ctx.stroke();
 
       if (style === "hammer") {
         ctx.fillStyle = "#07090f";
-        ctx.fillRect(tipX - 6, tipY - 5, 12, 10);
+        ctx.fillRect(tipX - 7, tipY - 6, 14, 12);
         ctx.fillStyle = wepTpl.weaponColor;
-        ctx.fillRect(tipX - 5, tipY - 4, 10, 8);
-        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(tipX - 6, tipY - 5, 12, 10);
+        ctx.fillStyle = "#ffffff";
         ctx.fillRect(tipX - 3, tipY - 2, 6, 4);
       } else if (style === "staff") {
-        const pulse = 3 + Math.sin(this.elapsed * 8);
+        const pulse = 3.5 + Math.sin(this.elapsed * 9) * 1.2;
         ctx.fillStyle = wepTpl.weaponColor;
         ctx.beginPath();
-        ctx.arc(tipX, tipY, pulse + 1.5, 0, Math.PI * 2);
+        ctx.arc(tipX, tipY, pulse + 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+        ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
         ctx.fill();
       } else if (style === "halberd") {
         ctx.fillStyle = wepTpl.trailColor || "#e0f2fe";
         ctx.beginPath();
-        ctx.moveTo(tipX, tipY - 5);
-        ctx.lineTo(tipX + 9, tipY);
-        ctx.lineTo(tipX + 4, tipY + 7);
+        ctx.moveTo(tipX, tipY - 6);
+        ctx.lineTo(tipX + 10, tipY);
+        ctx.lineTo(tipX + 5, tipY + 8);
         ctx.lineTo(tipX - 3, tipY + 2);
         ctx.closePath();
         ctx.fill();
@@ -6541,21 +6757,18 @@
         ctx.stroke();
       } else if (style === "scythe") {
         ctx.strokeStyle = "#07090f";
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 7;
         ctx.beginPath();
-        ctx.arc(tipX, tipY + 4, 9, baseAng - 1.4, baseAng + 0.7);
+        ctx.arc(tipX, tipY + 4, 10, baseAng - 1.5, baseAng + 0.8);
         ctx.stroke();
         ctx.strokeStyle = wepTpl.weaponColor;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.5;
         ctx.stroke();
-      } else if (style === "greatsword") {
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(handX, handY);
-        ctx.lineTo(tipX, tipY);
+        ctx.lineWidth = 1.2;
         ctx.stroke();
-        ctx.fillStyle = "#d97706";
+      } else if (style === "greatsword" || style === "katana") {
+        ctx.fillStyle = "#fde047";
         ctx.fillRect(handX - 5, handY - 2, 10, 4);
       } else {
         ctx.fillStyle = "#fde047";
@@ -8345,7 +8558,7 @@
 
       // 4. Render Astral Rift Rebirth Section
           const canRebirth = this.save.level >= (DATA.REBIRTH_REQ_LEVEL || 30);
-          const essenceGain = Math.max(1, Math.floor((this.save.level - 25) / 5));
+          const essenceGain = Math.max(2, Math.floor((this.save.level - 20) / 4));
           const rbBadge = document.getElementById("rebirth-count-badge");
           if (rbBadge) {
             rbBadge.textContent = `Rebirths: ${this.save.rebirthCount || 0} • Essence: ${this.save.astralEssence || 0}`;
@@ -8400,16 +8613,16 @@
                 this.refreshHeroVitals(true);
                 this.sfx.upgrade();
                 this.syncAllHUD();
-                this.renderClassModal();this.renderClassModal();
-          this.saveGame(false);
-        };
-        rbGrid.appendChild(card);
-      }
+                this.renderClassModal();
+                this.saveGame(false);
+              };
+              rbGrid.appendChild(card);
+            }
+          }
     }
-  }
 
-  /* --- 6. SETTINGS MODAL --- */
-  renderSettingsModal() {
+    /* --- 6. SETTINGS MODAL --- */
+    renderSettingsModal() {
       document.getElementById("setting-volume").value = this.save.settings.volume;
       document.getElementById("setting-mute").checked = this.save.settings.muted;
       document.getElementById("setting-dmg-nums").checked = this.save.settings.showDmgNums;
@@ -8582,11 +8795,30 @@
           this.castSkillQ();
         } else if (e.code === "KeyE") {
           this.castSkillE();
+        } else if (e.code === "KeyC") {
+          this.castSkillC();
         } else if (e.code === "KeyR") {
           this.useFlask();
         } else if (e.code === "KeyF") {
           if (this.mode === "hub" && this.nearbyStation) this.openModal(this.nearbyStation.id);
           else if (this.mode === "dungeon" && this.world?.specialEvent?.type === "cursed_shrine") this.activateCursedShrine();
+          if (this.mode === "hub" && this.nearbyStation) {
+            if (this.nearbyStation.id === "well") {
+              const stats = this.getHeroStats();
+              this.player.hp = stats.hp;
+              this.player.qCd = 0;
+              this.player.eCd = 0;
+              this.player.ultCd = 0;
+              this.player.dashCd = 0;
+              this.player.flaskCd = 0;
+              this.sfx.flask();
+              this.spawnBurst(this.player.x, this.player.y, "#34d399", 24, 3.8);
+              this.spawnFloatingText(this.player.x, this.player.y, 1.4, "FULLY RESTORED!", "#34d399", true);
+              this.syncLiveHUD();
+            } else {
+              this.openModal(this.nearbyStation.id);
+            }
+          }
         }
       });
 
